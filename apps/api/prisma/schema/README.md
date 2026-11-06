@@ -5,7 +5,7 @@ migration history in `../migrations`. There are no per-person databases.
 
 | File | Owner | Contents |
 |---|---|---|
-| `base.prisma` | E01 + E11 | generator + datasource only |
+| `base.prisma` | E11 | generator + datasource only |
 | `identity.prisma` | E01 | User, Workspace, Session, Notification, OutboxEvent… |
 | `directory.prisma` | E02 | TraineeProfile, Team, Membership, L&D feedback… |
 | `assessment.prisma` | E03 | Expertise, questions, attempts, results, appeals… |
@@ -17,9 +17,14 @@ migration history in `../migrations`. There are no per-person databases.
 | `growth-core.prisma` | E09 | XPRule, XPEvent, Streak, Badge… |
 | `engagement.prisma` | E10 | Quest, Hackathon, Kudos, LeaderboardPreference… |
 
+> **Process (team decision, 2026-11-06):** Day 2–3 each owner writes a draft in their own file
+> below, on the branch `schema/v1`, without migrations. On Day 4 **E10** combines all drafts into one
+> `schema.prisma` (one section per module) and deletes these files; **E11** creates the initial
+> migration. After that, everyone edits only their own section of `schema.prisma`. The examples below
+> use a module file; after Day 4 the same steps apply to your section of `schema.prisma`.
+
 Every file already exists and is **empty on purpose**. Add your models only after your data model
-(`docs/data-model/<module>.md`) is approved by E01 (Day 4). Do not create new `.prisma` files;
-ask E01 + E11 if you think one is needed.
+is ready. Do not create new `.prisma` files; ask E10 + E11 if you think one is needed.
 
 ## Rules
 
@@ -70,7 +75,7 @@ almost every other model points to them.
    git commit -m "feat(catalog): add Course model"
    git push -u origin feat/e04-catalog-schema
    ```
-   E01 + E11 review every schema PR (CODEOWNERS).
+   E10 + E11 review every schema PR (CODEOWNERS).
 
 ### If someone else merged a migration before you
 

@@ -1,10 +1,14 @@
-# AGENTS.md
+# AGENTS.md (apps/api)
 
-## Production data: NestJS Observe
+Notes for AI coding assistants working in this folder. People: see [README.md](README.md).
 
-This app's production telemetry - traces, errors, logs and metrics - goes to [NestJS Observe](https://observe.nestjs.com). Until `ObserveModule` is registered in `src/app.module.ts`, nothing is sent: `npx @nestjs/observe link` sets it up in one step - it installs `@nestjs/observe`, wires it into the app, and writes the key pair (`OBSERVE_APP_KEY`, `OBSERVE_APP_SECRET`) to `.env`.
-
-When a task depends on how the app behaves in production - an error users hit, a slow endpoint, a failing job, whether a release made things worse - work from that data, not from the code alone:
-
-- The Observe MCP server answers those questions directly: errors with their traces and logs, slow operations, jobs, and what a release changed (`find_regressions`, `diff_release`). It is included on the Pro plan and above. In Claude Code: `claude mcp add observe --transport http https://observe-api.nestjs.com/mcp`, and the client opens a browser to approve. Other clients: https://www.observe.nestjs.com/documentation/mcp
-- Without it, the user can open the request or error in the Observe dashboard and click **Copy agent prompt**, which hands over that page's trace, stack and logs as text.
+- This is the NestJS backend of the BS23 Training Workspace. Requirements: `docs/prd.md`, `docs/srs.md`.
+  Architecture: `docs/adr/0001-monorepo-structure.md`.
+- ESM project: relative imports end in `.js`. Tests use Vitest, lint uses oxlint.
+- Database access only through the global `PrismaService` (`src/prisma/prisma.service.ts`), Prisma 7.10.1.
+  The generated client is in `src/generated/prisma` (git-ignored, created by `pnpm db:generate`).
+- Never run migrations against staging or production, and never edit an existing migration folder.
+- Each module lives in `src/modules/<module>/` and is owned by one team member (see that folder's README).
+  Do not change another module's files or database section.
+- Observability tooling has not been chosen yet. Do not add `@nestjs/observe` or any telemetry SDK.
+- Secrets come from environment variables validated in `src/config/env.validation.ts`; never hard-code them.

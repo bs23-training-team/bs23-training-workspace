@@ -20,8 +20,8 @@
 /turbo.json                             @isfak1537
 /.nvmrc                                 @isfak1537
 
-# ---- Database schema & migrations (E01 + E11 must review) ----
-# /apps/api/prisma/                     @E01_USERNAME @isfak1537
+# ---- Database schema & migrations (E10 + E11 must review) ----
+# /apps/api/prisma/                     @E10_USERNAME @isfak1537
 
 # ---- Shared packages ----
 # /packages/contracts/                  @E01_USERNAME @isfak1537

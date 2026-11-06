@@ -41,20 +41,36 @@ echo 'eval "$(fnm env --use-on-cd --shell zsh)"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-### Windows
+### Windows (Git Bash)
 
-Use **WSL2 (Ubuntu)**, not plain Windows. Run all commands inside the Ubuntu terminal.
+Use **Git Bash** for every command in this guide. PowerShell is needed once (step 2); Ubuntu/WSL
+is not needed.
 
-1. Install WSL2: open PowerShell as Administrator → `wsl --install` → restart.
-2. Install **Docker Desktop for Windows** and enable *Use the WSL 2 based engine*.
-3. Inside Ubuntu, install Git, [fnm](https://github.com/Schniz/fnm#installation),
-   [pnpm](https://pnpm.io/installation) and [GitHub CLI](https://github.com/cli/cli#installation)
-   following each tool's Linux instructions. Use the bash version of the fnm line:
-   `eval "$(fnm env --use-on-cd --shell bash)"` in `~/.bashrc`.
-4. Keep the project **inside the Linux file system** (e.g. `~/projects`), not under `/mnt/c/...`.
-   Under `/mnt/c` everything is much slower.
+1. Install **Git for Windows** (git-scm.com). At the line-ending question choose
+   *Checkout as-is, commit Unix-style line endings*. Git Bash comes with it.
+2. Install **Docker Desktop** (docker.com), restart, and keep Docker Desktop open while you work.
+   Then, in **PowerShell**, once:
+   ```powershell
+   winget install Schniz.fnm
+   winget install GitHub.cli
+   ```
+3. Open **Git Bash** (Start menu) and run:
+   ```bash
+   echo 'eval "$(fnm env --use-on-cd --shell bash)"' >> ~/.bashrc
+   source ~/.bashrc
+   fnm install 26 && fnm default 26
+   npm install -g pnpm@12.16.1
+   git config --global core.autocrlf false
+   ```
+   `core.autocrlf false` stops Git from changing line endings, which would otherwise show every
+   file as modified and break lint.
+4. In VS Code, make Git Bash the default terminal: **Ctrl + Shift + P** →
+   *Terminal: Select Default Profile* → **Git Bash**.
 
-> ⚠ The Windows steps have not been tested on a team machine yet. If something here is wrong,
+`~/projects` in Git Bash is `C:\Users\<you>\projects`. If Docker Desktop reports a WSL error, run
+`wsl --update` in PowerShell.
+
+> ⚠ These Windows steps have not been tested on a team machine yet. If something here is wrong,
 > tell E11 so this guide can be fixed.
 
 ### Linux

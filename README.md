@@ -22,8 +22,8 @@ First time? Follow the full guide: **[docs/setup.md](docs/setup.md)**.
 ## Repository layout
 
 ```
-apps/web      Next.js frontend
-apps/api      NestJS backend (the only place for business rules)
+apps/web      Next.js frontend (src/features/<module> per module)
+apps/api      NestJS backend, the only place for business rules (src/modules/<module> per module)
 packages/     shared code (contracts, ui, config)
 infra/        local Docker Compose
 docs/         setup guide, architecture decisions (adr/), runbooks
@@ -31,6 +31,8 @@ docs/         setup guide, architecture decisions (adr/), runbooks
 
 ## Docs
 
+- [PRD](docs/prd.md): what we build · [SRS](docs/srs.md): technical rules and acceptance tests
+- [Repository structure](docs/repo-structure.md): what every folder is for and where your code goes
 - [Setup guide](docs/setup.md)
 - [Contributing rules](CONTRIBUTING.md): branches, PRs, migrations, secrets
 - [ADR 0001: Monorepo structure](docs/adr/0001-monorepo-structure.md)

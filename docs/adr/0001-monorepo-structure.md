@@ -2,11 +2,11 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed**: skeleton implemented (PR #1, #2); awaiting team / E01 / mentor approval |
-| Date | 2026-11-05 (updated 2026-11-06, see [Changelog](#17-changelog)) |
+| Status | **Proposed**: implemented in PR #1–#5, presented at the team kickoff (2026-11-06); awaiting formal approval from E01 / mentor |
+| Date | 2026-11-05 (last updated 2026-11-06, see [Changelog](#17-changelog)) |
 | Author | E11 (DevOps) |
 | Deciders | E01 (architecture owner), E11, all module owners E02–E10, mentor/PM |
-| Related | `BS23_Final_PRD_EN.pdf` v3.1, `BS23_Final_SRS_EN.pdf` v3.1 |
+| Related | [PRD](../prd.md) and [SRS](../srs.md) v3.2 (UI baseline v19), `BS23_Final_Build_Order_Plan_EN_v19.pdf` |
 
 > **How to review this ADR:** Read sections 3–7. If you disagree with something, comment on the
 > PR with the section number. Items marked **⚠ Verify** are assumptions that must be
@@ -93,125 +93,113 @@ inconsistent local setups, conflicting Prisma migrations, broken shared types, a
 ```
 bs23-training-workspace/
 ├── apps/
-│   ├── web/                          # Next.js (App Router) — UI only, proxies to API
-│   │   ├── src/app/                  # routes (PM + trainee workspaces)
-│   │   ├── src/features/<module>/    # module-specific UI, one folder per module
-│   │   └── Dockerfile
-│   └── api/                          # NestJS + Prisma — the only source of authority
+│   ├── web/                          # Next.js (App Router), UI only, proxies to the API
+│   │   ├── src/app/                  # routes (PM + trainee workspaces), owner of the shell: E01
+│   │   └── src/features/<module>/    # module-specific UI, one folder per module (§5)
+│   └── api/                          # NestJS + Prisma, the only source of authority
+│       ├── prisma.config.ts          # Prisma 7 CLI config (schema folder, DIRECT_URL)
 │       ├── prisma/
-│       │   ├── schema/               # multi-file Prisma schema (see §6)
-│       │   │   ├── base.prisma       # generator + datasource (E11 + E01)
-│       │   │   ├── identity.prisma   # E01
-│       │   │   ├── directory.prisma  # E02
-│       │   │   └── ...               # one file per module
-│       │   ├── migrations/           # ONE shared migration history
-│       │   └── seed/                 # dev/test seed only (incl. 50-course catalog)
+│       │   ├── schema/               # ONE schema (see §6.1)
+│       │   │   ├── base.prisma       # generator + datasource only (E11)
+│       │   │   └── schema.prisma     # all models, one section per module (combined by E10 on Day 4)
+│       │   └── migrations/           # ONE shared migration history (first one: Day 4)
 │       ├── src/
-│       │   ├── main.ts               # HTTP server entrypoint
-│       │   ├── worker.ts             # background worker entrypoint (BullMQ processors)
-│       │   ├── common/               # guards, interceptors, config, logging, health
-│       │   └── modules/              # one folder per module (see §5)
-│       ├── test/                     # integration / e2e API tests
-│       └── Dockerfile                # one image, two commands (api / worker)
+│       │   ├── main.ts               # HTTP server entrypoint (port 4000)
+│       │   ├── app.module.ts         # root module
+│       │   ├── config/               # env validation (E11)
+│       │   ├── prisma/               # PrismaService, global (E11)
+│       │   ├── health/               # /health/live, /health/ready (E11)
+│       │   ├── modules/<module>/     # one folder per module (§5)
+│       │   └── generated/            # Prisma client, generated, git-ignored
+│       └── test/                     # API e2e tests
 ├── packages/
-│   ├── contracts/                    # shared DTOs, enums, zod schemas, API types
-│   ├── ui/                           # shared React components (owner: E10)
-│   └── config/                       # shared eslint, prettier, tsconfig presets
-├── e2e/                              # Playwright PM + trainee journeys
+│   ├── contracts/                    # @bs23/contracts: shared types, one folder per module
+│   └── ui/                           # @bs23/ui: shared React components (owner: E10)
 ├── infra/
-│   ├── docker-compose.yml            # local Postgres 18 (host port 5433) + Redis 8
-│   └── scripts/                      # helper scripts (db reset for local only, etc.)
+│   └── docker-compose.yml            # local Postgres 18 (host port 5433) + Redis 8
 ├── docs/
+│   ├── prd.md, srs.md                # requirements (markdown copies of the v3.2 PDFs)
+│   ├── repo-structure.md             # what every folder is for
+│   ├── setup.md                      # developer onboarding / local setup
+│   ├── week1-team-brief.md
 │   ├── adr/                          # architecture decision records (this file)
-│   ├── runbooks/                     # deploy, rollback, restore, incident
-│   └── setup.md                      # developer onboarding / local setup
+│   └── data-model/                   # data model template
 ├── .github/
-│   ├── workflows/                    # ci.yml, deploy-staging.yml, deploy-prod.yml
+│   ├── workflows/ci.yml              # CI release gate (§10)
 │   ├── CODEOWNERS
 │   └── pull_request_template.md
-├── apps/api/.env.example             # API variables, NO real values (copy to .env)
-├── apps/web/.env.example             # web variables, NO secrets (copy to .env.local)
 ├── .nvmrc                            # pinned Node version (26)
 ├── package.json                      # root scripts + "packageManager" pin
-├── pnpm-workspace.yaml
+├── pnpm-workspace.yaml               # workspace + allowBuilds
 ├── pnpm-lock.yaml                    # committed; CI uses --frozen-lockfile
 └── turbo.json
 ```
+
+**Planned, not created yet:** `apps/api/src/worker.ts` (BullMQ worker, §3.4), `apps/api/prisma/seed/`
+(50-course seed), `packages/config` (shared lint/tsconfig presets), `e2e/` (Playwright), Dockerfiles
+(§11), `docs/runbooks/`, `.github/workflows/deploy-*.yml`. They are added when the phase that needs
+them starts, so the repo never contains empty promises.
 
 ---
 
 ## 5. Module ownership map
 
-Folder names are proposals. Final names should be agreed at the contract-freeze meeting.
+The module folders below exist in the repo (each with an owner README). Renaming one is a small PR reviewed by its owner and E11.
 
-| Owner | API module (`apps/api/src/modules/`) | Web feature (`apps/web/src/features/`) | Prisma file |
+| Owner | API module (`apps/api/src/modules/`) | Web feature (`apps/web/src/features/`) | Section in `schema.prisma` |
 |---|---|---|---|
-| E01 | `identity`, `notifications`, `outbox` (shared event foundation), `dashboard` | `shell`, `auth`, `dashboard`, `notifications` | `identity.prisma` |
-| E02 | `directory` (trainees, teams, L&D feedback) | `directory` | `directory.prisma` |
-| E03 | `assessment` (expertise, attempts, evaluation, AI adapter, appeals, recommendations) | `assessment` | `assessment.prisma` |
-| E04 | `catalog` (courses, versions, assignments, requests) | `catalog` | `catalog.prisma` |
-| E05 | `learning` (roadmap, topic state, progress) | `learning` | `learning.prisma` |
-| E06 | `sprint` (tasks, sheets, DS meetings, code quality) | `sprint` | `sprint.prisma` |
-| E07 | `attendance` (ERP/Teams adapters, sync, leave) | `attendance` | `attendance.prisma` |
-| E08 | `reports` (drafts, snapshots, PDF, mail) | `reports` | `reports.prisma` |
-| E09 | `growth-core` (XP ledger, rules, levels, streaks, badges) | `gamification-core` | `growth-core.prisma` |
-| E10 | `engagement` (quests, leaderboard, hackathon, kudos) | `engagement` + `packages/ui` | `engagement.prisma` |
-| E11 | `common/health`, `common/config` | — | `base.prisma` (with E01) |
+| E01 | `identity`, `notifications`, `outbox` (shared event foundation), `dashboard` | `shell`, `auth`, `dashboard`, `notifications` | `E01: identity` |
+| E02 | `directory` (trainees, teams, L&D feedback) | `directory` | `E02: directory` |
+| E03 | `assessment` (expertise, attempts, evaluation, AI adapter, appeals, recommendations) | `assessment` | `E03: assessment` |
+| E04 | `catalog` (courses, versions, assignments, requests) | `catalog` | `E04: catalog` |
+| E05 | `learning` (roadmap, topic state, progress) | `learning` | `E05: learning` |
+| E06 | `sprint` (tasks, sheets, DS meetings, code quality) | `sprint` | `E06: sprint` |
+| E07 | `attendance` (ERP/Teams adapters, sync, leave) | `attendance` | `E07: attendance` |
+| E08 | `reports` (drafts, snapshots, PDF, mail) | `reports` | `E08: reports` |
+| E09 | `growth-core` (XP ledger, rules, levels, streaks, badges) | `gamification-core` | `E09: growth-core` |
+| E10 | `engagement` (quests, leaderboard, hackathon, kudos) | `engagement` + `packages/ui` | `E10: engagement` |
+| E11 | `src/health`, `src/config`, `src/prisma` | — | `base.prisma` |
 | E11 | Root config, `infra/`, `.github/`, Dockerfiles, `turbo.json`, `docs/runbooks` | | |
 
 **Cross-module rule:** a module calls another module only through that module's exported
 NestJS service or through outbox events, never by writing directly to another module's tables.
 This matches the SRS ownership boundary (e.g. *E09 alone writes core awards; E10 requests them*).
 
-### CODEOWNERS (initial sketch)
+### CODEOWNERS
 
-```
-# Default: DevOps + architecture owner
-*                                   @<E11> @<E01>
-
-/apps/api/src/modules/identity/     @<E01>
-/apps/api/src/modules/directory/    @<E02>
-/apps/api/src/modules/assessment/   @<E03>
-/apps/api/src/modules/catalog/      @<E04>
-/apps/api/src/modules/learning/     @<E05>
-/apps/api/src/modules/sprint/       @<E06>
-/apps/api/src/modules/attendance/   @<E07>
-/apps/api/src/modules/reports/      @<E08>
-/apps/api/src/modules/growth-core/  @<E09>
-/apps/api/src/modules/engagement/   @<E10>
-/packages/ui/                       @<E10>
-/packages/contracts/                @<E01> @<E11>
-
-# Schema & migrations: everyone touches them, so E01 + E11 must review
-/apps/api/prisma/                   @<E01> @<E11>
-
-# Infra & CI
-/infra/                             @<E11>
-/.github/                           @<E11>
-```
-
-(Replace `@<E0x>` with real GitHub usernames. The same mapping applies to `apps/web/src/features/`.)
+The live file is `.github/CODEOWNERS`. Module lines are activated as each member's GitHub username
+is mapped to their E number. Schema changes (`apps/api/prisma/`) are reviewed by **E10 + E11**,
+shared contracts by **E01 + E11**, shared UI by **E10**.
 
 ---
 
 ## 6. Database, Prisma and migrations
 
-### 6.1 Multi-file schema
+### 6.1 One schema: per-module drafts, then one combined file
 
-The SRS requires one canonical schema. To avoid 10 people editing one huge `schema.prisma`,
-we split it into one file per module inside `prisma/schema/`. Prisma still treats it as **one** schema.
+The SRS requires one canonical schema and one migration history. Team decision (kickoff, 2026-11-06):
 
-> **⚠ Verify:** Multi-file schema support depends on the Prisma major/minor version. Recent
-> Prisma versions support it (it started as a preview feature). Confirm the exact
-> configuration for the version we pin. Also check whether our pinned major moves datasource
-> URLs into `prisma.config.ts`, since newer majors have changed configuration.
+1. **Day 2–3 (drafts):** on the shared branch `schema/v1`, each owner writes their models in their own
+   placeholder file (`identity.prisma` … `engagement.prisma`). No migrations yet, no PR to `develop`.
+   Cross-module links are written as plain ID columns with a comment (`traineeId String // → TraineeProfile (E02)`).
+2. **Day 4 (combine):** **E10** reviews every draft, removes duplicates, adds the `@relation`s and
+   combines everything into **one file, `schema.prisma`**, with one commented section per module.
+   The ten draft files are deleted. `base.prisma` (generator + datasource) stays separate.
+3. **Day 4 (migrate):** **E11** creates the single initial migration (`pnpm db:migrate --name init`)
+   and opens the PR `schema/v1` → `develop`.
+4. **After Day 4:** owners change only their own section of `schema.prisma`, with a migration, in small PRs.
 
-### 6.2 Migration rules (to avoid conflicts)
+Why one file in the end: the team preferred one place to see every relation. The cost is that all
+schema PRs touch the same file; editing only your own section keeps git conflicts rare.
+
+Technical basis (verified 2026-11-06): Prisma **7.10.1** reads every `.prisma` file in the folder set in
+`prisma.config.ts` (`schema: 'prisma/schema'`) as one schema, so both the ten-file draft stage and the
+two-file final stage work without config changes.### 6.2 Migration rules (to avoid conflicts)
 
 1. **One migration per PR**, created with `prisma migrate dev --name <module>_<change>`.
-2. Before merging, **rebase on `main`**. If `main` received a new migration, delete your migration, regenerate it, and re-test.
-3. **Never edit a migration that has been merged** to `main`.
-4. CI checks that the schema and the migrations are in sync (no drift), and runs migrations both on an empty DB and as an upgrade from `main`'s state (SRS: *clean and upgrade migrations*).
+2. Before merging, **rebase on `develop`**. If `develop` received a new migration, delete your migration, regenerate it, and re-test.
+3. **Never edit a migration that has been merged** to `develop`.
+4. CI applies all migrations to an empty database and fails when the schema has changes that are not in a migration (drift check). *Implemented.* The upgrade test (from the previous release's state) is added once the first release exists.
 5. **No destructive changes without a plan**: dropping/renaming columns uses expand → migrate data → contract across separate releases. SRS: *do not cascade-delete historical evidence*.
 6. Production migrations run **only** via the deploy pipeline (`prisma migrate deploy`), never from a laptop.
 
@@ -222,7 +210,9 @@ we split it into one file per module inside `prisma/schema/`. Prisma still treat
 | `DATABASE_URL` | Running API + worker | **Pooled** connection string |
 | `DIRECT_URL` | Migrations only (CI/deploy) | **Direct** (non-pooled) connection string |
 
-> **⚠ Verify:** exact variable names and where Prisma reads the direct URL depend on the pinned Prisma version and Neon's current docs.
+Resolved (Prisma 7): `prisma.config.ts` gives the CLI `DIRECT_URL` (falls back to `DATABASE_URL`),
+and the running app passes `DATABASE_URL` to `@prisma/adapter-pg` in `PrismaService`. Locally both
+point to the same Docker database.
 
 ### 6.4 Seeds
 
@@ -236,9 +226,9 @@ we split it into one file per module inside `prisma/schema/`. Prisma still treat
 | Environment | Database | Redis | Deployed from | Purpose |
 |---|---|---|---|---|
 | **local** | Postgres 18 in Docker Compose (host port **5433**) | Redis 8 in Docker Compose (6379) | developer machine | daily development |
-| **ci/test** | Postgres service container (fresh per run) | Redis service container | GitHub Actions | automated tests on real PostgreSQL |
-| **staging** | Neon (separate project or branch) | hosted Redis (TBD) | auto-deploy on merge to `main` | integration, smoke tests, restore/rollback drills |
-| **production** | Neon (separate, protected) | hosted Redis (TBD) | manual approval / release tag | real users |
+| **ci/test** | Postgres 18 service container (fresh per run) | added when the first Redis feature lands | GitHub Actions | automated tests on real PostgreSQL |
+| **staging** | Neon (separate project or branch) | hosted Redis (TBD) | auto-deploy on merge to `develop` | integration, smoke tests, restore/rollback drills |
+| **production** | Neon (separate, protected) | hosted Redis (TBD) | merge `develop` → `main` with manual approval | real users |
 
 - The local Postgres **major version must match Neon's**, so behavior is the same. Neon's default for new projects is Postgres 18 (Neon changelog, June 2026), so local uses `postgres:18-alpine`.
 - Local Postgres is exposed on host port **5433**, not 5432. Many developers already have a Postgres installed on 5432, and connections to `localhost:5432` would silently reach that one instead of the Docker database.
@@ -256,8 +246,8 @@ we split it into one file per module inside `prisma/schema/`. Prisma still treat
 1a. **The repository is public** (chosen because branch rulesets are not enforced on private repos on GitHub Free). Every commit is world-readable, so a leaked secret must be revoked, not just deleted.
 2. Secrets (DB, AI API key, mail provider, ERP/Teams, SonarQube tokens) live in **GitHub Environments secrets** and in the hosting provider's secret store, never in code.
 3. **Never** put a secret in a `NEXT_PUBLIC_*` variable (SRS p.9). Those are shipped to the browser.
-4. Config is validated at startup (NestJS `ConfigModule` + a schema). The app **refuses to start** if a required variable is missing.
-5. CI runs a secret scanner (e.g. gitleaks) on every PR.
+4. Config is validated at startup (`apps/api/src/config/env.validation.ts`). The API **refuses to start** if a required variable is missing and names it. *Implemented.*
+5. *Planned:* CI runs a secret scanner (e.g. gitleaks) on every PR.
 6. Logs must not contain credentials, private answers or leave reasons (SRS p.9).
 
 ---
@@ -266,7 +256,8 @@ we split it into one file per module inside `prisma/schema/`. Prisma still treat
 
 - **Two long-lived branches:** `develop` (integration, default branch, deploys to staging) and `main` (production, merged from `develop` at release time by E11/E01 only).
 - **Short-lived task branches** (1–3 days) off `develop`: `feat/e04-course-requests`, `fix/e07-leave-dates`, `chore/e11-ci-cache`. No long-lived per-member branches: they cause late, painful integration.
-- **Branch ruleset on `main` and `develop`:** PR required, 1 approval, no force-push, no deletion. CI status checks will be added as required once CI exists. Repository admins may bypass the approval for PRs only.
+- **Branch ruleset on `main` and `develop`:** PR required, 1 approval, **CI check required**, no force-push, no deletion. Repository admins can bypass for PRs only, used only when CI is green and no second reviewer exists yet.
+- **Shared draft branch `schema/v1`:** unprotected, used only for the Day 2–4 schema drafts (§6.1), merged into `develop` by one PR and then retired.
 - PR authors merge their own approved PRs into `develop`.
 - **Squash merge** with Conventional Commit titles (`feat(catalog): add course request API`).
 - Full rules for the team: `CONTRIBUTING.md`.
@@ -277,17 +268,18 @@ we split it into one file per module inside `prisma/schema/`. Prisma still treat
 
 ## 10. CI/CD pipeline (maps to the SRS release gate)
 
-| # | SRS gate step | Implementation | Phase |
+| # | SRS gate step | Implementation | Status |
 |---|---|---|---|
-| 1 | Locked install | `pnpm install --frozen-lockfile` | 2 |
-| 2 | Lint / types | `turbo run lint typecheck` (only affected packages) | 2 |
-| 3 | Prisma validate / generate | `prisma validate`, `prisma generate` | 2 |
-| 4 | Clean + upgrade migrations | `migrate deploy` on empty DB; upgrade test from `main`; drift check | 2 |
-| 5 | Backend / domain / access / contract / idempotency tests | Jest against real Postgres + Redis service containers | 2 |
-| 6 | Next production build | `turbo run build` | 2 |
-| 7 | PM / trainee E2E | Playwright against the built stack | 3–4 |
-| 8 | Staging migrations / smoke | deploy to staging → `migrate deploy` → health + smoke tests | 3 |
-| 9 | Controlled release + recovery checks | manual-approval production deploy; rollback + restore drill in staging | 4–6 |
+| 1 | Locked install | `pnpm install --frozen-lockfile` | ✅ in `ci.yml` |
+| 2 | Lint / types | `pnpm lint`, `pnpm typecheck` (Turborepo) | ✅ |
+| 3 | Prisma validate / generate | `pnpm db:validate`; generate runs before every task | ✅ |
+| 4 | Clean + upgrade migrations | `migrate deploy` on an empty Postgres 18 + `migrate diff --exit-code` drift check | ✅ clean + drift; upgrade test after first release |
+| 5 | Backend / domain / access / contract / idempotency tests | Vitest (`pnpm test`); module owners add tests with their modules | ✅ runner; tests grow with modules |
+| 6 | Next production build | `pnpm build` | ✅ |
+| – | API smoke test (extra) | start built API, wait for `/health/ready` | ✅ |
+| 7 | PM / trainee E2E | Playwright against the built stack | Planned (Phase 3–4) |
+| 8 | Staging migrations / smoke | deploy to staging → `migrate deploy` → health + smoke tests | Planned (Phase 3) |
+| 9 | Controlled release + recovery checks | manual-approval production deploy; rollback + restore drill in staging | Planned (Phase 4–6) |
 
 Extra checks (not in SRS, recommended): secret scanning, dependency audit, SonarQube Cloud
 analysis (already in scope for code quality, QUALITY-01).
@@ -296,8 +288,9 @@ analysis (already in scope for code quality, QUALITY-01).
 
 ## 11. Docker
 
-- `infra/docker-compose.yml` for local Postgres + Redis. One command: `docker compose up -d`.
-- Multi-stage Dockerfiles using `turbo prune` so each image contains only what it needs.
+- `infra/docker-compose.yml` for local Postgres + Redis. One command: `pnpm infra:up` (also `infra:down`, `infra:logs`). *Implemented.*
+- On Windows the team runs Docker Desktop and uses **Git Bash** for all commands (`docs/setup.md`).
+- *Planned (Phase 3):* multi-stage Dockerfiles using `turbo prune` so each image contains only what it needs.
 - `apps/api` builds **one image** that runs as either `api` (`node dist/main.js`) or `worker` (`node dist/worker.js`).
 - Containers run as a non-root user, with health checks.
 
@@ -310,7 +303,8 @@ analysis (already in scope for code quality, QUALITY-01).
 | Node.js | **26** (Active LTS since 2026-10-28) via `.nvmrc` + `"engines": ">=26 <27"`. Verified: Next.js and NestJS skeletons build and run on Node 26.13.0. |
 | pnpm | `"packageManager": "pnpm@12.16.1"` in root `package.json` |
 | Dependencies | exact versions + committed `pnpm-lock.yaml` |
-| Prisma / Next / NestJS / Postgres | pinned majors, upgraded deliberately in dedicated PRs |
+| Prisma | **7.10.1** exact (`prisma`, `@prisma/client`, `@prisma/adapter-pg`). npm's `latest` tag pointed to an 8.0 release candidate on 2026-11-06, so Prisma is never added without a version. |
+| Next / NestJS / Postgres | Next.js 16, NestJS 12 (CLI), Postgres 18; upgraded deliberately in dedicated PRs |
 
 > Resolved 2026-11-06: Node 26 chosen (see table). pnpm is installed directly (Homebrew on macOS), not via Corepack.
 
@@ -318,7 +312,7 @@ analysis (already in scope for code quality, QUALITY-01).
 
 ## 13. Observability (later phases)
 
-- Health endpoints: `GET /health/live` (process up) and `GET /health/ready` (DB + Redis reachable).
+- Health endpoints: `GET /health/live` (process up) and `GET /health/ready` (database reachable, HTTP 503 when not). *Implemented;* the Redis check is added with the first Redis feature.
 - Structured JSON logs with request IDs, with private fields scrubbed.
 - Job monitoring: queue depth, failed jobs, retry counts, ERP/Teams sync freshness, mail send status (SRS p.9).
 - Error tracking and uptime alerts: tools TBD, free-tier options to be compared in Phase 5.
@@ -330,37 +324,39 @@ analysis (already in scope for code quality, QUALITY-01).
 **Positive**
 - One `git clone` + one `docker compose up` + one `pnpm dev` gives a working stack for every developer.
 - Contract changes are caught in CI before they break another module.
-- Schema conflicts are reduced by per-module schema files and clear migration rules.
+- Schema conflicts are reduced by the draft-then-combine process (§6.1), per-module sections and clear migration rules.
 - CI enforces the SRS release gate automatically.
 
 **Negative / costs**
 - Everyone must learn basic pnpm/Turborepo commands (covered in `docs/setup.md`).
-- The shared migration history still needs discipline (§6.2). E01 + E11 review all schema PRs.
+- The shared migration history still needs discipline (§6.2). E10 + E11 review all schema PRs.
+- One combined `schema.prisma` means every schema PR touches the same file; owners must stay inside their own section.
 - Redis adds one more service to host and monitor.
 - Monorepo CI needs caching to stay fast as the code grows.
 
 ---
 
-## 15. Open questions (to resolve before or during Phase 1)
+## 15. Open questions
 
-1. Does E01 / the team accept this layout and the module folder names? (blocking)
-2. Who creates and administers the GitHub organization (team or BS23)?
-3. Final module folder names. Should they be agreed at the contract-freeze meeting?
+1. ~~Does the team accept this layout?~~ Presented at the kickoff (2026-11-06). Formal approval by E01 / mentor pending.
+2. ~~Who administers the GitHub organization?~~ E11 (`bs23-training-team`). Public repo still to be confirmed with the mentor.
+3. ~~Module folder names?~~ Created (§5); renames by small PR.
 4. Hosting providers for staging/production (Phase 3, after free-tier verification).
 5. Hosted Redis choice and limits (Phase 3).
-6. Isolated code runner design for AI-01 (code execution with resource/network limits). Phase 6, needs its own ADR.
-7. File storage for PDFs / profile photos (SRS lists it as an open "supporting host/job/file choice").
+6. Isolated code runner design for AI-01 (code execution with resource/network limits). Needs its own ADR.
+7. File storage for PDFs / profile photos (SRS: open "supporting host/job/file choice").
 8. Retention, recovery (RPO/RTO) and load targets. SRS marks them as pending decisions.
+9. Cache Components is on in the Next.js scaffold (create-next-app default). E01 to confirm.
 
 ---
 
 ## 16. Next steps
 
-1. ~~E11 creates the GitHub org/repo and enables branch protection.~~ Done.
-2. ~~E11 pushes the monorepo skeleton, `docker-compose.yml`, `.env.example` files and `docs/setup.md`.~~ Done (PR #1, #2, #3).
-3. Every developer follows `docs/setup.md` and confirms the stack runs locally.
-4. E11 adds the first CI workflow (gate steps 1–6).
-5. Module owners start their modules inside their own folders.
+1. ~~Repo, rules, skeleton, local infra, Prisma, contracts, health checks, CI, docs.~~ Done (PR #1–#5).
+2. Every developer follows `docs/setup.md` and confirms the stack runs locally.
+3. Day 2–4: schema drafts → E10 combine → E11 initial migration (§6.1).
+4. E11: Neon staging, hosting choice and first deploy (Phase 3).
+5. Module owners build their modules inside their folders (§5).
 
 ---
 
@@ -377,3 +373,15 @@ analysis (already in scope for code quality, QUALITY-01).
 | Local DB | Postgres 18 (matches Neon default) on host port **5433** to avoid clashing with pre-installed Postgres on 5432. Volume persistence verified (data survives `infra:down` / `infra:up`). |
 | Env files | Per-app `.env.example` instead of one root file. `apps/web/.gitignore` needed `!.env.example`, because its `.env*` rule was hiding the example file. |
 | Git | `develop` + `main` model with short-lived task branches (§9). Repo made public so rulesets are enforced on GitHub Free. |
+
+**2026-11-06 (later): Prisma, CI and the schema process**
+
+| Area | Decision / finding |
+|---|---|
+| Prisma | 7.10.1 pinned. Schema folder in `prisma.config.ts`; `DIRECT_URL` for the CLI, `DATABASE_URL` via `@prisma/adapter-pg` at runtime. `prisma generate --no-hints` (avoids a 30-second interactive prompt). |
+| pnpm | `allowBuilds` allows `prisma` and `@prisma/engines` install scripts; pnpm 12 fails the install when they are blocked. |
+| Schema process | Per-module drafts on `schema/v1`, combined by **E10** into one `schema.prisma` on Day 4, initial migration by E11 (§6.1). Changes the earlier plan of keeping ten permanent module files and E01 as schema reviewer. |
+| CI | `.github/workflows/ci.yml` implements gate steps 1–6 plus an API smoke test; set as a required check on `main` and `develop`. |
+| Packages | `@bs23/contracts` (built ESM types, `health` contract) and `@bs23/ui` (skeleton for E10). |
+| Windows | Team machines run Windows: Git Bash + Docker Desktop instead of WSL/Ubuntu (`docs/setup.md`). |
+| Docs | PRD/SRS v3.2 added as markdown (`docs/prd.md`, `docs/srs.md`); module folders created with owner READMEs; `docs/repo-structure.md` explains every folder. |

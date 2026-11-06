@@ -2,6 +2,10 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# pnpm blocks dependency install scripts unless they are listed here.
+# true  = allowed to run, false = intentionally skipped (prebuilt binaries are used instead).
 allowBuilds:
+  "@prisma/engines": true
+  prisma: true
   sharp: false
   unrs-resolver: false

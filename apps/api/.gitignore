@@ -1,0 +1,2 @@
+# Prisma client is generated from prisma/schema (run: pnpm db:generate)
+src/generated/

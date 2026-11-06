@@ -12,7 +12,14 @@
     "test": "turbo run test",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d --wait",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
-    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f"
+    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "turbo run db:generate",
+    "db:validate": "pnpm --filter api exec prisma validate",
+    "db:migrate": "pnpm --filter api exec prisma migrate dev",
+    "db:deploy": "pnpm --filter api exec prisma migrate deploy",
+    "db:status": "pnpm --filter api exec prisma migrate status",
+    "db:studio": "pnpm --filter api exec prisma studio"
   },
   "devDependencies": {
     "turbo": "^2.11.10"

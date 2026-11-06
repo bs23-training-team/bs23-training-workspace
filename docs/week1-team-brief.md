@@ -29,15 +29,19 @@ Some of us assumed each member builds a separate database and E10 merges them at
 - **One Prisma schema and one migration history, from day one** (SRS p.8, Build Plan p.9).
 - *"Coordinate shared schema changes; do not create eleven competing migration histories."*
   (Build Plan p.10)
-- **Every owner writes their own models** inside the shared schema, in their own file:
-  `apps/api/prisma/schema/<module>.prisma`.
-- **E01** owns the shared architecture, identity and the shared data-model review.
-- **E11** sets up the Prisma tooling and runs migrations on staging/production through the
-  pipeline. E11 does not write everyone's business models (Build Plan p.2).
-- **E10 is a full-stack module owner** like everyone else (quests, leaderboards, hackathons,
-  kudos). E10 also supports **shared UI components and integration fixtures**. E10 is *not*
-  the person who merges or fixes everyone's modules at the end. *"Domain owners remain
-  responsible for their own bugs"* (Build Plan p.2, p.8).
+- **Every owner writes their own models** first, as a draft in their own placeholder file
+  (`apps/api/prisma/schema/<module>.prisma`) on the shared branch `schema/v1`.
+- **E10** reviews all drafts on Day 4 and combines them into **one `schema.prisma`** with one section
+  per module (team decision at the kickoff, 2026-11-06). E10 also supports shared UI components and
+  integration fixtures, and owns the engagement module (quests, leaderboards, hackathons, kudos).
+- **E11** sets up the Prisma tooling, creates the initial migration on Day 4 and runs migrations on
+  staging/production through the pipeline. E11 does not write everyone's business models (Build Plan p.2).
+- **E01** still owns identity, the shared shell and the shared event foundation.
+- After Day 4 every owner keeps fixing bugs in their own module. *"Domain owners remain responsible
+  for their own bugs"* (Build Plan p.2, p.8).
+
+The step-by-step guide with commands for every member is the shared **Schema v1 team guide** doc
+(link in the team group).
 
 **Why:** if 10 people build separately and merge in Week 9, IDs, relations and migrations
 will not fit together, and there will be no time to fix it. Integrating small pieces every
@@ -61,7 +65,7 @@ day is how the plan avoids that.
 | 3 | E08 | Report / snapshot schema and all-source fixtures |
 | 3 | E09 | Reward key / status contract |
 | 3 | E10 | Engagement entities and shared components |
-| 4 | Owners + E01 | Shared data model documented and reviewed. First Prisma migrations applied to an isolated PostgreSQL. |
+| 4 | E10 + E11 | E10 reviews and combines the drafts into `schema.prisma`; E11 applies the first migration to an isolated PostgreSQL and merges `schema/v1` into `develop`. |
 | 4 | E11 | Locked builds, CI and staging skeleton |
 | 5 | All | Demo: PM creates trainee → trainee signs in. Verify IDs/access/fixtures across modules. Re-estimate workload. |
 
@@ -73,17 +77,17 @@ fixtures (fake sample data) instead of waiting for you.
 
 ## 3. How to deliver your Day 2–3 contract
 
-Each owner opens **one PR** containing:
+1. **Schema draft:** on branch `schema/v1`, write your models in your own file
+   `apps/api/prisma/schema/<module>.prisma`, check with `pnpm db:validate`, push. Links to other
+   modules are plain ID columns with a comment: `traineeId String // → TraineeProfile (E02)`.
+   E01, E02 and E04 push on Day 2 (most models point to theirs); everyone else on Day 3.
+2. **Shared types (optional on Day 2–3):** DTOs other modules need go in
+   `packages/contracts/src/<module>/` (separate small PR into `develop`).
+3. **Notes (optional):** open questions or rules that don't fit in the schema can go in
+   `docs/data-model/<module>.md`, using [the template](data-model/_TEMPLATE.md).
 
-1. `docs/data-model/<module>.md`: your data model, using
-   [docs/data-model/_TEMPLATE.md](data-model/_TEMPLATE.md)
-2. (after E11 creates `packages/contracts`) your shared TypeScript types in
-   `packages/contracts/src/<module>/`
-
-Reviewers: **E01** (always) + every owner whose module you reference or who consumes your events.
-
-Do **not** write Prisma migrations before the Day 4 review. On Day 4, after review, each owner
-adds `apps/api/prisma/schema/<module>.prisma` and E01 + E11 review the first migration together.
+Do **not** run `pnpm db:migrate` and do **not** open a schema PR into `develop` before Day 4.
+On Day 4, E10 combines the drafts and E11 creates the single initial migration.
 
 ---
 
@@ -160,9 +164,9 @@ A green build or a convincing prototype screen is **not** "done".
 
 - ✅ Repository, branch rules, monorepo skeleton (`apps/web`, `apps/api`), local Postgres 18 + Redis
 - ✅ `docs/setup.md`, `CONTRIBUTING.md`, PR template, CODEOWNERS
-- ⏳ Prisma tooling with the per-module schema folder
-- ⏳ `packages/contracts` and `packages/ui` skeletons
-- ⏳ CI (install → lint/types → Prisma validate → tests → build) on every PR
+- ✅ Prisma 7 tooling, schema placeholder files, `PrismaService` and health checks
+- ✅ `packages/contracts` and `packages/ui` skeletons, module folders in `apps/api` and `apps/web`
+- ✅ CI (install → lint/types → Prisma validate → migrations → tests → build) required on every PR
 - ⏳ Neon staging + first skeleton deploy
 - ⏳ Provider access request list sent to the PM/mentor
 

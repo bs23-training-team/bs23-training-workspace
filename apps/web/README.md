@@ -1,36 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# apps/web: Next.js frontend
 
-## Getting Started
+The PM and trainee screens. It shows data and sends user actions to the NestJS API (`apps/api`);
+it never decides permissions, scores, XP or approvals itself (SRS p.9).
 
-First, run the development server:
+## Run
+
+From the repository root (first time: [docs/setup.md](../../docs/setup.md)):
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm infra:up
+pnpm dev        # web on http://localhost:3000, api on http://localhost:4000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Environment: copy `.env.example` to `.env.local`. Every `NEXT_PUBLIC_*` variable is visible in the
+browser, so never put a secret there.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Code layout
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/                    # routes (pages and layouts), App Router. Shell and route folders: E01
+└── features/<module>/      # one folder per module, owned by its developer (see its README)
+public/                     # static files (images, icons)
+```
 
-## Learn More
+Pages in `src/app` stay thin and import from `src/features/<module>`. Shared components come from
+`@bs23/ui` (E10), shared types from `@bs23/contracts`.
 
-To learn more about Next.js, take a look at the following resources:
+The SVGs in `public/` and the content of `src/app/page.tsx` are create-next-app placeholders. E01
+replaces them when building the shell.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Commands
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm --filter web dev
+pnpm --filter web lint
+pnpm --filter web typecheck
+pnpm --filter web build
+```

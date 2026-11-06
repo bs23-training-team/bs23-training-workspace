@@ -118,13 +118,15 @@ change it, so these rules are strict:
 2. **Never edit a migration that is already merged** into `develop`.
 3. If `develop` received a new migration while you were working: rebase, **delete your
    migration folder, generate it again**, and re-test.
-4. **Dropping or renaming** a column/table: talk to E01 and E11 **before** writing it. We do
+4. **Dropping or renaming** a column/table: talk to E10 and E11 **before** writing it. We do
    these in steps (add new → copy data → remove old) so no history is lost.
 5. Nobody runs migrations against staging or production from their laptop. Only the deploy
    pipeline does that.
 6. Seed data (including the 50-course catalog) is for local/test/staging only, never production.
 
-Schema PRs always need review from E01 + E11 (see CODEOWNERS).
+After Day 4 all models live in one file, `apps/api/prisma/schema/schema.prisma`, with one section
+per module. **Edit only your own section.** Schema PRs always need review from E10 + E11 (see CODEOWNERS).
+Before Day 4, schema drafts go only to the `schema/v1` branch (see `docs/week1-team-brief.md`).
 
 ---
 

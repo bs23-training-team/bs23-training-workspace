@@ -1,0 +1,8 @@
+// ============================================================================
+// Owner: E10 (quests, leaderboard, hackathons, kudos)
+// Planned records (SRS p.8): Quest, QuestProgress, LeaderboardPreference, Hackathon, HackathonEntry, Kudos, KudosReview
+//
+// Empty on purpose. Add your models here AFTER your data model
+// (docs/data-model/<module>.md) is approved by E01 on Day 4.
+// Rules and an example: see README.md in this folder.
+// ============================================================================

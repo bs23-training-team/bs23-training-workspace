@@ -1,0 +1,8 @@
+// ============================================================================
+// Owner: E08 (reports, PDF, mail)
+// Planned records (SRS p.8): ReportDraftVersion, Snapshot, ReportFile, MailDelivery, MailAttempt
+//
+// Empty on purpose. Add your models here AFTER your data model
+// (docs/data-model/<module>.md) is approved by E01 on Day 4.
+// Rules and an example: see README.md in this folder.
+// ============================================================================

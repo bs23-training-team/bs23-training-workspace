@@ -1,0 +1,58 @@
+# CODEOWNERS
+# The owners listed for a path are automatically requested as reviewers on PRs that change it.
+# The LAST matching rule wins.
+#
+# TODO (E11): replace each placeholder with the member's real GitHub username
+# (e.g. @isfak1537) and remove the leading "# " to activate the line.
+# Lines with usernames that don't exist or have no repo access show errors on GitHub,
+# so only uncomment a line once that member has accepted the repo invitation.
+
+# Default owner for everything not matched below
+*                                       @isfak1537
+
+# ---- Infra, CI and root config (E11) ----
+/infra/                                 @isfak1537
+/.github/                               @isfak1537
+/docs/                                  @isfak1537
+/package.json                           @isfak1537
+/pnpm-workspace.yaml                    @isfak1537
+/pnpm-lock.yaml                         @isfak1537
+/turbo.json                             @isfak1537
+/.nvmrc                                 @isfak1537
+
+# ---- Database schema & migrations (E01 + E11 must review) ----
+# /apps/api/prisma/                     @E01_USERNAME @isfak1537
+
+# ---- Shared packages ----
+# /packages/contracts/                  @E01_USERNAME @isfak1537
+# /packages/ui/                         @E10_USERNAME
+
+# ---- API modules ----
+# /apps/api/src/modules/identity/       @E01_USERNAME
+# /apps/api/src/modules/notifications/  @E01_USERNAME
+# /apps/api/src/modules/outbox/         @E01_USERNAME
+# /apps/api/src/modules/dashboard/      @E01_USERNAME
+# /apps/api/src/modules/directory/      @E02_USERNAME
+# /apps/api/src/modules/assessment/     @E03_USERNAME
+# /apps/api/src/modules/catalog/        @E04_USERNAME
+# /apps/api/src/modules/learning/       @E05_USERNAME
+# /apps/api/src/modules/sprint/         @E06_USERNAME
+# /apps/api/src/modules/attendance/     @E07_USERNAME
+# /apps/api/src/modules/reports/        @E08_USERNAME
+# /apps/api/src/modules/growth-core/    @E09_USERNAME
+# /apps/api/src/modules/engagement/     @E10_USERNAME
+
+# ---- Web features ----
+# /apps/web/src/features/shell/         @E01_USERNAME
+# /apps/web/src/features/auth/          @E01_USERNAME
+# /apps/web/src/features/dashboard/     @E01_USERNAME
+# /apps/web/src/features/notifications/ @E01_USERNAME
+# /apps/web/src/features/directory/     @E02_USERNAME
+# /apps/web/src/features/assessment/    @E03_USERNAME
+# /apps/web/src/features/catalog/       @E04_USERNAME
+# /apps/web/src/features/learning/      @E05_USERNAME
+# /apps/web/src/features/sprint/        @E06_USERNAME
+# /apps/web/src/features/attendance/    @E07_USERNAME
+# /apps/web/src/features/reports/       @E08_USERNAME
+# /apps/web/src/features/gamification-core/ @E09_USERNAME
+# /apps/web/src/features/engagement/    @E10_USERNAME

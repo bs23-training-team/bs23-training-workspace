@@ -90,50 +90,86 @@ inconsistent local setups, conflicting Prisma migrations, broken shared types, a
 
 ## 4. Decision: repository layout
 
+Exact layout of `develop` on 2026-11-06 (commit `127dd1e`, 111 tracked files). Local-only folders
+(`node_modules`, `.next`, `dist`, `.turbo`, `src/generated`, `.env`) are not shown.
+
 ```
 bs23-training-workspace/
-├── apps/
-│   ├── web/                          # Next.js (App Router), UI only, proxies to the API
-│   │   ├── src/app/                  # routes (PM + trainee workspaces), owner of the shell: E01
-│   │   └── src/features/<module>/    # module-specific UI, one folder per module (§5)
-│   └── api/                          # NestJS + Prisma, the only source of authority
-│       ├── prisma.config.ts          # Prisma 7 CLI config (schema folder, DIRECT_URL)
-│       ├── prisma/
-│       │   ├── schema/               # ONE schema (see §6.1)
-│       │   │   ├── base.prisma       # generator + datasource only (E11)
-│       │   │   └── schema.prisma     # all models, one section per module (combined by E10 on Day 4)
-│       │   └── migrations/           # ONE shared migration history (first one: Day 4)
-│       ├── src/
-│       │   ├── main.ts               # HTTP server entrypoint (port 4000)
-│       │   ├── app.module.ts         # root module
-│       │   ├── config/               # env validation (E11)
-│       │   ├── prisma/               # PrismaService, global (E11)
-│       │   ├── health/               # /health/live, /health/ready (E11)
-│       │   ├── modules/<module>/     # one folder per module (§5)
-│       │   └── generated/            # Prisma client, generated, git-ignored
-│       └── test/                     # API e2e tests
-├── packages/
-│   ├── contracts/                    # @bs23/contracts: shared types, one folder per module
-│   └── ui/                           # @bs23/ui: shared React components (owner: E10)
-├── infra/
-│   └── docker-compose.yml            # local Postgres 18 (host port 5433) + Redis 8
-├── docs/
-│   ├── prd.md, srs.md                # requirements (markdown copies of the v3.2 PDFs)
-│   ├── repo-structure.md             # what every folder is for
-│   ├── setup.md                      # developer onboarding / local setup
-│   ├── week1-team-brief.md
-│   ├── adr/                          # architecture decision records (this file)
-│   └── data-model/                   # data model template
 ├── .github/
-│   ├── workflows/ci.yml              # CI release gate (§10)
-│   ├── CODEOWNERS
+│   ├── workflows/ci.yml              ← CI: runs on every PR
+│   ├── CODEOWNERS                    ← who reviews which folder
 │   └── pull_request_template.md
-├── .nvmrc                            # pinned Node version (26)
-├── package.json                      # root scripts + "packageManager" pin
-├── pnpm-workspace.yaml               # workspace + allowBuilds
-├── pnpm-lock.yaml                    # committed; CI uses --frozen-lockfile
-└── turbo.json
+│
+├── apps/
+│   ├── api/                          ← BACKEND (NestJS, port 4000)
+│   │   ├── prisma/schema/
+│   │   │   ├── base.prisma           ← generator + datasource (E11)
+│   │   │   ├── identity.prisma       ← E01 ┐
+│   │   │   ├── directory.prisma      ← E02 │
+│   │   │   ├── assessment.prisma     ← E03 │
+│   │   │   ├── catalog.prisma        ← E04 │
+│   │   │   ├── learning.prisma       ← E05 │ empty now,
+│   │   │   ├── sprint.prisma         ← E06 │ drafts on Day 2–3,
+│   │   │   ├── attendance.prisma     ← E07 │ combined by E10 into one file on Day 4
+│   │   │   ├── reports.prisma        ← E08 │
+│   │   │   ├── growth-core.prisma    ← E09 │
+│   │   │   ├── engagement.prisma     ← E10 ┘
+│   │   │   └── README.md
+│   │   ├── src/
+│   │   │   ├── modules/              ← backend of each module (README only for now)
+│   │   │   │   ├── identity/ notifications/ outbox/ dashboard/   ← E01
+│   │   │   │   ├── directory/      ← E02     ├── sprint/       ← E06
+│   │   │   │   ├── assessment/     ← E03     ├── attendance/   ← E07
+│   │   │   │   ├── catalog/        ← E04     ├── reports/      ← E08
+│   │   │   │   ├── learning/       ← E05     ├── growth-core/  ← E09
+│   │   │   │   └── engagement/     ← E10
+│   │   │   ├── config/               ← env validation (E11)
+│   │   │   ├── health/               ← /health/live, /health/ready (E11)
+│   │   │   ├── prisma/               ← PrismaService (E11)
+│   │   │   ├── app.module.ts         ← every module is registered here
+│   │   │   ├── main.ts               ← starts the server
+│   │   │   └── app.controller.ts, app.service.ts (+ spec)  ← "Hello World" sample
+│   │   ├── test/app.e2e-spec.ts
+│   │   ├── prisma.config.ts
+│   │   ├── .env.example, README.md, AGENTS.md
+│   │   └── package.json, tsconfig, vitest, oxlint, nest-cli config
+│   │
+│   └── web/                          ← FRONTEND (Next.js, port 3000)
+│       ├── src/
+│       │   ├── app/                  ← routes/pages (create-next-app sample page for now)
+│       │   │   └── layout.tsx, page.tsx, globals.css, favicon.ico
+│       │   └── features/             ← UI of each module (README only for now)
+│       │       ├── shell/ auth/ dashboard/ notifications/   ← E01
+│       │       ├── directory/      ← E02     ├── sprint/             ← E06
+│       │       ├── assessment/     ← E03     ├── attendance/         ← E07
+│       │       ├── catalog/        ← E04     ├── reports/            ← E08
+│       │       ├── learning/       ← E05     ├── gamification-core/  ← E09
+│       │       └── engagement/     ← E10
+│       ├── public/                   ← 5 sample SVGs (E01 replaces them)
+│       ├── .env.example, README.md, AGENTS.md
+│       └── package.json, next.config.ts, eslint, tsconfig
+│
+├── packages/
+│   ├── contracts/src/health/         ← shared types (only health so far)
+│   └── ui/src/index.ts               ← shared components (E10, empty)
+│
+├── infra/docker-compose.yml          ← local Postgres 18 + Redis 8
+│
+├── docs/
+│   ├── prd.md, srs.md                ← requirements
+│   ├── repo-structure.md             ← what every folder is for
+│   ├── setup.md                      ← first-time setup
+│   ├── week1-team-brief.md
+│   ├── adr/0001-monorepo-structure.md
+│   └── data-model/_TEMPLATE.md
+│
+├── CONTRIBUTING.md, README.md
+├── package.json, pnpm-workspace.yaml, pnpm-lock.yaml
+└── turbo.json, .nvmrc, .gitignore
 ```
+
+**After Day 4** the ten module `.prisma` files are replaced by one `schema.prisma` (§6.1), and
+`apps/api/prisma/migrations/` appears with the first migration.
 
 **Planned, not created yet:** `apps/api/src/worker.ts` (BullMQ worker, §3.4), `apps/api/prisma/seed/`
 (50-course seed), `packages/config` (shared lint/tsconfig presets), `e2e/` (Playwright), Dockerfiles
@@ -385,3 +421,4 @@ analysis (already in scope for code quality, QUALITY-01).
 | Packages | `@bs23/contracts` (built ESM types, `health` contract) and `@bs23/ui` (skeleton for E10). |
 | Windows | Team machines run Windows: Git Bash + Docker Desktop instead of WSL/Ubuntu (`docs/setup.md`). |
 | Docs | PRD/SRS v3.2 added as markdown (`docs/prd.md`, `docs/srs.md`); module folders created with owner READMEs; `docs/repo-structure.md` explains every folder. |
+| Layout | §4 now shows the exact repository tree on `develop` (commit `127dd1e`) instead of the target sketch. |

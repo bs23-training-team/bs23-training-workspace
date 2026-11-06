@@ -1,8 +1,41 @@
-// ============================================================================
-// Owner: E04 (catalog, assignments, requests)
-// Planned records (SRS p.8): Course, CourseVersion, Topic, Resource, Assignment, Request
-//
-// Empty on purpose. Add your models here AFTER your data model
-// (docs/data-model/<module>.md) is approved by E01 on Day 4.
-// Rules and an example: see README.md in this folder.
-// ============================================================================
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 1. Courses Table (URL: /lms/myCourses/:courseSlug)
+model Course {
+  id          String   @id @default(uuid())
+  title       String
+  slug        String   @unique // URL er jonno: full-stack
+  description String?
+  thumbnail   String?
+  topics      Topic[]  // Relation with Topics
+  createdAt   DateTime @default(now())
+}
+
+// 2. Topic Table (URL: /lms/myCourses/:courseSlug/:topicSlug)
+model Topic {
+  id        String     @id @default(uuid())
+  title     String     // Jemon: HTML, CSS, JavaScript
+  slug      String     @unique
+  order     Int        // Roadmap er sequence maintain korar jonno (1, 2, 3...)
+  courseId  String     // Foreign Key (Course ID)
+  course    Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons   Lesson[]   // Relation with Lessons
+}
+
+// 3. Lesson / Subtopic Table (URL: /lms/myCourses/:courseSlug/:topicSlug/:lessonSlug)
+model Lesson {
+  id          String   @id @default(uuid())
+  title       String   // Jemon: HTML Table
+  slug        String   @unique // html-table
+  order       Int      // Lesson er serial
+  contentPath String   // .md file er path ba name (jemon: "html-table.md")
+  topicId     String   // Foreign Key (Topic ID)
+  topic       Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+}

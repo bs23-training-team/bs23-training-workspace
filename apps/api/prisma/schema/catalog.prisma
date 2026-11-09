@@ -1,12 +1,3 @@
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-generator client {
-  provider = "prisma-client-js"
-}
-
 // 1. Courses Table (URL: /lms/myCourses/:courseSlug)
 model Course {
   id          String   @id @default(uuid())

@@ -1,32 +1,39 @@
-// 1. Courses Table (URL: /lms/myCourses/:courseSlug)
+// 1. Main Course Template (Global & Reusable)
 model Course {
-  id          String   @id @default(uuid())
-  title       String
-  slug        String   @unique // URL er jonno: full-stack
-  description String?
-  thumbnail   String?
-  topics      Topic[]  // Relation with Topics
-  createdAt   DateTime @default(now())
+  id             String         @id @default(uuid())
+  title          String         @unique //  unique for duplicate course
+  slug           String         @unique
+  description    String         @db.Text
+  targetSkills   String[]       // e.g., ["React", "TypeScript", "Next.js"]
+  isApproved     Boolean        @default(false) // after PM approve will be true
+  approvedByPmId String?        // PM user ID
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  modules        CourseModule[]
 }
 
-// 2. Topic Table (URL: /lms/myCourses/:courseSlug/:topicSlug)
-model Topic {
-  id        String     @id @default(uuid())
-  title     String     // Jemon: HTML, CSS, JavaScript
-  slug      String     @unique
-  order     Int        // Roadmap er sequence maintain korar jonno (1, 2, 3...)
-  courseId  String     // Foreign Key (Course ID)
-  course    Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lessons   Lesson[]   // Relation with Lessons
+// 2. Course Modules (Roadmap Structure)
+model CourseModule {
+  id          String          @id @default(uuid())
+  courseId    String
+  title       String          // e.g., "Module 1: Advanced Hooks"
+  description String?         @db.Text
+  order       Int             // 1, 2, 3...
+
+  course      Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     LessonContent[]
 }
 
-// 3. Lesson / Subtopic Table (URL: /lms/myCourses/:courseSlug/:topicSlug/:lessonSlug)
-model Lesson {
-  id          String   @id @default(uuid())
-  title       String   // Jemon: HTML Table
-  slug        String   @unique // html-table
-  order       Int      // Lesson er serial
-  contentPath String   // .md file er path ba name (jemon: "html-table.md")
-  topicId     String   // Foreign Key (Topic ID)
-  topic       Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+// 3. Lesson Content (Markdown, Code Snippets & AI External Sources)
+model LessonContent {
+  id              String        @id @default(uuid())
+  moduleId        String
+  title           String        // Lesson / Topic title
+  filePath        String           // Path of Supabase private bucket (e.g., "lessons/react-hooks.md")
+  codeExamples    Json?         // Array of code objects: [{ "lang": "typescript", "code": "..." }]
+  references      Json          // External source docs: [{ "source": "React Docs", "url": "https://..." }]
+  createdAt       DateTime      @default(now())
+
+  module          CourseModule  @relation(fields: [moduleId], references: [id], onDelete: Cascade)
 }

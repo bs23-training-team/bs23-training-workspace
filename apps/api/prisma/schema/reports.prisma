@@ -2,7 +2,9 @@
 // Owner: E08 (reports, PDF, mail)
 // Planned records (SRS p.8): ReportDraftVersion, Snapshot, ReportFile, MailDelivery, MailAttempt
 //
-// Empty on purpose. Add your models here AFTER your data model
-// (docs/data-model/<module>.md) is approved by E01 on Day 4.
+// Empty until you write your draft. Add your models here (Day 2-3), check them
+// with `pnpm db:validate`, then push to the branch schema/v1.
+// A short design note in docs/data-model/<module>.md is optional and does NOT replace
+// this file: E10 combines the .prisma drafts on Day 4.
 // Rules and an example: see README.md in this folder.
 // ============================================================================

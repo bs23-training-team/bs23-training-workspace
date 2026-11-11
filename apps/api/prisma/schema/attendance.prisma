@@ -1,14 +1,14 @@
 
 // ============================================================
-// E08/M08 - Attendance & Leave Management
+// E07 - Attendance & Leave Management
 // File: attendance.prisma
 //
 // Note:
-// - User and TraineeProfile models are owned by other modules.
+// - User and TraineeProfile are owned by other modules.
 // - traineeId and reviewerId are scalar references for now.
 // - Relations to those models will be added after their models
 //   are available and reviewed by their owners.
-// - Original ERP and Teams source records must remain unchanged.
+// - Original ERP and Teams source records remain unchanged.
 // ============================================================
 
 
@@ -70,22 +70,22 @@ enum MeetingAttendanceStatus {
 // ------------------------------------------------------------
 
 model AttendanceRecord {
-  id              String           @id @default(uuid())
-  workspaceId     String
-  traineeId       String
+  id             String           @id @default(uuid())
+  workspaceId    String
+  traineeId      String
 
-  attendanceDate  DateTime         @db.Date
-  entryAt         DateTime?        @db.Timestamptz(6)
-  exitAt          DateTime?        @db.Timestamptz(6)
+  attendanceDate DateTime         @db.Date
+  entryAt        DateTime?        @db.Timestamptz(6)
+  exitAt         DateTime?        @db.Timestamptz(6)
 
-  lateMinutes     Int?
-  workingMinutes  Int?
+  lateMinutes    Int?
+  workingMinutes Int?
 
-  source          AttendanceSource
-  sourceRecordId  String?
+  source         AttendanceSource
+  sourceRecordId String?
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   reconciliationRequests ReconciliationRequest[]
 
@@ -126,29 +126,25 @@ model TeamsMeeting {
 // ------------------------------------------------------------
 
 model MeetingAttendance {
-  id                 String                  @id @default(uuid())
-  workspaceId        String
+  id              String                  @id @default(uuid())
+  workspaceId     String
 
-  meetingId          String
-  traineeId          String?
-  teamsUserId        String
+  meetingId       String
+  traineeId       String?
+  teamsUserId     String
 
-  firstJoinAt        DateTime?               @db.Timestamptz(6)
-  durationMinutes    Int?
-  lateMinutes        Int?
+  firstJoinAt     DateTime?               @db.Timestamptz(6)
+  durationMinutes Int?
+  lateMinutes     Int?
 
-  status             MeetingAttendanceStatus @default(PENDING)
+  status          MeetingAttendanceStatus @default(PENDING)
 
-  createdAt          DateTime                @default(now())
-  updatedAt          DateTime                @updatedAt
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
 
-  meeting            TeamsMeeting            @relation(
-    fields: [meetingId],
-    references: [id],
-    onDelete: Restrict
-  )
+  meeting         TeamsMeeting             @relation(fields: [meetingId], references: [id], onDelete: Restrict)
 
-  intervals          MeetingAttendanceInterval[]
+  intervals       MeetingAttendanceInterval[]
   reconciliationRequests ReconciliationRequest[]
 
   @@index([workspaceId])
@@ -164,6 +160,7 @@ model MeetingAttendance {
 
 model MeetingAttendanceInterval {
   id                  String   @id @default(uuid())
+  workspaceId         String
   meetingAttendanceId String
 
   joinedAt            DateTime @db.Timestamptz(6)
@@ -172,13 +169,11 @@ model MeetingAttendanceInterval {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  meetingAttendance   MeetingAttendance @relation(
-    fields: [meetingAttendanceId],
-    references: [id],
-    onDelete: Restrict
-  )
+  meetingAttendance   MeetingAttendance @relation(fields: [meetingAttendanceId], references: [id], onDelete: Restrict)
 
+  @@index([workspaceId])
   @@index([meetingAttendanceId])
+  @@index([workspaceId, meetingAttendanceId])
 }
 
 
@@ -187,23 +182,23 @@ model MeetingAttendanceInterval {
 // ------------------------------------------------------------
 
 model LeaveRequest {
-  id              String             @id @default(uuid())
-  workspaceId     String
-  traineeId       String
+  id          String             @id @default(uuid())
+  workspaceId String
+  traineeId   String
 
-  startDate       DateTime           @db.Date
-  endDate         DateTime           @db.Date
+  startDate   DateTime           @db.Date
+  endDate     DateTime           @db.Date
 
-  type            LeaveType
-  reason          String             @db.Text
-  status          LeaveRequestStatus @default(PENDING)
+  type        LeaveType
+  reason      String             @db.Text
+  status      LeaveRequestStatus @default(PENDING)
 
-  reviewerId      String?
-  reviewedAt      DateTime?          @db.Timestamptz(6)
-  reviewNote      String?            @db.Text
+  reviewerId  String?
+  reviewedAt  DateTime?          @db.Timestamptz(6)
+  reviewNote  String?            @db.Text
 
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
   @@index([workspaceId])
   @@index([traineeId])
@@ -237,17 +232,8 @@ model ReconciliationRequest {
   createdAt           DateTime                  @default(now())
   updatedAt           DateTime                  @updatedAt
 
-  attendanceRecord    AttendanceRecord?         @relation(
-    fields: [attendanceRecordId],
-    references: [id],
-    onDelete: Restrict
-  )
-
-  meetingAttendance   MeetingAttendance?        @relation(
-    fields: [meetingAttendanceId],
-    references: [id],
-    onDelete: Restrict
-  )
+  attendanceRecord    AttendanceRecord?         @relation(fields: [attendanceRecordId], references: [id], onDelete: Restrict)
+  meetingAttendance   MeetingAttendance?        @relation(fields: [meetingAttendanceId], references: [id], onDelete: Restrict)
 
   @@index([workspaceId])
   @@index([traineeId])
@@ -262,14 +248,14 @@ model ReconciliationRequest {
 // ------------------------------------------------------------
 
 model TeamsIdentityMapping {
-  id              String   @id @default(uuid())
-  workspaceId     String
+  id          String   @id @default(uuid())
+  workspaceId String
 
-  teamsUserId     String
-  traineeId       String
+  teamsUserId String
+  traineeId   String
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([workspaceId, teamsUserId])
   @@index([workspaceId])

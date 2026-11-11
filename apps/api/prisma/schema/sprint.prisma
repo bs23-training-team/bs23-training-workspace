@@ -8,3 +8,207 @@
 // this file: E10 combines the .prisma drafts on Day 4.
 // Rules and an example: see README.md in this folder.
 // ============================================================================
+// =====================================================================
+// sprint.prisma  -  Module M6: Daily Sprint (DS)
+// Source: BS23 PRD v1.1 + SRS v1.1  (FR-DS-01 .. FR-DS-08, US-10, US-11)
+// =====================================================================
+//
+// KOTHA-E BHALO KORE PORUN (shuru-r note)
+//
+// 1. datasource ar generator block ekhane NEI. Repo-r main schema-te
+//    already thakbe. Duibar likhle error hobe.
+//
+// 2. traineeId, teamId, *ById column gulo ekhon shudhu String.
+//    User ar Team model onno member-der. Tader model-er naam jani na.
+//    Naam pele eikhane @relation jure dite hobe (niche TODO dekhen).
+//
+// 3. Status tag:
+//      [PRD]      = PRD/SRS-e spasto lekha
+//      [PROPOSED] = ami anuman korechi, PM-er yes lagbe (Q number = PRD doc-er prosno)
+//
+// 4. Retired (v1.1): repo link, SonarQube, code-quality, project review
+//    (FR-DS-09). Tai oi table/column nei.
+//
+// 5. PM weekly report (FR-DS-07) sheet theke on-demand toiri hobe,
+//    tai alada table nei. [PROPOSED, Q11]
+//
+// 6. Time zone ekhono open (Q4). Tai shob instant (DateTime) UTC-te
+//    store hobe. Din (date) @db.Date. 10:00 cutoff code-e check hobe.
+
+// ---------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------
+
+// [PRD] FR-DS-02: category shudhu SBO ba L&D
+enum TaskCategory {
+  SBO
+  LND // L&D
+}
+
+// [PRD] FR-DS-04: sheet-er column
+enum DSColumn {
+  PLAN      // "Sprint Plan Tasks" column. Din-e na, week-e ekbar. [PROPOSED, Q3]
+  YESTERDAY // What I did yesterday
+  HOURS     // Spent hours
+  TODAY     // What I will do today
+  BLOCKERS  // Blockers
+}
+
+// [PRD] FR-DS-08: team ba all teams
+enum MeetingAudience {
+  TEAM
+  ALL
+}
+
+// ---------------------------------------------------------------------
+// 1. SprintTask  (FR-DS-02)  -  trainee-r dated task
+// ---------------------------------------------------------------------
+model SprintTask {
+  id          String       @id @default(uuid())
+  traineeId   String
+  teamId      String // [PROPOSED, Q1] trainee onek team-e thakte pare, tai task-e team lage
+  date        DateTime     @db.Date // [PRD] task-er din
+  title       String // [PRD] must
+  description String? // [PRD] optional
+  category    TaskCategory // [PRD] SBO ba L&D
+
+  // Somoy minute-e rakhi (90 = 1.5 ghonta). 0..1440, 15 minute step.
+  // Eta NestJS DTO-te check korbe. [PROPOSED, Q8]
+  plannedMinutes Int  @default(0)
+  actualMinutes  Int?
+
+  plannedStart DateTime? // [PRD] plannedEnd > plannedStart code-e check
+  plannedEnd   DateTime?
+
+  blocker String? // [PRD] optional
+
+  done        Boolean   @default(false) // [PRD data model] "done"
+  completedAt DateTime? // [PROPOSED, Q6] kokhon done holo
+
+  // [PROPOSED, Q5] shesh na hoa task porer din-e copy hole, kon task theke
+  carriedFromId String?
+  carriedFrom   SprintTask?  @relation("CarriedTask", fields: [carriedFromId], references: [id], onDelete: Restrict)
+  carriedTo     SprintTask[] @relation("CarriedTask")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([traineeId, date]) // trainee board, 2-week summary
+  @@index([teamId, date]) // PM sheet
+  @@index([carriedFromId])
+}
+
+// ---------------------------------------------------------------------
+// 2. SprintSubmission  (FR-DS-03)  -  din-e ekbar submit
+// ---------------------------------------------------------------------
+model SprintSubmission {
+  id          String   @id @default(uuid())
+  traineeId   String
+  date        DateTime @db.Date // [PRD] ekta din
+  submittedAt DateTime @default(now()) // [PRD] "time"
+  onTime      Boolean // [PRD] at or before 10:00 (cutoff default 10:00)
+
+  @@unique([traineeId, date]) // [PRD] one submission per day
+  @@index([date])
+}
+
+// ---------------------------------------------------------------------
+// 3. SprintWeek  (FR-DS-04, FR-DS-05)  -  team-er ekta week
+// ---------------------------------------------------------------------
+// Ek team + ek week = ekta sheet.  "Add Sprint" = notun row.
+// Sprint nei emon tarikh khola jabe na (code-e check).
+model SprintWeek {
+  id          String   @id @default(uuid())
+  teamId      String
+  weekStart   DateTime @db.Date // [PRD] Monday
+  createdById String // PM
+  createdAt   DateTime @default(now())
+
+  cells DSCell[]
+
+  @@unique([teamId, weekStart]) // Add Sprint duibar chaple duita week hobe na
+  @@index([teamId])
+}
+
+// ---------------------------------------------------------------------
+// 4. DSCell  (FR-DS-04, FR-DS-06)  -  sheet-er ekta cell
+// ---------------------------------------------------------------------
+// Cell = (week, trainee, din, column).
+// PLAN column-er jonno "date" = oi week-er weekStart dibo (null na),
+// jate unique rule thik kaj kore.  [PROPOSED, Q3]
+//
+// authorId   = prothom jon je likhechilo   [PRD: original author]
+// updatedById = shesh jon je edit korechilo [PRD]
+// version    = conflict dhorar jonno       [PRD: conflict choice]
+model DSCell {
+  id           String   @id @default(uuid())
+  sprintWeekId String
+  traineeId    String
+  date         DateTime @db.Date
+  column       DSColumn
+  value        String   @default("")
+
+  authorId    String
+  updatedById String
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sprintWeek SprintWeek     @relation(fields: [sprintWeekId], references: [id], onDelete: Restrict)
+  history    DSCellVersion[]
+
+  @@unique([sprintWeekId, traineeId, date, column])
+  @@index([sprintWeekId, traineeId])
+}
+
+// ---------------------------------------------------------------------
+// 5. DSCellVersion  (FR-DS-06)  -  cell-er edit history
+// ---------------------------------------------------------------------
+// PRD bole "edit history dekha jay". Proti save-e ekta row.
+// Kokhono update ba delete hobe na. [PROPOSED: data model-e nei, kintu lage]
+model DSCellVersion {
+  id        String   @id @default(uuid())
+  cellId    String
+  version   Int
+  value     String
+  actorId   String
+  createdAt DateTime @default(now())
+
+  cell DSCell @relation(fields: [cellId], references: [id], onDelete: Restrict)
+
+  @@unique([cellId, version])
+  @@index([cellId, createdAt])
+}
+
+// ---------------------------------------------------------------------
+// 6. DSMeeting  (FR-DS-08)
+// ---------------------------------------------------------------------
+// Teams link shudhu save hobe. Teams meeting toiri hobe na (PRD non-goal).
+// audience = ALL hole teamId null.
+model DSMeeting {
+  id          String          @id @default(uuid())
+  title       String
+  audience    MeetingAudience
+  teamId      String? // TEAM hole must
+  scheduledAt DateTime // [PRD] date + time, UTC-te instant (Q4)
+  teamsLink   String? // optional, https only (code-e check)
+  createdById String // PM
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([scheduledAt])
+  @@index([teamId, scheduledAt])
+}
+
+// =====================================================================
+// TODO (onno der model-er naam pele)
+// ---------------------------------------------------------------------
+//  - SprintTask.traineeId, SprintSubmission.traineeId, DSCell.traineeId
+//        -> User ba TraineeProfile model-er sathe @relation
+//  - SprintTask.teamId, SprintWeek.teamId, DSMeeting.teamId
+//        -> Team model-er sathe @relation
+//  - createdById / authorId / updatedById / actorId
+//        -> User model-er sathe @relation
+//  - Onno model-e back-relation field dite hobe (Prisma-r niyom).
+//    Eta schema owner/lead-er sathe milan.
+// =====================================================================

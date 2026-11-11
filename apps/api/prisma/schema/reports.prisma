@@ -8,3 +8,96 @@
 // this file: E10 combines the .prisma drafts on Day 4.
 // Rules and an example: see README.md in this folder.
 // ============================================================================
+// ==========================================
+// MODULE E09: Evaluation Reports & Mail
+// ==========================================
+
+enum ReportPeriodType {
+  WEEKLY
+  MONTHLY
+  FULL_TRAINEE_PERIOD
+}
+
+enum DataStatus {
+  CONNECTED
+  SAMPLE
+  UNAVAILABLE
+  PM_ENTERED
+}
+
+enum EmailDeliveryStatus {
+  QUEUED
+  ACCEPTED
+  FAILED
+}
+
+model Report {
+  id           String           @id @default(uuid())
+  traineeId    String
+  periodType   ReportPeriodType
+  periodStart  DateTime
+  periodEnd    DateTime
+  
+  // Custom metadata & JSON dynamic payload for 10 report sections
+  sections     Json
+  
+  // PM Review edits & general notes
+  notes        String?          @db.Text
+  version      Int              @default(1)
+  isPublished  Boolean          @default(false)
+  
+  publishedBy  String?
+  publishedAt  DateTime?
+
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  // Relations
+  trainee      Trainee          @relation(fields: [traineeId], references: [traineeId], onDelete: Cascade)
+  publisher    User?            @relation("ReportPublisher", fields: [publishedBy], references: [id], onDelete: SetNull)
+  versions     ReportVersion[]
+  emailLogs    EmailDelivery[]
+
+  @@unique([traineeId, periodType, periodStart, periodEnd, version])
+  @@index([traineeId])
+  @@index([publishedBy])
+}
+
+model ReportVersion {
+  id          String   @id @default(uuid())
+  reportId    String
+  version     Int
+  sections    Json
+  notes       String?  @db.Text
+  publishedBy String?
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  // Relations
+  report      Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  publisher   User?    @relation("ReportVersionPublisher", fields: [publishedBy], references: [id], onDelete: SetNull)
+
+  @@unique([reportId, version])
+}
+
+model EmailDelivery {
+  id              String              @id @default(uuid())
+  reportId        String
+  reportVersionId String?
+  recipient       String
+  subject         String
+  status          EmailDeliveryStatus @default(QUEUED)
+  providerId      String?
+  attempts        Int                 @default(0)
+  errorMessage    String?             @db.Text
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  // Relations
+  report          Report              @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reportVersion   ReportVersion?      @relation(fields: [reportVersionId], references: [id], onDelete: SetNull)
+
+  @@index([reportId])
+  @@index([status])
+}

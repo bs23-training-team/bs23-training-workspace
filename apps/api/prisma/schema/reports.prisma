@@ -53,8 +53,9 @@ model Report {
   updatedAt    DateTime         @updatedAt
 
   // Relations
-  trainee      Trainee          @relation(fields: [traineeId], references: [traineeId], onDelete: Cascade)
-  publisher    User?            @relation("ReportPublisher", fields: [publishedBy], references: [id], onDelete: SetNull)
+  // Note: Cross-module relations to Trainee (E02) and User (E01) are linked on Day 4 by E10
+  // trainee      Trainee          @relation(fields: [traineeId], references: [traineeId], onDelete: Cascade)
+  // publisher    User?            @relation("ReportPublisher", fields: [publishedBy], references: [id], onDelete: SetNull)
   versions     ReportVersion[]
   emailLogs    EmailDelivery[]
 
@@ -74,8 +75,9 @@ model ReportVersion {
   createdAt   DateTime @default(now())
 
   // Relations
-  report      Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  publisher   User?    @relation("ReportVersionPublisher", fields: [publishedBy], references: [id], onDelete: SetNull)
+  report          Report          @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  // publisher   User?    @relation("ReportVersionPublisher", fields: [publishedBy], references: [id], onDelete: SetNull)
+  emailDeliveries EmailDelivery[]
 
   @@unique([reportId, version])
 }

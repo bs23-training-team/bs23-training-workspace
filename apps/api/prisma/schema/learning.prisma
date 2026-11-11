@@ -8,3 +8,1073 @@
 // this file: E10 combines the .prisma drafts on Day 4.
 // Rules and an example: see README.md in this folder.
 // ============================================================================
+
+// ============================================================================
+// M7 / E03 — Assessment engine (initial expertise assessment, course exams,
+// AI evaluation, appeals, recommendations).
+//
+// This section was authored for E03 (assessment module) and placed in this file
+// under explicit authorisation. File ownership is unchanged: this file remains
+// E05's per apps/api/prisma/schema/README.md, and E03's own
+// assessment.prisma is untouched. E10 resolves placement during the Day 4
+// combination into a single schema.prisma.
+//
+// Sources: SRS p.8 (E03 logical records), INIT-01..INIT-06, AI-01..AI-05,
+// EXAM-01..EXAM-04; PRD Epics 03, 04, 06.
+//
+// Cross-module references use plain scalar IDs with a `// → Model.id (Owner)`
+// comment, per docs/week1-team-brief.md. Prisma relations are declared ONLY
+// between models that exist in this file. User, Workspace, TraineeProfile and
+// CourseVersion are owned by E01/E02/E04 and are not yet delivered, so no
+// @relation is declared against them.
+//
+// E11 SQL requirements (NOT enforced by Prisma — see each TODO below):
+//   1. Composite FK: AssessmentAttempt(expertiseProfileId, expertiseVersionId)
+//      -> ExpertiseVersion(expertiseProfileId, id)               [D-4 / A-6]
+//   2. CHECK: AssessmentAttempt expertise pair is both-NULL or both-populated
+//                                                    [D-4 / A-10]
+//   3. Composite FK: EvaluationJob(assessmentResultId, assessmentAttemptId)
+//      -> AssessmentResult(id, attemptId)                        [A-8]
+//      Expressed as the Prisma relation `EvaluationJob.assessmentResult`,
+//      so Prisma emits the composite FK itself. E11 confirms it in the
+//      generated migration.
+//   4. Composite FK: Recommendation(expertiseProfileId, expertiseVersionId)
+//      -> ExpertiseVersion(expertiseProfileId, id)               [A-12]
+//   5. Parent candidate UNIQUE keys required by 1 and 4:
+//      ExpertiseVersion(expertiseProfileId, id)
+//      AssessmentResult(id, attemptId)  — required by 3 as well
+//   6. Partial UNIQUE index: AssessmentResult(attemptId)
+//      WHERE "supersedesId" IS NULL   — at most one root result per attempt
+//                                                    [D-5, E11 recommendation]
+//      Requires previewFeatures = ["partialIndexes"] in base.prisma (E11 file).
+// ============================================================================
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Joining role declared by the trainee during the expertise onboarding survey.
+/// INIT-01: the declared role is stored separately from the PM-assigned
+/// position and never overwrites it.
+enum JoiningRole {
+  FRONTEND
+  BACKEND
+  FULL_STACK
+  SOFTWARE_ENGINEER
+  QA
+  DEVOPS
+  OTHER
+}
+
+/// Technologies covered by the expertise survey and the skill catalog.
+/// INIT-02 defines the supported list; OTHER carries a free-text detail.
+enum Technology {
+  JAVASCRIPT
+  REACT
+  NEXT_JS
+  NODE_JS
+  LARAVEL
+  PHP
+  PYTHON
+  JAVA
+  MYSQL
+  POSTGRESQL
+  DOCKER
+  GIT_GITHUB
+  OTHER
+}
+
+/// Self-reported experience level. INIT-03: Beginner / Intermediate / Advanced.
+/// Self-confidence never adds marks (INIT-05).
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+/// Self-reported confidence. INIT-03: Not / Somewhat / Confident / Very Confident.
+/// Never contributes marks to a score.
+enum ConfidenceLevel {
+  NOT_CONFIDENT
+  SOMEWHAT_CONFIDENT
+  CONFIDENT
+  VERY_CONFIDENT
+}
+
+/// Improvement interests chosen during onboarding. INIT-03.
+enum ImprovementArea {
+  FUNDAMENTALS
+  PROBLEM_SOLVING
+  BACKEND
+  FRONTEND
+  DATABASE
+  ARCHITECTURE
+  API
+  TESTING_CODE_QUALITY
+  OTHER
+}
+
+/// Kind of question in a frozen assessment form. EXAM-01 freezes questions;
+/// INIT-04 mixes objective questions with a required practical explanation.
+enum QuestionKind {
+  OBJECTIVE
+  WRITTEN
+  PRACTICAL
+  CODE
+}
+
+/// Difficulty band of a question. INIT-04 selects questions per level:
+/// Beginner foundation+applied, Intermediate foundation+advanced,
+/// Advanced applied+advanced.
+enum QuestionLevel {
+  FOUNDATION
+  APPLIED
+  ADVANCED
+}
+
+/// Which assessment an attempt belongs to. INIT-04/INIT-06 cover the initial
+/// expertise assessment; EXAM-01..EXAM-04 cover course exams.
+enum AssessmentType {
+  INITIAL
+  RETEST
+  COURSE
+}
+
+/// Lifecycle of an attempt. EXAM-02: an explicit or timeout submission
+/// finalizes exactly once; refresh/retry must not extend time or duplicate
+/// results.
+enum AttemptStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SUBMITTED
+  TIMED_OUT
+  GRADING
+  GRADED
+  FINALIZED
+  CANCELLED
+}
+
+/// Lifecycle of a result. EXAM-03: provisional results are excluded from final
+/// averages, mastery and eligible XP.
+enum ResultStatus {
+  PROVISIONAL
+  FINAL
+  SUPERSEDED
+  INVALIDATED
+}
+
+/// What caused an attempt to be submitted. EXAM-02 distinguishes an explicit
+/// submission from a server-deadline timeout.
+enum SubmissionTrigger {
+  EXPLICIT
+  TIMEOUT
+}
+
+/// Kind of AI/automated evaluation job. AI-01: rubrics are applied to written,
+/// practical and code review; code runs in a disposable isolated runner.
+enum EvaluationJobKind {
+  AI_WRITTEN_REVIEW
+  AI_CODE_REVIEW
+  AUTOMATED_TEST_RUN
+  HUMAN_REVIEW
+}
+
+/// Lifecycle of an evaluation job. AI-05: on timeout or invalid output the job
+/// ends pending/failed/review-required; a previous valid result is preserved.
+enum EvaluationJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  TIMED_OUT
+  REVIEW_REQUIRED
+  CANCELLED
+}
+
+/// Outcome of a course assessment under the published versioned policy.
+/// EXAM-03: Done >= 80%, Needs revision 60-79%, Weak < 60%.
+enum CourseOutcome {
+  DONE
+  NEEDS_REVISION
+  WEAK
+}
+
+/// Initial assessed level derived from the objective score. INIT-05:
+/// Advanced >= 80%, Intermediate 60-79%, Beginner < 60%.
+enum InitialLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+/// Lifecycle of an appeal. EXAM-04: retain the appeal reason and review
+/// provenance.
+enum AppealStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+/// Per-skill assessment outcome of a recommendation. AI-03: assessed
+/// per-skill baseline Strong >= 80%, Developing 60-79%, Needs revision < 60%.
+/// Untested = NOT_ASSESSED; profile-only suggestions = UNASSESSED.
+/// These two are genuinely distinct and must not be merged.
+enum RecommendationSkillStatus {
+  STRONG
+  DEVELOPING
+  NEEDS_REVISION
+  NOT_ASSESSED
+  UNASSESSED
+}
+
+// ---------------------------------------------------------------------------
+// Catalog: skills, role requirements, questions, rubrics, forms
+// ---------------------------------------------------------------------------
+
+/// A technical skill in the catalog. INIT-02/INIT-04: unsupported skills stay
+/// honestly labelled as unassessed rather than being scored.
+model Skill {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  slug        String   @unique
+  technology  Technology
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  /// Cross-module reference to the owning course catalog entry (E04).
+  courseId String? // → Course.id (E04)
+
+  roleRequirements RoleRequirement[]
+  profileTechnologies ExpertiseProfileTechnology[]
+  recommendations   Recommendation[]
+  questions         Question[]
+
+  @@index([workspaceId])
+  @@index([technology])
+}
+
+/// The skills expected for a joining role, with a required weight.
+/// INIT-01/INIT-02/AI-03: recommendations use role requirements and
+/// demonstrated gaps.
+model RoleRequirement {
+  id          String   @id @default(uuid())
+  workspaceId String
+  skillId     String
+  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  role        JoiningRole
+  priority    Int      @default(0)
+  required    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([skillId, role])
+  @@index([workspaceId, role])
+}
+
+/// A question. The question body is versioned; `Question` holds identity only.
+model Question {
+  id          String   @id @default(uuid())
+  workspaceId String
+  kind        QuestionKind
+  level       QuestionLevel
+  skillId     String?
+  skill       Skill?   @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  versions QuestionVersion[]
+
+  /// TODO (PENDING D-1 APPROVAL): QuestionSolution.questionId redundancy —
+  /// whether the solution should point directly at Question (identity) in
+  /// addition to its QuestionVersion link. Provisional design keeps the
+  /// QuestionVersion link as the only version-carrying reference and leaves
+  /// QuestionSolution.questionId out until D-1 is decided.
+
+  @@index([workspaceId])
+  @@index([skillId])
+}
+
+/// A frozen version of a question. INIT-04 and EXAM-01 freeze question and
+/// rubric versions; a published version is never overwritten.
+model QuestionVersion {
+  id          String   @id @default(uuid())
+  workspaceId String
+  questionId  String
+  question    Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  version     Int
+  prompt      String
+  /// Stable identifier used by rubrics, AI evidence and results.
+  questionCode String
+  /// Marks available for this question under the frozen policy.
+  maxScore    Decimal  @default(0) @db.Decimal(10, 2)
+  /// Options for objective questions, stored as JSON.
+  options     Json?
+  /// Version label of the policy that produced maxScore.
+  policyVersion String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  solutions       QuestionSolution[]
+  rubricVersions  RubricVersion[] @relation("QuestionVersionRubrics")
+  formQuestions   AssessmentFormQuestion[] @relation("FormQuestionVersion")
+  attemptQuestions AttemptQuestion[]
+
+  /// TODO (PENDING D-2 APPROVAL): QuestionVersion.modelAnswer redundancy —
+  /// whether the model/expected answer is stored on the question version and
+  /// duplicated by the rubric version, or owned by exactly one side.
+  /// Provisional design stores the expected answer on QuestionSolution and
+  /// leaves QuestionVersion.modelAnswer out until D-2 is decided.
+
+  @@unique([questionId, version])
+  @@index([workspaceId])
+}
+
+/// The expected/correct answer for one objective question version.
+/// AUTH-02: answer keys are never returned by the API.
+model QuestionSolution {
+  id                String         @id @default(uuid())
+  workspaceId       String
+  questionVersionId String
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Restrict)
+  answerKey         Json
+  explanation       String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  /// TODO (PENDING D-1 APPROVAL): QuestionSolution.questionId redundancy —
+  /// see the note on Question. Not added until D-1 is decided.
+
+  @@unique([questionVersionId])
+  @@index([workspaceId])
+}
+
+/// A rubric. The rubric body is versioned; `Rubric` holds identity and a
+/// pointer to its current version.
+model Rubric {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  /// Pointer to the current published rubric version.
+  currentVersionId String? @unique // → RubricVersion.id (self relation, see below)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  currentVersion RubricVersion? @relation("RubricCurrentVersion", fields: [currentVersionId], references: [id], onDelete: Restrict)
+  versions       RubricVersion[]  @relation("RubricVersions")
+
+  /// TODO (PENDING D-3 APPROVAL): Rubric.currentVersionId enforcement —
+  /// whether the pointer must resolve to a version belonging to this rubric is
+  /// currently an application rule only; a composite FK
+  /// (Rubric(id, currentVersionId) -> RubricVersion(id, rubricId)) would need
+  /// E11 raw SQL. Not added until D-3 is decided.
+
+  /// D-7 (APPROVED, Option 4a): rubric granularity is form-level. A rubric
+  /// version may be referenced by any number of forms; there is no
+  /// form-scoped uniqueness rule. Section-level overrides are deferred
+  /// until D-18 confirms they are a product requirement.
+
+  @@index([workspaceId])
+}
+
+/// A frozen rubric version. EXAM-01 freezes the rubric; sections and criteria
+/// are versioned content.
+model RubricVersion {
+  id          String   @id @default(uuid())
+  workspaceId String
+  rubricId    String
+  rubric      Rubric   @relation("RubricVersions", fields: [rubricId], references: [id], onDelete: Restrict)
+  /// The rubric version this rubric currently points at (D-3 pending).
+  currentOfRubric Rubric? @relation("RubricCurrentVersion")
+  version     Int
+  /// Frozen scoring scale and criteria, stored as JSON.
+  sections    Json
+  maxScore    Decimal  @default(0) @db.Decimal(10, 2)
+  policyVersion String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  /// The question version this rubric version scores, when the rubric is
+  /// question-scoped.
+  questionVersionId String?
+  questionVersion   QuestionVersion? @relation("QuestionVersionRubrics", fields: [questionVersionId], references: [id], onDelete: Restrict)
+
+  /// D-7 (APPROVED, Option 4a): the forms this rubric version is bound to.
+  /// AssessmentForm.rubricVersionId is the form-level binding.
+  assessmentForms  AssessmentForm[]
+  /// D-7 (APPROVED, Option 4a): the attempt items that snapshotted this
+  /// rubric version. AttemptQuestion.rubricVersionId is the per-item
+  /// snapshot that keeps historical grading assignments stable.
+  attemptQuestions AttemptQuestion[]
+
+  @@unique([rubricId, version])
+  @@index([workspaceId])
+  @@index([questionVersionId])
+}
+
+/// A frozen assessment form. EXAM-01 freezes instructions, questions, rubric,
+/// duration and attempt policy.
+model AssessmentForm {
+  id          String   @id @default(uuid())
+  workspaceId String
+  title       String
+  type        AssessmentType
+  instructions String
+  /// Frozen duration in whole minutes (SRS: integer minutes, no floats).
+  durationMinutes Int?
+  /// Frozen attempt policy, stored as JSON (max attempts, retry rules).
+  attemptPolicy Json?
+  /// Version label of the frozen policy.
+  policyVersion String
+  /// Whether the trainee must acknowledge the instructions before starting.
+  requiresAcknowledgement Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  /// Cross-module reference to the E04 catalog.
+  courseId        String? // → Course.id (E04)
+  /// D-6 (APPROVED, Option B): optional scalar pointer to the E04 course
+  /// version this form is bound to. E04 has not delivered CourseVersion, so
+  /// NO Prisma relation is declared here.
+  courseVersionId String? // → CourseVersion.id (E04) — model not yet delivered
+  topicId         String? // → Topic.id (E04)
+
+  /// Cross-module reference to the trainee (E02).
+  traineeId String? // → TraineeProfile.id (E02)
+
+  /// D-7 (APPROVED, Option 4a): the rubric version applied to this form's
+  /// questions. Bound to a SPECIFIC RubricVersion id, never to
+  /// Rubric.currentVersionId: the current version is a moving pointer and
+  /// would make an attempt's rubric basis drift over time.
+  ///
+  /// This is the only configuration-level rubric binding in the 4a design.
+  /// Section-level overrides are deferred until D-18 confirms they are a
+  /// product requirement; if D-18 resolves affirmatively this becomes the
+  /// form default and a section override would replace it.
+  ///
+  /// Limitation (D-19, accepted): this FK enforces EXISTENCE of the rubric
+  /// version only. It does NOT enforce that the referenced RubricVersion
+  /// belongs to the same workspace as this form.
+  rubricVersionId String?
+  rubricVersion   RubricVersion? @relation(fields: [rubricVersionId], references: [id], onDelete: Restrict)
+
+  sections   AssessmentFormSection[]
+  questions  AssessmentFormQuestion[]
+  attempts   AssessmentAttempt[]
+  results    AssessmentResult[]
+
+  /// TODO (E11 SQL, A-19): composite FK
+  /// AssessmentForm(courseId, courseVersionId) -> CourseVersion(id, courseId)
+  /// is BLOCKED until E04 delivers CourseVersion. Not added here.
+
+  @@index([workspaceId])
+  @@index([courseVersionId])
+  @@index([traineeId])
+  @@index([rubricVersionId])
+}
+
+/// A section of an assessment form, holding ordered questions.
+model AssessmentFormSection {
+  id          String   @id @default(uuid())
+  workspaceId String
+  assessmentFormId String
+  assessmentForm   AssessmentForm @relation(fields: [assessmentFormId], references: [id], onDelete: Restrict)
+  title       String
+  order       Int
+  /// Instructions shown for this section.
+  instructions String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  questions AssessmentFormQuestion[]
+
+  @@unique([assessmentFormId, order])
+  @@index([workspaceId])
+}
+
+/// The frozen link between a form and one question version. INIT-04/EXAM-01:
+/// the form pins the exact question version that was reviewed.
+model AssessmentFormQuestion {
+  id          String   @id @default(uuid())
+  workspaceId String
+  assessmentFormId String
+  assessmentForm   AssessmentForm @relation(fields: [assessmentFormId], references: [id], onDelete: Restrict)
+  sectionId   String?
+  section     AssessmentFormSection? @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  questionVersionId String
+  questionVersion   QuestionVersion @relation("FormQuestionVersion", fields: [questionVersionId], references: [id], onDelete: Restrict)
+  order       Int
+  maxScore    Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  attemptQuestions AttemptQuestion[]
+
+  @@unique([assessmentFormId, questionVersionId])
+  @@index([workspaceId])
+  @@index([sectionId])
+}
+
+// ---------------------------------------------------------------------------
+// Expertise: profile, versions, technologies
+// ---------------------------------------------------------------------------
+
+/// The trainee's expertise profile. Holds the declared onboarding survey.
+model ExpertiseProfile {
+  id          String   @id @default(uuid())
+  workspaceId String
+  traineeId   String
+  joiningRole JoiningRole
+  /// Free-text detail for OTHER role/technology/improvement choices.
+  otherDetails Json?
+  experienceLevel ExperienceLevel
+  improvementAreas ImprovementArea[]
+  /// Non-empty goals captured during onboarding (INIT-01).
+  goals       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  /// Pointer to the current published expertise version.
+  currentVersionId String? @unique // → ExpertiseVersion.id (self relation, see below)
+
+  currentVersion ExpertiseVersion? @relation("ExpertiseCurrentVersion", fields: [currentVersionId], references: [id], onDelete: Restrict)
+  versions       ExpertiseVersion[]  @relation("ExpertiseVersions")
+
+  technologies ExpertiseProfileTechnology[]
+  attempts     AssessmentAttempt[]
+  results      AssessmentResult[]
+  recommendations Recommendation[]
+
+  /// TODO (PENDING D-9 APPROVAL): ExpertiseProfile.currentVersionId relation
+  /// naming — the named self-relation "ExpertiseCurrentVersion" above is the
+  /// provisional choice; the final relation name is pending D-9.
+
+  @@index([workspaceId])
+  @@index([traineeId])
+}
+
+/// A frozen expertise version: the survey answer set and the derived skill
+/// state at that point in time. INIT-04/INIT-06 freeze profile versions;
+/// a retest creates a new version and keeps history.
+model ExpertiseVersion {
+  id          String   @id @default(uuid())
+  workspaceId String
+  expertiseProfileId String
+  expertiseProfile   ExpertiseProfile @relation("ExpertiseVersions", fields: [expertiseProfileId], references: [id], onDelete: Restrict)
+  /// The expertise profile that currently points at this version.
+  currentOfProfile   ExpertiseProfile? @relation("ExpertiseCurrentVersion")
+  version     Int
+  /// Frozen survey answers and derived skill state, stored as JSON.
+  snapshot   Json
+  /// Assessed level derived under the frozen threshold policy (INIT-05).
+  initialLevel InitialLevel?
+  /// Version label of the threshold policy used to derive initialLevel.
+  thresholdVersion String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  attempts         AssessmentAttempt[]
+  results          AssessmentResult[]
+  recommendations  Recommendation[]
+
+  @@unique([expertiseProfileId, version])
+  /// Candidate unique key required by the A-6 and A-12 composite FKs
+  /// (E11 raw SQL): AssessmentAttempt(expertiseProfileId, expertiseVersionId)
+  /// and Recommendation(expertiseProfileId, expertiseVersionId)
+  ///   -> ExpertiseVersion(expertiseProfileId, id).
+  /// Column order matches the child key order.
+  @@unique([expertiseProfileId, id])
+  @@index([workspaceId])
+}
+
+/// A technology declared by the trainee on the expertise profile.
+model ExpertiseProfileTechnology {
+  id          String   @id @default(uuid())
+  workspaceId String
+  expertiseProfileId String
+  expertiseProfile   ExpertiseProfile @relation(fields: [expertiseProfileId], references: [id], onDelete: Restrict)
+  skillId     String?
+  skill       Skill?   @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  technology  Technology
+  experienceLevel ExperienceLevel
+  confidenceLevel  ConfidenceLevel
+  otherDetail String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([expertiseProfileId, technology])
+  @@index([workspaceId])
+  @@index([skillId])
+}
+
+// ---------------------------------------------------------------------------
+// Attempts, responses, evaluations, results
+// ---------------------------------------------------------------------------
+
+/// One trainee's attempt at one assessment form. EXAM-02: the server owns the
+/// deadline; the attempt finalizes exactly once.
+model AssessmentAttempt {
+  id          String   @id @default(uuid())
+  workspaceId String
+  assessmentFormId String
+  assessmentForm   AssessmentForm @relation(fields: [assessmentFormId], references: [id], onDelete: Restrict)
+  traineeId   String
+  /// Sequential attempt number per (trainee, form).
+  attemptNumber Int
+  type        AssessmentType
+  status      AttemptStatus @default(NOT_STARTED)
+  startedAt   DateTime?
+  submittedAt DateTime?
+  /// Server deadline (EXAM-02). Frozen duration in whole minutes lives on the form.
+  deadlineAt  DateTime?
+  gradingStartedAt DateTime?
+  gradedAt    DateTime?
+  /// Trainee acknowledgement of the frozen instructions (EXAM-01).
+  acknowledgedAt DateTime?
+  /// Snapshot of the acknowledgement text that was shown and accepted.
+  acknowledgementTextSnapshot String?
+  /// Frozen attempt policy at launch time, stored as JSON.
+  attemptPolicySnapshot Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  /// D-4 (APPROVED, Option B): the expertise pair is either both NULL
+  /// (course-only assessment) or both populated (initial/retest assessment
+  /// pinning one expertise version).
+  expertiseProfileId String? // → ExpertiseProfile.id
+  expertiseVersionId String? // → ExpertiseVersion.id
+  expertiseProfile   ExpertiseProfile? @relation(fields: [expertiseProfileId], references: [id], onDelete: Restrict)
+  expertiseVersion   ExpertiseVersion? @relation(fields: [expertiseVersionId], references: [id], onDelete: Restrict)
+
+  questions AttemptQuestion[]
+  responses AttemptResponse[]
+  jobs     EvaluationJob[]
+  results  AssessmentResult[]
+  appeals  Appeal[]
+
+  /// TODO (E11 SQL, D-4 / A-10): the both-NULL-or-both-populated rule is an
+  /// application rule today. It needs (a) a CHECK constraint and (b) a
+  /// composite FK AssessmentAttempt(expertiseProfileId, expertiseVersionId)
+  /// -> ExpertiseVersion(expertiseProfileId, id). Neither is expressible
+  /// in Prisma's DSL; both need E11 raw SQL. The parent candidate UNIQUE key
+  /// ExpertiseVersion(expertiseProfileId, id) is also required.
+  /// The single-column FKs below only prove EXISTENCE, never RELATIONSHIP.
+
+  /// TODO (E11 SQL, A-15 — PENDING SCOPE SELECTION): the invalid mapping
+  /// AssessmentResult.assessmentResultId/attemptId/traineeId ->
+  /// AssessmentAttempt(id, attemptId, traineeId) is NOT used, because
+  /// AssessmentAttempt has no `attemptId` field and AssessmentResult.
+  /// assessmentResultId references the result chain, not the attempt.
+  /// The two valid alternatives remain pending:
+  ///   Option A: AssessmentResult(attemptId, traineeId)
+  ///             -> AssessmentAttempt(id, traineeId)
+  ///   Option B: AssessmentResult(attemptId, traineeId, assessmentFormId)
+  ///             -> AssessmentAttempt(id, traineeId, assessmentFormId)
+  /// Both need E11 raw SQL and a parent candidate UNIQUE key. No A-15
+  /// composite FK and no A-15-specific parent unique key are added here.
+
+  @@unique([traineeId, assessmentFormId, attemptNumber])
+  @@index([workspaceId, assessmentFormId])
+  @@index([workspaceId, deadlineAt])
+  @@index([deadlineAt])
+  @@index([traineeId])
+}
+
+/// One question inside an attempt, with the answer the trainee gave.
+model AttemptQuestion {
+  id          String   @id @default(uuid())
+  workspaceId String
+  attemptId   String
+  attempt     AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  /// The form question this attempt question came from.
+  assessmentFormQuestionId String
+  assessmentFormQuestion   AssessmentFormQuestion @relation(fields: [assessmentFormQuestionId], references: [id], onDelete: Restrict)
+  order       Int
+  maxScore    Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  /// Provisional question-version provenance (D-10 PENDING).
+  questionVersionId String?
+  questionVersion   QuestionVersion? @relation(fields: [questionVersionId], references: [id], onDelete: Restrict)
+
+  /// D-7 (APPROVED, Option 4a): snapshot of the rubric version applied to
+  /// THIS item at attempt creation. Resolved once from the form's rubric
+  /// binding (AssessmentForm.rubricVersionId) and never updated at
+  /// application level. Null means no rubric was assigned to this item.
+  ///
+  /// Deliberately nullable: null is a meaningful state ("no rubric
+  /// assigned"), and the FK still forbids a dangling reference for any
+  /// non-null value.
+  ///
+  /// Guarantee (qualified): this snapshot keeps the rubric ASSIGNMENT
+  /// stable against later changes to the form or rubric configuration. It
+  /// does NOT guarantee grading reproducibility across evaluator
+  /// implementations, AI model versions or human graders — those are not
+  /// recorded anywhere in M7 (D-14, D-22).
+  ///
+  /// Limitation (D-19, accepted): this FK enforces EXISTENCE only. It does
+  /// NOT enforce same-workspace ownership of the referenced RubricVersion.
+  rubricVersionId String?
+  rubricVersion   RubricVersion? @relation(fields: [rubricVersionId], references: [id], onDelete: Restrict)
+
+  responses AttemptResponse[]
+  revisions AnswerRevision[]
+
+  /// TODO (PENDING D-10 APPROVAL): AttemptQuestion provenance. The provisional
+  /// design keeps BOTH assessmentFormQuestionId (mandatory) and
+  /// questionVersionId (optional), which leaves two sources for one fact and
+  /// requires an application rule that the two agree. Option 4 would remove
+  /// questionVersionId and keep assessmentFormQuestionId as the single source
+  /// of truth, eliminating that rule structurally. NOT applied here because
+  /// D-10 is unapproved. Option 4 also changes the report read path to two
+  /// hops and needs an E08 query-performance review.
+
+  @@unique([attemptId, assessmentFormQuestionId])
+  @@index([workspaceId])
+  @@index([questionVersionId])
+  @@index([rubricVersionId])
+}
+
+/// The trainee's answer to one attempt question. EXAM-01 autosaves versioned
+/// answers with saved/error state and recovers accepted answers after refresh.
+model AttemptResponse {
+  id          String   @id @default(uuid())
+  workspaceId String
+  attemptId   String
+  attempt     AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  /// The attempt the response belongs to. This is the same attempt that
+  /// attemptQuestionId resolves to via AttemptQuestion.attemptId; it is
+  /// denormalized here so AssessmentAttempt.responses is a real Prisma
+  /// relation (Prisma cannot express a relation through another model).
+  /// The single-column FK proves EXISTENCE only, never that the two agree;
+  /// keeping them consistent is an application rule, as for the other
+  /// denormalized attempt references (see the A-15 note on
+  /// AssessmentAttempt).
+  attemptQuestionId String
+  attemptQuestion   AttemptQuestion @relation(fields: [attemptQuestionId], references: [id], onDelete: Restrict)
+  /// Free-text or structured answer payload, stored as JSON.
+  answer      Json?
+  /// Autosave state for the answer.
+  savedAt     DateTime?
+  /// Whether the last save was rejected.
+  saveError   String?
+  /// Marks awarded by the deterministic backend scorer.
+  score       Decimal? @db.Decimal(10, 2)
+  /// Marks available for this question.
+  maxScore    Decimal? @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  revisions AnswerRevision[]
+  evaluations EvaluationResult[]
+
+  @@index([workspaceId])
+  @@index([attemptQuestionId])
+  @@index([attemptId])
+}
+
+/// A revision of a submitted answer. Append-only: no updatedAt, because a
+/// revision is historical evidence (SRS: preserve question/results history).
+model AnswerRevision {
+  id          String   @id @default(uuid())
+  workspaceId String
+  attemptResponseId String
+  attemptResponse   AttemptResponse @relation(fields: [attemptResponseId], references: [id], onDelete: Restrict)
+  attemptQuestionId String
+  attemptQuestion   AttemptQuestion @relation(fields: [attemptQuestionId], references: [id], onDelete: Restrict)
+  version     Int
+  answer      Json?
+  savedAt     DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([attemptResponseId, version])
+  @@index([workspaceId])
+  @@index([attemptQuestionId])
+}
+
+/// A durable AI/automated evaluation job. AI-02: store provider, prompt,
+/// rubric and job versions, statuses and bounded retry history. SRS: AI and
+/// sync work runs as durable jobs, never in-memory only.
+model EvaluationJob {
+  id          String   @id @default(uuid())
+  workspaceId String
+  attemptId   String
+  attempt     AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  kind        EvaluationJobKind
+  status      EvaluationJobStatus @default(QUEUED)
+  /// Which result version this job was produced for.
+  assessmentResultId String?
+  /// The attempt that the produced result belongs to. This is a separate
+  /// snapshot reference, kept alongside assessmentResultId so the job can be
+  /// checked for staleness (INIT-06: stale jobs cannot overwrite newer
+  /// results). It is NOT the same field as EvaluationJob.attemptId, which is
+  /// the attempt the job was launched against.
+  assessmentAttemptId String?
+  /// A-8 composite relation: EvaluationJob(assessmentResultId,
+  /// assessmentAttemptId) -> AssessmentResult(id, attemptId). The child column
+  /// names do not have to match the parent column names, so the child field
+  /// assessmentAttemptId maps onto the parent field attemptId. The parent
+  /// candidate UNIQUE key is AssessmentResult @@unique([id, attemptId]).
+  /// Both child columns are optional, so this relation is optional too.
+  assessmentResult   AssessmentResult? @relation(fields: [assessmentResultId, assessmentAttemptId], references: [id, attemptId], onDelete: Restrict)
+  /// Provider, model and prompt version identifiers (AI-02).
+  provider    String?
+  modelVersion String?
+  promptVersion String?
+  rubricVersionId String?
+  /// Bounded retry history, stored as JSON.
+  retryHistory Json?
+  /// Retry counter, bounded.
+  retryCount   Int      @default(0)
+  queuedAt    DateTime @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  /// Timeout deadline for the job.
+  timeoutAt   DateTime?
+  /// Failure or review reason.
+  failureReason String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  results EvaluationResult[]
+
+  /// TODO (E11 SQL, A-8): composite FK
+  /// EvaluationJob(assessmentResultId, assessmentAttemptId)
+  ///   -> AssessmentResult(id, attemptId)
+  /// ensures the job's result belongs to the job's attempt. The child column
+  /// names do not have to match the parent column names, so the child field
+  /// assessmentAttemptId maps onto the parent field attemptId. This composite
+  /// mapping is now declared as the Prisma relation `assessmentResult` above,
+  /// which Prisma renders as the composite FK
+  /// EvaluationJob(assessmentResultId, assessmentAttemptId)
+  ///   -> AssessmentResult(id, attemptId)
+  /// together with the parent candidate UNIQUE key AssessmentResult(id,
+  /// attemptId). E11 still has to confirm the generated migration matches this
+  /// mapping and keeps onDelete Restrict on the composite FK.
+
+  @@index([workspaceId, status])
+  @@index([attemptId])
+  @@index([assessmentResultId])
+}
+
+/// The output of one evaluation job: rubric-based scoring with evidence.
+model EvaluationResult {
+  id          String   @id @default(uuid())
+  workspaceId String
+  evaluationJobId String
+  evaluationJob   EvaluationJob @relation(fields: [evaluationJobId], references: [id], onDelete: Restrict)
+  attemptResponseId String?
+  attemptResponse   AttemptResponse? @relation(fields: [attemptResponseId], references: [id], onDelete: Restrict)
+  score       Decimal  @default(0) @db.Decimal(10, 2)
+  maxScore    Decimal  @default(0) @db.Decimal(10, 2)
+  /// Per-criterion evidence, stored as JSON.
+  evidence    Json?
+  /// Validated response schema of the model output.
+  rawOutput   Json?
+  /// Whether the backend validated the totals (AI-01).
+  totalsValidated Boolean @default(false)
+  /// Whether a human confirmed this evaluation (AI-01: AI assists).
+  humanConfirmed Boolean @default(false)
+  /// Whether this evaluation is provisional and therefore excluded from final
+  /// averages, mastery and eligible XP (EXAM-03).
+  provisional Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([evaluationJobId])
+}
+
+/// The scored, versioned outcome of an attempt.
+///
+/// D-5 (APPROVED, Option B): history is linear. `supersedesId` points at the
+/// predecessor version; `@@unique([supersedesId])` forbids a fork (two
+/// versions sharing one predecessor) and `@@unique([attemptId, version])`
+/// fixes the version number inside an attempt. Historical results are never
+/// overwritten.
+model AssessmentResult {
+  id          String   @id @default(uuid())
+  workspaceId String
+  attemptId   String
+  attempt     AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  /// The form the attempt was launched against, kept on the result so the
+  /// result chain carries its own form reference.
+  assessmentFormId String
+  assessmentForm   AssessmentForm @relation(fields: [assessmentFormId], references: [id], onDelete: Restrict)
+  traineeId   String
+  /// The expertise profile and version this result was produced against.
+  ///
+  /// SCOPE NOTE (unresolved, no approved decision covers this model): the
+  /// approved D-4 Option B and the E11 CHECK/composite-FK list apply to
+  /// AssessmentAttempt only. D-4's approved scope does NOT extend to
+  /// AssessmentResult, so the both-NULL-or-both-populated rule and the
+  /// "version belongs to profile" rule are NOT currently DB-enforced here,
+  /// and no E11 item covers them. The two single-column relations below prove
+  /// EXISTENCE only, never RELATIONSHIP. This is a reported finding, not an
+  /// approved constraint: extending D-4 to AssessmentResult needs a new
+  /// decision and would add two E11 items (a CHECK and the composite FK
+  /// AssessmentResult(expertiseProfileId, expertiseVersionId)
+  /// -> ExpertiseVersion(expertiseProfileId, id)).
+  expertiseProfileId String?
+  expertiseVersionId String?
+  expertiseProfile   ExpertiseProfile? @relation(fields: [expertiseProfileId], references: [id], onDelete: Restrict)
+  expertiseVersion   ExpertiseVersion? @relation(fields: [expertiseVersionId], references: [id], onDelete: Restrict)
+
+  /// Linear version chain (D-5).
+  version     Int      @default(1)
+  supersedesId String?
+  supersedes   AssessmentResult?  @relation("ResultVersions", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy AssessmentResult[] @relation("ResultVersions")
+
+  score       Decimal? @db.Decimal(10, 2)
+  maxScore    Decimal? @db.Decimal(10, 2)
+  /// Aggregated score as a percentage, kept for the 80%/60% thresholds.
+  percentage  Decimal? @db.Decimal(5, 2)
+  status      ResultStatus @default(PROVISIONAL)
+  /// Assessed level for an initial/retest assessment (INIT-05).
+  initialLevel InitialLevel?
+  /// Course outcome under the published versioned policy (EXAM-03).
+  courseOutcome CourseOutcome?
+  /// Version label of the scoring/threshold policy used.
+  policyVersion String?
+  /// Raw responses and evidence backing this result (INIT-05).
+  evidence    Json?
+  finalizedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  jobs           EvaluationJob[]
+  appeals        Appeal[]
+  recommendations Recommendation[]
+
+  /// D-5 (APPROVED, Option B): no fork — one predecessor, one successor.
+  @@unique([supersedesId])
+  /// D-5 (APPROVED, Option B): one version number per attempt.
+  @@unique([attemptId, version])
+  /// Candidate unique key required by the A-8 composite FK:
+  /// EvaluationJob(assessmentResultId, assessmentAttemptId)
+  ///   -> AssessmentResult(id, attemptId).
+  /// Column order matches the child key order. Not contradictory with
+  /// @@unique([attemptId, version]) — a different column set.
+  /// This is the criterion referenced by the Prisma relation
+  /// EvaluationJob.assessmentResult, so it is required by Prisma as well.
+  @@unique([id, attemptId])
+
+  /// TODO (E11 SQL, D-5 — E11 IMPLEMENTATION RECOMMENDATION): at most one
+  /// root result per attempt, enforced by the partial unique index
+  /// AssessmentResult(attemptId) WHERE "supersedesId" IS NULL.
+  /// Requires previewFeatures = ["partialIndexes"] in base.prisma (E11 file).
+  /// NOT added here because base.prisma must not be modified and the preview
+  /// feature is not enabled. Recorded as an E11 implementation recommendation,
+  /// not as a reopened user decision.
+  ///
+  /// Application rules (D-5): the root version is 1; a successor's version is
+  /// its predecessor's version + 1; a successor belongs to the same attempt;
+  /// the chain cannot form a cycle; historical results are never overwritten.
+
+  /// TODO (E11 SQL, A-15 — PENDING SCOPE SELECTION): see the note on
+  /// AssessmentAttempt. No A-15 composite FK and no A-15-specific parent
+  /// unique key are added here.
+
+  @@index([workspaceId, status])
+  @@index([traineeId])
+  @@index([assessmentFormId])
+}
+
+/// A trainee appeal against a result. EXAM-04: retain the appeal reason and
+/// review provenance.
+model Appeal {
+  id          String   @id @default(uuid())
+  workspaceId String
+  assessmentResultId String
+  assessmentResult   AssessmentResult @relation(fields: [assessmentResultId], references: [id], onDelete: Restrict)
+  attemptId   String
+  attempt     AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  traineeId   String
+  reason      String
+  status      AppealStatus @default(SUBMITTED)
+  /// Review provenance: who reviewed, when and why.
+  reviewedById String?
+  reviewedAt  DateTime?
+  reviewNote  String?
+  /// The outcome of the review, when it changed the result.
+  resolution  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId, status])
+  @@index([assessmentResultId])
+}
+
+// ---------------------------------------------------------------------------
+// Recommendations
+// ---------------------------------------------------------------------------
+
+/// A recommended skill, gap or learning direction for a trainee.
+/// AI-03/AI-04: recommendations use role requirements and demonstrated gaps.
+/// The skill status distinguishes assessed skills (STRONG / DEVELOPING /
+/// NEEDS_REVISION) from NOT_ASSESSED (untested) and UNASSESSED (profile-only
+/// suggestion). The two are genuinely distinct.
+model Recommendation {
+  id          String   @id @default(uuid())
+  workspaceId String
+  /// Every recommendation is anchored to an expertise profile.
+  expertiseProfileId String
+  expertiseProfile   ExpertiseProfile @relation(fields: [expertiseProfileId], references: [id], onDelete: Restrict)
+  expertiseVersionId String?
+  expertiseVersion   ExpertiseVersion? @relation(fields: [expertiseVersionId], references: [id], onDelete: Restrict)
+  skillId     String?
+  skill       Skill?   @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  /// The catalog course this recommendation points at, when it is
+  /// course-driven. NULL for a skill-driven or profile-only recommendation.
+  /// AI-04: course suggestions must point at a valid, available catalog
+  /// course; the AI never invents or publishes courses.
+  courseId    String? // → Course.id (E04)
+  /// The result this recommendation was derived from. NULL for a profile-only
+  /// suggestion.
+  assessmentResultId String?
+  assessmentResult   AssessmentResult? @relation(fields: [assessmentResultId], references: [id], onDelete: Restrict)
+
+  skillStatus RecommendationSkillStatus
+  /// Human-readable gap, reason and priority for the report.
+  rationale   String
+  priority    Int      @default(0)
+  /// Reason the suggested course was chosen, with priorities and preview.
+  courseReason String?
+  /// Whether this recommendation needs a human confirmation.
+  requiresConfirmation Boolean @default(false)
+  confirmedById String?
+  confirmedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  /// TODO (PENDING D-8 APPROVAL): Recommendation uniqueness. Two rules are
+  /// intended: result-linked uniqueness over (assessmentResultId, courseId,
+  /// skillId) and profile-only uniqueness over (expertiseProfileId, courseId,
+  /// skillId). NO partial unique indexes are added here because D-8 is
+  /// unapproved, and because courseId / skillId are nullable: a partial index
+  /// whose key contains a nullable column would not reject duplicates under
+  /// PostgreSQL's NULL-distinct semantics unless the index also declares
+  /// NULLS NOT DISTINCT, which Prisma's DSL cannot express (E11 raw SQL).
+  /// A profile-only index must be keyed on expertiseProfileId, because
+  /// assessmentResultId is NULL for every row it would cover. The intended
+  /// cardinality (one per result/profile, or one per result/profile + course +
+  /// skill) is still undecided and depends partly on D-2 and on the retest
+  /// question Q-PM-4.
+
+  /// TODO (E11 SQL, A-12): composite FK
+  /// Recommendation(expertiseProfileId, expertiseVersionId)
+  ///   -> ExpertiseVersion(expertiseProfileId, id)
+  /// Today this is an application rule only; the composite FK is not
+  /// expressible in Prisma's DSL and needs E11 raw SQL. The parent candidate
+  /// UNIQUE key ExpertiseVersion(expertiseProfileId, id) is required.
+
+  @@index([workspaceId])
+  @@index([expertiseProfileId])
+  @@index([assessmentResultId])
+  @@index([skillId])
+}

@@ -2,9 +2,107 @@
 // Owner: E02 (directory, teams, profiles)
 // Planned records (SRS p.8): TraineeProfile, Team, Membership, L&D FeedbackVersion
 //
-// Empty until you write your draft. Add your models here (Day 2-3), check them
-// with `pnpm db:validate`, then push to the branch schema/v1.
-// A short design note in docs/data-model/<module>.md is optional and does NOT replace
-// this file: E10 combines the .prisma drafts on Day 4.
+// Draft for schema/v1. Check with `pnpm db:validate`, then push to schema/v1.
+// Links to other modules are plain ID columns with a comment (E10 adds @relation).
 // Rules and an example: see README.md in this folder.
 // ============================================================================
+
+enum Position {
+  FULL_STACK
+  FRONTEND
+  BACKEND
+  QA
+  DEVOPS
+}
+
+enum WorkMode {
+  PHYSICAL
+  ONLINE
+}
+
+enum LdFeedbackKind {
+  PROFESSIONALISM
+  NEXT_STEPS
+}
+
+// ---------- Team ----------
+// The "Teams" choices in the Add trainee form and the Manage teams screen read from here.
+model Team {
+  id          String   @id @default(uuid())
+  workspaceId String // → Workspace (E01)
+  name        String // unique per workspace, e.g. "Team Alpha"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships Membership[]
+
+  @@unique([workspaceId, name])
+}
+
+// ---------- TraineeProfile ----------
+// One row per trainee: only what E02 owns.
+// Login, name, email and password live in E01 (User, Credential), reached by userId.
+model TraineeProfile {
+  id          String   @id @default(uuid())
+  workspaceId String // → Workspace (E01)
+  userId      String // → User (E01): login account, name, email, password
+  traineeCode String // e.g. BS23008, typed by the PM
+  position    Position
+  mode        WorkMode
+  onboardDate DateTime @db.Date // L&D onboarding date = Day 1 of the tenure
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships Membership[]
+  feedbacks   LdFeedbackVersion[]
+
+  @@unique([workspaceId, traineeCode])
+  @@unique([userId])
+  @@index([workspaceId, position, mode])
+}
+
+// ---------- Membership ----------
+// One row per (trainee, team). endedAt = null means the trainee is still in that team.
+model Membership {
+  id          String    @id @default(uuid())
+  workspaceId String // → Workspace (E01)
+  teamId      String
+  traineeId   String
+  startedAt   DateTime
+  endedAt     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  team    Team           @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  trainee TraineeProfile @relation(fields: [traineeId], references: [id], onDelete: Restrict)
+
+  @@unique([traineeId, teamId, startedAt])
+  @@index([workspaceId, teamId])
+  @@index([workspaceId, traineeId])
+}
+
+// ---------- LdFeedbackVersion ----------
+// L&D feedback on a trainee. Each edit is a new version; old versions are kept.
+model LdFeedbackVersion {
+  id          String         @id @default(uuid())
+  workspaceId String // → Workspace (E01)
+  traineeId   String
+  kind        LdFeedbackKind
+  version     Int
+  content     String         @db.Text
+  authorId    String // → User (E01): who wrote this version
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  trainee TraineeProfile @relation(fields: [traineeId], references: [id], onDelete: Restrict)
+
+  @@unique([traineeId, kind, version])
+  @@index([workspaceId, traineeId])
+}
+
+// ? Does E01 create the User and E02 then create the TraineeProfile with that userId
+//   (one transaction), or the other way round? Confirm with E01/E10.
+// ? Enum names Position and WorkMode are generic. If another module defines the same
+//   name, one of us must rename. Check when the drafts are combined.
+// ? Not in this file: NotificationPreference (E01 "Preference") and AssessmentPolicy
+//   (E03 already references it in identity.prisma). Ask the owners.

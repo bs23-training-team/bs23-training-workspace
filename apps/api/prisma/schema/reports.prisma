@@ -33,6 +33,7 @@ enum EmailDeliveryStatus {
 
 model Report {
   id           String           @id @default(uuid())
+  workspaceId  String
   traineeId    String
   periodType   ReportPeriodType
   periodStart  DateTime
@@ -53,19 +54,22 @@ model Report {
   updatedAt    DateTime         @updatedAt
 
   // Relations
-  // Note: Cross-module relations to Trainee (E02) and User (E01) are linked on Day 4 by E10
-  // trainee      Trainee          @relation(fields: [traineeId], references: [traineeId], onDelete: Cascade)
+  // Note: Cross-module relations to Workspace (E01), Trainee (E02) and User (E01) are linked on Day 4 by E10
+  // workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  // trainee      Trainee          @relation(fields: [traineeId], references: [traineeId], onDelete: Restrict)
   // publisher    User?            @relation("ReportPublisher", fields: [publishedBy], references: [id], onDelete: SetNull)
   versions     ReportVersion[]
   emailLogs    EmailDelivery[]
 
-  @@unique([traineeId, periodType, periodStart, periodEnd, version])
+  @@unique([workspaceId, traineeId, periodType, periodStart, periodEnd, version])
+  @@index([workspaceId])
   @@index([traineeId])
   @@index([publishedBy])
 }
 
 model ReportVersion {
   id          String   @id @default(uuid())
+  workspaceId String
   reportId    String
   version     Int
   sections    Json
@@ -73,17 +77,20 @@ model ReportVersion {
   publishedBy String?
   publishedAt DateTime @default(now())
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Relations
-  report          Report          @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report          Report          @relation(fields: [reportId], references: [id], onDelete: Restrict)
   // publisher   User?    @relation("ReportVersionPublisher", fields: [publishedBy], references: [id], onDelete: SetNull)
   emailDeliveries EmailDelivery[]
 
   @@unique([reportId, version])
+  @@index([workspaceId])
 }
 
 model EmailDelivery {
   id              String              @id @default(uuid())
+  workspaceId     String
   reportId        String
   reportVersionId String?
   recipient       String
@@ -97,9 +104,10 @@ model EmailDelivery {
   updatedAt       DateTime            @updatedAt
 
   // Relations
-  report          Report              @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report          Report              @relation(fields: [reportId], references: [id], onDelete: Restrict)
   reportVersion   ReportVersion?      @relation(fields: [reportVersionId], references: [id], onDelete: SetNull)
 
+  @@index([workspaceId])
   @@index([reportId])
   @@index([status])
 }

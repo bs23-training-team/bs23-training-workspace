@@ -8,3 +8,627 @@
 // this file: E10 combines the .prisma drafts on Day 4.
 // Rules and an example: see README.md in this folder.
 // ============================================================================
+// E03: Skills Assessment | schema/v1 draft | 2026-11-11
+// Edit ONLY the existing apps/api/prisma/schema/assessment.prisma.
+// No generator/datasource here; base.prisma is owned by E11.
+// Current user scope: ten-answer expertise, on-demand AI questions (NO BANK),
+// common 100-mark/360-minute policy, retests, automated scoring/report,
+// verified course suggestions and neutral browser proctoring. No roadmap.
+// E01 must add the named inverse Workspace/User relations listed in assessment.md.
+// Do not format the full schema folder: that can change other owners' files.
+// All E03 internal relations include workspaceId; E01 User workspace membership
+// must also be authorized in the backend until E01 exposes a composite User key.
+// API/business validation enforces immutable snapshots, numeric bounds,
+// twelve-cell quotas, supported topics, single active writer and lifecycle.
+
+enum ExpertiseVersionStatus {
+  DRAFT
+  SUBMITTED
+  SUPERSEDED
+}
+
+enum AssessmentProcessingStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CLARIFICATION_REQUIRED
+}
+
+enum AssessmentPolicyStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+}
+
+enum AssessmentQuestionType {
+  THEORETICAL_MCQ
+  ANALYTICAL_MCQ
+  PSEUDOCODE
+  PROBLEM_SOLVING
+}
+
+enum AssessmentDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum AssessmentAttemptKind {
+  INITIAL
+  RETEST
+}
+
+enum AssessmentAttemptStatus {
+  PREPARING
+  CLARIFICATION_REQUIRED
+  READY
+  IN_PROGRESS
+  SUBMITTED
+  EVALUATING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AssessmentSubmissionReason {
+  MANUAL
+  TIMEOUT
+}
+
+enum AssessmentJobKind {
+  QUESTION_GENERATION
+  ANSWER_EVALUATION
+  REPORT_GENERATION
+  COURSE_RECOMMENDATION
+}
+
+enum AssessmentEvaluationMethod {
+  BACKEND_KEY
+  AI_RUBRIC
+}
+
+enum AssessmentResultStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum AssessmentCourseSource {
+  CATALOG
+  EXTERNAL
+}
+
+enum AssessmentSessionStatus {
+  ACTIVE
+  EXPIRED
+  RECOVERED
+  CLOSED
+}
+
+enum AssessmentProctoringEventKind {
+  PAGE_HIDDEN
+  PAGE_VISIBLE
+  FULLSCREEN_ENTERED
+  FULLSCREEN_EXITED
+  COPY
+  PASTE
+  WARNING
+  SESSION_CONFLICT
+  TELEMETRY_GAP
+  MONITORING_UNAVAILABLE
+}
+
+enum AssessmentMonitoringCoverage {
+  COMPLETE
+  INCOMPLETE
+  UNSUPPORTED
+  UNAVAILABLE
+}
+
+enum AssessmentAppealStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+// One JSONB document holds all ten answers; Q5-Q7 are keyed by stable selected/custom skill keys.
+// Submitted versions are immutable. User role and workspace membership are checked by backend.
+// traineeUserId is E01 User.id, NOT a login code or email; E02 resolves its trainee profile.
+model ExpertiseVersion {
+  id                   String                 @id @default(uuid())
+  workspaceId          String
+  traineeUserId        String
+  version              Int
+  questionnaireVersion String
+  status               ExpertiseVersionStatus @default(DRAFT)
+  answers              Json                   @db.JsonB
+  submittedAt          DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  workspace Workspace           @relation("E03ExpertiseVersionWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  trainee   User                @relation("E03ExpertiseTrainee", fields: [traineeUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  analyses  ExpertiseAnalysis[]
+  attempts  AssessmentAttempt[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, traineeUserId, version])
+  @@index([workspaceId, traineeUserId, status])
+}
+
+// Analysis retains original Other labels, normalized interpretation, all-ten-answer reasoning and unsupported states.
+model ExpertiseAnalysis {
+  id                     String                     @id @default(uuid())
+  workspaceId            String
+  expertiseVersionId     String
+  revision               Int
+  status                 AssessmentProcessingStatus @default(PENDING)
+  analysis               Json?                      @db.JsonB
+  clarificationQuestions Json?                      @db.JsonB
+  provider               String?
+  modelName              String?
+  promptVersion          String
+  inputHash              String
+  completedAt            DateTime?
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+
+  workspace Workspace        @relation("E03ExpertiseAnalysisWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  expertise ExpertiseVersion @relation(fields: [workspaceId, expertiseVersionId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, expertiseVersionId, revision])
+  @@index([workspaceId, status])
+}
+
+// Before publishing: exactly 12 type/difficulty rules; positive counts/marks; sum(count*marks)=100.
+// Published policy and its rules are immutable. No question-count split or pass threshold is invented here.
+model AssessmentPolicy {
+  id              String                 @id @default(uuid())
+  workspaceId     String
+  version         Int
+  status          AssessmentPolicyStatus @default(DRAFT)
+  totalMarks      Decimal                @default(100) @db.Decimal(10, 2)
+  durationMinutes Int                    @default(360)
+  resourceRules   Json                   @db.JsonB
+  scoringRules    Json                   @db.JsonB
+  publishedAt     DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  workspace Workspace              @relation("E03AssessmentPolicyWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  rules     AssessmentPolicyRule[]
+  attempts  AssessmentAttempt[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, version])
+  @@index([workspaceId, status])
+}
+
+model AssessmentPolicyRule {
+  id               String                 @id @default(uuid())
+  workspaceId      String
+  policyId         String
+  questionType     AssessmentQuestionType
+  difficulty       AssessmentDifficulty
+  questionCount    Int
+  marksPerQuestion Decimal                @db.Decimal(10, 2)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  workspace Workspace        @relation("E03AssessmentPolicyRuleWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  policy    AssessmentPolicy @relation(fields: [workspaceId, policyId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, policyId, questionType, difficulty])
+}
+
+// Settings: visibility/fullscreen/copy-paste events, neutral warnings and supported exceptions.
+// No camera/mic/screen recording/clipboard payload. No automatic score penalty or failure.
+model AssessmentProctoringPolicy {
+  id            String                 @id @default(uuid())
+  workspaceId   String
+  version       Int
+  status        AssessmentPolicyStatus @default(DRAFT)
+  noticeText    String                 @db.Text
+  settings      Json                   @db.JsonB
+  retentionDays Int?
+  publishedAt   DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  workspace Workspace           @relation("E03AssessmentProctoringPolicyWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  attempts  AssessmentAttempt[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, version])
+  @@index([workspaceId, status])
+}
+
+// A new RETEST is a new row, never an overwrite. Attempt number is per expertise version.
+// Resolve trainee and cross-version history through expertise. Backend serializes per-trainee active-attempt creation.
+// READY freezes questions/keys/rubrics; Start fixes deadline=startedAt+360 minutes.
+// Backend verifies activeSessionId belongs to this attempt and admits writes only for its current lease.
+model AssessmentAttempt {
+  id                       String                      @id @default(uuid())
+  workspaceId              String
+  expertiseVersionId       String
+  policyId                 String
+  proctoringPolicyId       String
+  kind                     AssessmentAttemptKind
+  attemptNumber            Int
+  status                   AssessmentAttemptStatus     @default(PREPARING)
+  idempotencyKey           String
+  profileSnapshot          Json                        @db.JsonB
+  policySnapshot           Json                        @db.JsonB
+  proctoringPolicySnapshot Json                        @db.JsonB
+  aiPlan                   Json?                       @db.JsonB
+  preparationMetadata      Json?                       @db.JsonB
+  questionSetHash          String?
+  readyAt                  DateTime?
+  startedAt                DateTime?
+  deadlineAt               DateTime?
+  submittedAt              DateTime?
+  submissionReason         AssessmentSubmissionReason?
+  completedAt              DateTime?
+  cancelledAt              DateTime?
+  // Current session pointer is managed atomically with leaseVersion; it is not an extra relation.
+  activeSessionId          String?
+  leaseVersion             Int                         @default(0)
+  createdAt                DateTime                    @default(now())
+  updatedAt                DateTime                    @updatedAt
+
+  workspace         Workspace                    @relation("E03AssessmentAttemptWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  expertise         ExpertiseVersion             @relation(fields: [workspaceId, expertiseVersionId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  policy            AssessmentPolicy             @relation(fields: [workspaceId, policyId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  proctoringPolicy  AssessmentProctoringPolicy   @relation(fields: [workspaceId, proctoringPolicyId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  questions         AssessmentQuestion[]
+  responses         AssessmentResponse[]
+  evaluations       AssessmentEvaluation[]
+  results           AssessmentResult[]
+  jobs              AssessmentJob[]
+  sessions          AssessmentSession[]
+  proctoringEvents  AssessmentProctoringEvent[]
+  proctoringSummary AssessmentProctoringSummary?
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, idempotencyKey])
+  @@unique([workspaceId, expertiseVersionId, attemptNumber])
+  @@index([workspaceId, status, deadlineAt])
+  @@index([workspaceId, expertiseVersionId, completedAt])
+}
+
+// Historical per-attempt question snapshot, NOT a reusable Question Bank. No cross-trainee bank selection.
+// MCQ options contain public IDs/text only. Written questions have null options.
+// Questions become immutable at READY. A correction requires recorded evidence and a revised result.
+model AssessmentQuestion {
+  id           String                 @id @default(uuid())
+  workspaceId  String
+  attemptId    String
+  position     Int
+  questionType AssessmentQuestionType
+  difficulty   AssessmentDifficulty
+  marks        Decimal                @db.Decimal(10, 2)
+  prompt       String                 @db.Text
+  options      Json?                  @db.JsonB
+  // Validated skill/topic labels and allocation weights; Other skills do not require a fixed catalog.
+  coverage     Json                   @db.JsonB
+  contentHash  String
+  isVoided     Boolean                @default(false)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  workspace        Workspace                   @relation("E03AssessmentQuestionWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  attempt          AssessmentAttempt           @relation(fields: [workspaceId, attemptId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  rubric           AssessmentRubric?
+  response         AssessmentResponse?
+  evaluations      AssessmentEvaluation[]
+  proctoringEvents AssessmentProctoringEvent[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, attemptId, id])
+  @@unique([workspaceId, attemptId, position])
+  @@unique([workspaceId, attemptId, contentHash])
+  @@index([workspaceId, attemptId, questionType, difficulty])
+}
+
+// Private, frozen grading material. Backend validates MCQ answer membership OR written rubric criteria.
+// Max marks and criterion totals equal question marks. Never include this relation in trainee exam endpoints.
+model AssessmentRubric {
+  id              String   @id @default(uuid())
+  workspaceId     String
+  questionId      String
+  version         Int      @default(1)
+  correctOptionId String?
+  referenceAnswer String?  @db.Text
+  criteria        Json?    @db.JsonB
+  maxMarks        Decimal  @db.Decimal(10, 2)
+  contentHash     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace Workspace          @relation("E03AssessmentRubricWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  question  AssessmentQuestion @relation(fields: [workspaceId, questionId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, questionId])
+}
+
+// Autosave uses optimistic revision checks and the server deadline/current session lease.
+// Finalization creates empty responses for unanswered questions and freezes all answers atomically.
+model AssessmentResponse {
+  id              String    @id @default(uuid())
+  workspaceId     String
+  attemptId       String
+  questionId      String
+  answer          Json?     @db.JsonB
+  revision        Int       @default(0)
+  markedForReview Boolean   @default(false)
+  savedAt         DateTime?
+  frozenAt        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  workspace   Workspace              @relation("E03AssessmentResponseWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  attempt     AssessmentAttempt      @relation(fields: [workspaceId, attemptId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  question    AssessmentQuestion     @relation(fields: [workspaceId, attemptId, questionId], references: [workspaceId, attemptId, id], onDelete: Restrict, onUpdate: Restrict)
+  evaluations AssessmentEvaluation[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, questionId])
+  @@unique([workspaceId, attemptId, questionId])
+  @@unique([workspaceId, attemptId, questionId, id])
+  @@index([workspaceId, attemptId])
+}
+
+// Durable work state around shared Redis/job infrastructure; does not duplicate E01 OutboxEvent.
+// PROFILE interpretation before attempt creation is tracked by ExpertiseAnalysis. All later AI work references an attempt.
+model AssessmentJob {
+  id                 String                     @id @default(uuid())
+  workspaceId        String
+  attemptId          String
+  kind               AssessmentJobKind
+  status             AssessmentProcessingStatus @default(PENDING)
+  deduplicationKey   String
+  provider           String?
+  modelName          String?
+  promptVersion      String
+  rubricVersion      String?
+  inputHash          String
+  outputHash         String?
+  retryCount         Int                        @default(0)
+  maxRetries         Int
+  nextRetryAt        DateTime?
+  leaseToken         String?
+  leaseExpiresAt     DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  errorCode          String?
+  errorMessage       String?                    @db.Text
+  validationEvidence Json?                      @db.JsonB
+  // Bounded per-try metadata; never credentials or full private user payloads.
+  executionHistory   Json?                      @db.JsonB
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  workspace   Workspace              @relation("E03AssessmentJobWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  attempt     AssessmentAttempt      @relation(fields: [workspaceId, attemptId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  evaluations AssessmentEvaluation[]
+  results     AssessmentResult[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, deduplicationKey])
+  @@unique([workspaceId, attemptId, id])
+  @@index([workspaceId, status, nextRetryAt])
+}
+
+// MCQ: backend scoring. Written: AI rubric scoring, then numeric validation.
+// Provider failures stay pending/failed; only genuinely unanswered responses earn an explicit zero.
+// Accepted evaluations are immutable; a regrade creates a new complete evaluation revision.
+model AssessmentEvaluation {
+  id              String                     @id @default(uuid())
+  workspaceId     String
+  attemptId       String
+  questionId      String
+  responseId      String
+  jobId           String
+  revision        Int
+  method          AssessmentEvaluationMethod
+  status          AssessmentProcessingStatus @default(PENDING)
+  awardedMarks    Decimal?                   @db.Decimal(10, 2)
+  criterionScores Json?                      @db.JsonB
+  feedback        String?                    @db.Text
+  inputHash       String
+  rubricHash      String
+  completedAt     DateTime?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  workspace Workspace          @relation("E03AssessmentEvaluationWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  attempt   AssessmentAttempt  @relation(fields: [workspaceId, attemptId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  question  AssessmentQuestion @relation(fields: [workspaceId, attemptId, questionId], references: [workspaceId, attemptId, id], onDelete: Restrict, onUpdate: Restrict)
+  response  AssessmentResponse @relation(fields: [workspaceId, attemptId, questionId, responseId], references: [workspaceId, attemptId, questionId, id], onDelete: Restrict, onUpdate: Restrict)
+  job       AssessmentJob      @relation(fields: [workspaceId, attemptId, jobId], references: [workspaceId, attemptId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, questionId, revision])
+  @@index([workspaceId, attemptId, revision, status])
+}
+
+// Publish only after every question has an accepted evaluation in evaluationRevision. Backend computes totals.
+// Published rows are immutable. Regrade/appeal publishes a new version, preserving previous evidence.
+// Latest report is selected by completed attempt order, not by background job completion order.
+model AssessmentResult {
+  id                    String                 @id @default(uuid())
+  workspaceId           String
+  attemptId             String
+  jobId                 String
+  version               Int
+  evaluationRevision    Int
+  status                AssessmentResultStatus @default(DRAFT)
+  score                 Decimal                @db.Decimal(10, 2)
+  totalMarks            Decimal                @db.Decimal(10, 2)
+  breakdown             Json                   @db.JsonB
+  analysis              Json                   @db.JsonB
+  scoringPolicySnapshot Json                   @db.JsonB
+  evidenceHash          String
+  publishedAt           DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  workspace       Workspace                  @relation("E03AssessmentResultWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  attempt         AssessmentAttempt          @relation(fields: [workspaceId, attemptId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  job             AssessmentJob              @relation(fields: [workspaceId, attemptId, jobId], references: [workspaceId, attemptId, id], onDelete: Restrict, onUpdate: Restrict)
+  recommendations AssessmentRecommendation[]
+  appeals         AssessmentAppeal[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, attemptId, version])
+  @@unique([workspaceId, attemptId, evaluationRevision])
+  @@index([workspaceId, status, publishedAt])
+}
+
+// Courses only: no roadmap generation or assignment. Actual retrieved/supplied source records required.
+// CATALOG sourceRecordId resolves to E04 Course.id via an authorized source adapter; EXTERNAL uses provider ID.
+// No cross-module Course FK until E04 workspace contract is settled. Never invent unknown metadata.
+// Source failure/no matches is tracked by the COURSE_RECOMMENDATION job even when no rows exist.
+model AssessmentRecommendation {
+  id             String                     @id @default(uuid())
+  workspaceId    String
+  resultId       String
+  rank           Int
+  status         AssessmentProcessingStatus @default(PENDING)
+  sourceKind     AssessmentCourseSource
+  sourceRecordId String
+  courseTitle    String
+  providerName   String?
+  courseUrl      String?
+  courseLevel    String?
+  language       String?
+  costMetadata   Json?                      @db.JsonB
+  matchedSkills  Json                       @db.JsonB
+  reason         String                     @db.Text
+  sourceSnapshot Json                       @db.JsonB
+  verifiedAt     DateTime?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  workspace Workspace        @relation("E03AssessmentRecommendationWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  result    AssessmentResult @relation(fields: [workspaceId, resultId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, resultId, rank])
+  @@unique([workspaceId, resultId, sourceKind, sourceRecordId])
+  @@index([workspaceId, resultId, status])
+}
+
+// One active writer is enforced by compare-and-swap on AssessmentAttempt.activeSessionId/leaseVersion.
+// A status index alone does not enforce a single active writer. Recovery invalidates old lease and keeps deadline.
+model AssessmentSession {
+  id                   String                  @id @default(uuid())
+  workspaceId          String
+  attemptId            String
+  sessionTokenHash     String                  @unique
+  leaseVersion         Int
+  status               AssessmentSessionStatus @default(ACTIVE)
+  noticeAcknowledgedAt DateTime
+  monitoringSupport    Json                    @db.JsonB
+  lastHeartbeatAt      DateTime
+  leaseExpiresAt       DateTime
+  closedAt             DateTime?
+  recoveryReason       String?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  workspace Workspace                   @relation("E03AssessmentSessionWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  attempt   AssessmentAttempt           @relation(fields: [workspaceId, attemptId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  events    AssessmentProctoringEvent[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, attemptId, id])
+  @@unique([workspaceId, attemptId, leaseVersion])
+  @@index([workspaceId, attemptId, status, leaseExpiresAt])
+}
+
+// Telemetry only, never cheating proof. Metadata is allowlisted; no clipboard/answer payload or camera/audio/video.
+// Idempotent ingestion, bounded client buffering, and server receipt timestamps; late events never reopen answers.
+model AssessmentProctoringEvent {
+  id               String                        @id @default(uuid())
+  workspaceId      String
+  attemptId        String
+  sessionId        String
+  questionId       String?
+  eventId          String
+  sequence         Int
+  kind             AssessmentProctoringEventKind
+  occurredAt       DateTime
+  receivedAt       DateTime                      @default(now())
+  intervalKey      String?
+  warningReason    String?
+  warningDisplayed Boolean?
+  metadata         Json?                         @db.JsonB
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
+
+  workspace Workspace           @relation("E03AssessmentProctoringEventWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  attempt   AssessmentAttempt   @relation(fields: [workspaceId, attemptId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  session   AssessmentSession   @relation(fields: [workspaceId, attemptId, sessionId], references: [workspaceId, attemptId, id], onDelete: Restrict, onUpdate: Restrict)
+  question  AssessmentQuestion? @relation(fields: [workspaceId, attemptId, questionId], references: [workspaceId, attemptId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, attemptId, eventId])
+  @@unique([workspaceId, sessionId, sequence])
+  @@index([workspaceId, attemptId, occurredAt])
+}
+
+// Derived cache, rebuildable from events. Keep separate from skill scores and course matching.
+// Unpaired intervals remain incomplete. FinalizedAt can be revised for legitimate late telemetry, without altering marks.
+model AssessmentProctoringSummary {
+  id                  String                       @id @default(uuid())
+  workspaceId         String
+  attemptId           String
+  coverage            AssessmentMonitoringCoverage
+  counts              Json                         @db.JsonB
+  intervals           Json                         @db.JsonB
+  limitations         Json                         @db.JsonB
+  lastEventReceivedAt DateTime?
+  computedAt          DateTime
+  finalizedAt         DateTime?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+
+  workspace Workspace         @relation("E03AssessmentProctoringSummaryWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  attempt   AssessmentAttempt @relation(fields: [workspaceId, attemptId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, attemptId])
+}
+
+// Included because the shared E03 ownership contract lists Appeal; this is NOT a question-review gate.
+// Backend authorizes trainee/result ownership, reviewer workspace/role and replacementResultId lineage.
+model AssessmentAppeal {
+  id                  String                 @id @default(uuid())
+  workspaceId         String
+  resultId            String
+  submittedByUserId   String
+  reviewedByUserId    String?
+  status              AssessmentAppealStatus @default(SUBMITTED)
+  reason              String                 @db.Text
+  decisionReason      String?                @db.Text
+  decidedAt           DateTime?
+  // An accepted appeal triggers a new evaluation/result version; original result is retained.
+  replacementResultId String?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  workspace   Workspace        @relation("E03AssessmentAppealWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  result      AssessmentResult @relation(fields: [workspaceId, resultId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  submittedBy User             @relation("E03AppealSubmitter", fields: [submittedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy  User?            @relation("E03AppealReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, resultId, status])
+  @@index([workspaceId, submittedByUserId, createdAt])
+}

@@ -22,28 +22,89 @@
 // Sources: SRS p.8 (E03 logical records), INIT-01..INIT-06, AI-01..AI-05,
 // EXAM-01..EXAM-04; PRD Epics 03, 04, 06.
 //
+// ---------------------------------------------------------------------------
+// COLLISION RESOLUTION WITH E03's assessment.prisma (3 duplicate models)
+// ---------------------------------------------------------------------------
+// E03's assessment.prisma and this file were authored independently for the
+// same SRS domain (SRS p.10 lists E03 as owner of ExpertiseVersion, Attempt,
+// Result, Appeal, Recommendation). Three model names collided:
+//
+//   M7 model (this file)     E03 model (assessment.prisma)
+//   -----------------------   ------------------------------------------
+//   ExpertiseVersion          ExpertiseVersion
+//   AssessmentAttempt         AssessmentAttempt
+//   AssessmentResult          AssessmentResult
+//
+// The three pairs are NOT interchangeable — they encode two different
+// lifecycles for the same domain, so the M7 models were renamed rather than
+// deleted or merged:
+//
+//   ExpertiseVersion     -> ExpertiseProfileVersion
+//     E03's ExpertiseVersion is the ten-answer onboarding QUESTIONNAIRE
+//     document (traineeUserId, answers JSON, DRAFT/SUBMITTED/SUPERSEDED).
+//     M7's is a frozen, versioned SNAPSHOT OF AN ExpertiseProfile, carrying
+//     the derived skill state and the assessed level (INIT-05). M7's
+//     ExpertiseProfile + ExpertiseProfileTechnology have no E03 equivalent,
+//     so the profile side stays and only the version model is renamed.
+//
+//   AssessmentAttempt    -> AssessmentFormAttempt
+//     E03's attempt is POLICY-driven: it requires a published
+//     AssessmentPolicy + AssessmentProctoringPolicy, carries session leases,
+//     proctoring events and idempotency keys, and its kind is INITIAL/RETEST
+//     only. M7's attempt is FORM-driven: it runs a frozen AssessmentForm
+//     (sections, question versions, rubric snapshot, attempt policy,
+//     acknowledgement) and additionally covers COURSE assessments, which
+//     E03's model cannot express at all. E03's attempt therefore cannot
+//     absorb M7's form-driven attempt without changing assessment.prisma,
+//     which is out of scope for this change.
+//
+//   AssessmentResult     -> AssessmentFormResult
+//     E03's result is JOB-bound: it requires a jobId and an
+//     evaluationRevision, carries evidenceHash/breakdown/analysis and is
+//     immutable once PUBLISHED. M7's result is CHAIN-bound: D-5 mandates a
+//     linear supersedes chain (supersedesId, at most one successor,
+//     sequential versions) plus courseOutcome and provisional/final
+//     lifecycle. E03's model has no successor pointer, so it cannot carry
+//     D-5. The two models coexist as two distinct record kinds.
+//
+// All three renames are name-only: no approved M7 decision (D-1..D-22) was
+// reopened, and no field, constraint, index or deletion behaviour was
+// dropped. See the per-model notes for the exact column-level mapping.
+//
 // Cross-module references use plain scalar IDs with a `// → Model.id (Owner)`
 // comment, per docs/week1-team-brief.md. Prisma relations are declared ONLY
-// between models that exist in this file. User, Workspace, TraineeProfile and
-// CourseVersion are owned by E01/E02/E04 and are not yet delivered, so no
-// @relation is declared against them.
+// between models that exist in this file. User and Workspace are owned by E01
+// and ARE delivered (identity.prisma), but identity.prisma is not editable
+// here, so M7 keeps `workspaceId` as a plain scoped column and declares no
+// @relation against Workspace/User — exactly as E03 does for the models it
+// owns. TraineeProfile (E02) and CourseVersion (E04) are not delivered yet,
+// so they are scalar-only as well (see D-6).
 //
 // E11 SQL requirements (NOT enforced by Prisma — see each TODO below):
-//   1. Composite FK: AssessmentAttempt(expertiseProfileId, expertiseVersionId)
-//      -> ExpertiseVersion(expertiseProfileId, id)               [D-4 / A-6]
-//   2. CHECK: AssessmentAttempt expertise pair is both-NULL or both-populated
-//                                                    [D-4 / A-10]
+//   1. Composite FK: AssessmentFormAttempt(expertiseProfileId,
+//      expertiseProfileVersionId) -> ExpertiseProfileVersion(
+//      expertiseProfileId, id)                                    [D-4 / A-6]
+//      Expressed as the Prisma relation
+//      `AssessmentFormAttempt.expertiseProfileVersion`, so Prisma emits the
+//      composite FK itself. E11 confirms it in the generated migration.
+//   2. CHECK: AssessmentFormAttempt expertise pair is both-NULL or
+//      both-populated                                              [D-4 / A-10]
+//      Not expressible in Prisma's DSL; needs E11 raw SQL.
 //   3. Composite FK: EvaluationJob(assessmentResultId, assessmentAttemptId)
-//      -> AssessmentResult(id, attemptId)                        [A-8]
+//      -> AssessmentFormResult(id, attemptId)                        [A-8]
 //      Expressed as the Prisma relation `EvaluationJob.assessmentResult`,
 //      so Prisma emits the composite FK itself. E11 confirms it in the
 //      generated migration.
-//   4. Composite FK: Recommendation(expertiseProfileId, expertiseVersionId)
-//      -> ExpertiseVersion(expertiseProfileId, id)               [A-12]
+//   4. Composite FK: Recommendation(expertiseProfileId,
+//      expertiseProfileVersionId) -> ExpertiseProfileVersion(
+//      expertiseProfileId, id)                                    [A-12]
+//      Not expressible in Prisma's DSL; needs E11 raw SQL. NOTE: D-4's
+//      approved scope does NOT extend to Recommendation; see the D-8 scope
+//      note on Recommendation for the current rule.
 //   5. Parent candidate UNIQUE keys required by 1 and 4:
-//      ExpertiseVersion(expertiseProfileId, id)
-//      AssessmentResult(id, attemptId)  — required by 3 as well
-//   6. Partial UNIQUE index: AssessmentResult(attemptId)
+//      ExpertiseProfileVersion(expertiseProfileId, id)
+//      AssessmentFormResult(id, attemptId)  — required by 3 as well
+//   6. Partial UNIQUE index: AssessmentFormResult(attemptId)
 //      WHERE "supersedesId" IS NULL   — at most one root result per attempt
 //                                                    [D-5, E11 recommendation]
 //      Requires previewFeatures = ["partialIndexes"] in base.prisma (E11 file).
@@ -463,8 +524,8 @@ model AssessmentForm {
 
   sections   AssessmentFormSection[]
   questions  AssessmentFormQuestion[]
-  attempts   AssessmentAttempt[]
-  results    AssessmentResult[]
+  attempts   AssessmentFormAttempt[]
+  results    AssessmentFormResult[]
 
   /// TODO (E11 SQL, A-19): composite FK
   /// AssessmentForm(courseId, courseVersionId) -> CourseVersion(id, courseId)
@@ -538,14 +599,14 @@ model ExpertiseProfile {
   updatedAt   DateTime @updatedAt
 
   /// Pointer to the current published expertise version.
-  currentVersionId String? @unique // → ExpertiseVersion.id (self relation, see below)
+  currentVersionId String? @unique // → ExpertiseProfileVersion.id (self relation, see below)
 
-  currentVersion ExpertiseVersion? @relation("ExpertiseCurrentVersion", fields: [currentVersionId], references: [id], onDelete: Restrict)
-  versions       ExpertiseVersion[]  @relation("ExpertiseVersions")
+  currentVersion ExpertiseProfileVersion? @relation("ExpertiseCurrentVersion", fields: [currentVersionId], references: [id], onDelete: Restrict)
+  versions       ExpertiseProfileVersion[]  @relation("ExpertiseVersions")
 
   technologies ExpertiseProfileTechnology[]
-  attempts     AssessmentAttempt[]
-  results      AssessmentResult[]
+  attempts     AssessmentFormAttempt[]
+  results      AssessmentFormResult[]
   recommendations Recommendation[]
 
   /// TODO (PENDING D-9 APPROVAL): ExpertiseProfile.currentVersionId relation
@@ -559,7 +620,14 @@ model ExpertiseProfile {
 /// A frozen expertise version: the survey answer set and the derived skill
 /// state at that point in time. INIT-04/INIT-06 freeze profile versions;
 /// a retest creates a new version and keeps history.
-model ExpertiseVersion {
+///
+/// RENAMED from `ExpertiseVersion` (collision with E03's assessment.prisma
+/// `ExpertiseVersion`, which is the ten-answer onboarding questionnaire
+/// document). E03's model has no ExpertiseProfile, no
+/// ExpertiseProfileTechnology rows and no derived-level snapshot, so it cannot
+/// express this concept. The rename is name-only: fields, constraints,
+/// indexes and deletion behaviour are unchanged.
+model ExpertiseProfileVersion {
   id          String   @id @default(uuid())
   workspaceId String
   expertiseProfileId String
@@ -576,16 +644,19 @@ model ExpertiseVersion {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  attempts         AssessmentAttempt[]
-  results          AssessmentResult[]
+  attempts         AssessmentFormAttempt[]
+  results          AssessmentFormResult[]
   recommendations  Recommendation[]
 
   @@unique([expertiseProfileId, version])
   /// Candidate unique key required by the A-6 and A-12 composite FKs
-  /// (E11 raw SQL): AssessmentAttempt(expertiseProfileId, expertiseVersionId)
-  /// and Recommendation(expertiseProfileId, expertiseVersionId)
-  ///   -> ExpertiseVersion(expertiseProfileId, id).
-  /// Column order matches the child key order.
+  /// (E11 raw SQL): AssessmentFormAttempt(expertiseProfileId,
+  /// expertiseProfileVersionId) and Recommendation(expertiseProfileId,
+  /// expertiseProfileVersionId)
+  ///   -> ExpertiseProfileVersion(expertiseProfileId, id).
+  /// Column order matches the child key order. It is also the parent key
+  /// referenced by the Prisma relation
+  /// `AssessmentFormAttempt.expertiseProfileVersion`, so Prisma requires it.
   @@unique([expertiseProfileId, id])
   @@index([workspaceId])
 }
@@ -616,7 +687,17 @@ model ExpertiseProfileTechnology {
 
 /// One trainee's attempt at one assessment form. EXAM-02: the server owns the
 /// deadline; the attempt finalizes exactly once.
-model AssessmentAttempt {
+///
+/// RENAMED from `AssessmentAttempt` (collision with E03's assessment.prisma
+/// `AssessmentAttempt`). E03's attempt is POLICY-driven — it requires a
+/// published AssessmentPolicy and AssessmentProctoringPolicy and owns
+/// session leases and proctoring events, and its kind is INITIAL/RETEST only.
+/// This attempt is FORM-driven: it runs a frozen AssessmentForm (sections,
+/// question versions, rubric snapshot, attempt policy, acknowledgement) and
+/// additionally covers COURSE assessments, which E03's model cannot express.
+/// The rename is name-only: fields, constraints, indexes and deletion
+/// behaviour are unchanged, and D-4 is preserved in full.
+model AssessmentFormAttempt {
   id          String   @id @default(uuid())
   workspaceId String
   assessmentFormId String
@@ -644,35 +725,61 @@ model AssessmentAttempt {
   /// D-4 (APPROVED, Option B): the expertise pair is either both NULL
   /// (course-only assessment) or both populated (initial/retest assessment
   /// pinning one expertise version).
+  ///
+  /// COLUMN RENAME (name-only, D-4 unchanged): the columns were
+  /// `expertiseProfileId` / `expertiseVersionId` and are now
+  /// `expertiseProfileId` / `expertiseProfileVersionId`. The second column
+  /// must point at the M7 profile-version model, which is now called
+  /// `ExpertiseProfileVersion` because E03 owns the model name
+  /// `ExpertiseVersion` for a different concept (the onboarding questionnaire
+  /// document). D-4's approved semantics — both-NULL-or-both-populated, the
+  /// version belonging to the profile, the composite FK and the CHECK
+  /// constraint — are unchanged.
   expertiseProfileId String? // → ExpertiseProfile.id
-  expertiseVersionId String? // → ExpertiseVersion.id
+  expertiseProfileVersionId String? // → ExpertiseProfileVersion.id
   expertiseProfile   ExpertiseProfile? @relation(fields: [expertiseProfileId], references: [id], onDelete: Restrict)
-  expertiseVersion   ExpertiseVersion? @relation(fields: [expertiseVersionId], references: [id], onDelete: Restrict)
+  /// D-4 / A-6 composite relation:
+  /// AssessmentFormAttempt(expertiseProfileId, expertiseProfileVersionId)
+  ///   -> ExpertiseProfileVersion(expertiseProfileId, id).
+  /// The child column names do not have to match the parent column names, so
+  /// the child field expertiseProfileVersionId maps onto the parent field id.
+  /// The parent candidate UNIQUE key
+  /// ExpertiseProfileVersion @@unique([expertiseProfileId, id]) is required
+  /// and is declared on that model.
+  ///
+  /// This relation is what makes "the expertise version belongs to the
+  /// specified expertise profile" a database fact rather than an application
+  /// rule: the FK column expertiseProfileId points at
+  /// ExpertiseProfileVersion.expertiseProfileId, which is itself an FK to
+  /// ExpertiseProfile.id.
+  expertiseProfileVersion ExpertiseProfileVersion? @relation(fields: [expertiseProfileId, expertiseProfileVersionId], references: [expertiseProfileId, id], onDelete: Restrict)
 
   questions AttemptQuestion[]
   responses AttemptResponse[]
   jobs     EvaluationJob[]
-  results  AssessmentResult[]
+  results  AssessmentFormResult[]
   appeals  Appeal[]
 
-  /// TODO (E11 SQL, D-4 / A-10): the both-NULL-or-both-populated rule is an
-  /// application rule today. It needs (a) a CHECK constraint and (b) a
-  /// composite FK AssessmentAttempt(expertiseProfileId, expertiseVersionId)
-  /// -> ExpertiseVersion(expertiseProfileId, id). Neither is expressible
-  /// in Prisma's DSL; both need E11 raw SQL. The parent candidate UNIQUE key
-  /// ExpertiseVersion(expertiseProfileId, id) is also required.
-  /// The single-column FKs below only prove EXISTENCE, never RELATIONSHIP.
+  /// TODO (E11 SQL, D-4 / A-10): the both-NULL-or-both-populated rule is NOT
+  /// expressible in Prisma's DSL and needs a CHECK constraint in E11 raw SQL.
+  /// The composite FK of A-6 IS now emitted by Prisma through the relation
+  /// `expertiseProfileVersion` above; E11 confirms it in the generated
+  /// migration and confirms that the FK keeps onDelete Restrict.
+  /// The CHECK must also cover the case where expertiseProfileId is populated
+  /// while expertiseProfileVersionId is NULL, because PostgreSQL's default
+  /// MATCH SIMPLE semantics leave such a row unconstrained by the composite
+  /// FK.
 
   /// TODO (E11 SQL, A-15 — PENDING SCOPE SELECTION): the invalid mapping
-  /// AssessmentResult.assessmentResultId/attemptId/traineeId ->
-  /// AssessmentAttempt(id, attemptId, traineeId) is NOT used, because
-  /// AssessmentAttempt has no `attemptId` field and AssessmentResult.
+  /// AssessmentFormResult.assessmentResultId/attemptId/traineeId ->
+  /// AssessmentFormAttempt(id, attemptId, traineeId) is NOT used, because
+  /// AssessmentFormAttempt has no `attemptId` field and AssessmentFormResult.
   /// assessmentResultId references the result chain, not the attempt.
   /// The two valid alternatives remain pending:
-  ///   Option A: AssessmentResult(attemptId, traineeId)
-  ///             -> AssessmentAttempt(id, traineeId)
-  ///   Option B: AssessmentResult(attemptId, traineeId, assessmentFormId)
-  ///             -> AssessmentAttempt(id, traineeId, assessmentFormId)
+  ///   Option A: AssessmentFormResult(attemptId, traineeId)
+  ///             -> AssessmentFormAttempt(id, traineeId)
+  ///   Option B: AssessmentFormResult(attemptId, traineeId, assessmentFormId)
+  ///             -> AssessmentFormAttempt(id, traineeId, assessmentFormId)
   /// Both need E11 raw SQL and a parent candidate UNIQUE key. No A-15
   /// composite FK and no A-15-specific parent unique key are added here.
 
@@ -681,6 +788,7 @@ model AssessmentAttempt {
   @@index([workspaceId, deadlineAt])
   @@index([deadlineAt])
   @@index([traineeId])
+  @@index([expertiseProfileId, expertiseProfileVersionId])
 }
 
 /// One question inside an attempt, with the answer the trainee gave.
@@ -688,7 +796,7 @@ model AttemptQuestion {
   id          String   @id @default(uuid())
   workspaceId String
   attemptId   String
-  attempt     AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  attempt     AssessmentFormAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
   /// The form question this attempt question came from.
   assessmentFormQuestionId String
   assessmentFormQuestion   AssessmentFormQuestion @relation(fields: [assessmentFormQuestionId], references: [id], onDelete: Restrict)
@@ -745,15 +853,15 @@ model AttemptResponse {
   id          String   @id @default(uuid())
   workspaceId String
   attemptId   String
-  attempt     AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  attempt     AssessmentFormAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
   /// The attempt the response belongs to. This is the same attempt that
   /// attemptQuestionId resolves to via AttemptQuestion.attemptId; it is
-  /// denormalized here so AssessmentAttempt.responses is a real Prisma
+  /// denormalized here so AssessmentFormAttempt.responses is a real Prisma
   /// relation (Prisma cannot express a relation through another model).
   /// The single-column FK proves EXISTENCE only, never that the two agree;
   /// keeping them consistent is an application rule, as for the other
   /// denormalized attempt references (see the A-15 note on
-  /// AssessmentAttempt).
+  /// AssessmentFormAttempt).
   attemptQuestionId String
   attemptQuestion   AttemptQuestion @relation(fields: [attemptQuestionId], references: [id], onDelete: Restrict)
   /// Free-text or structured answer payload, stored as JSON.
@@ -803,7 +911,7 @@ model EvaluationJob {
   id          String   @id @default(uuid())
   workspaceId String
   attemptId   String
-  attempt     AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  attempt     AssessmentFormAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
   kind        EvaluationJobKind
   status      EvaluationJobStatus @default(QUEUED)
   /// Which result version this job was produced for.
@@ -815,12 +923,12 @@ model EvaluationJob {
   /// the attempt the job was launched against.
   assessmentAttemptId String?
   /// A-8 composite relation: EvaluationJob(assessmentResultId,
-  /// assessmentAttemptId) -> AssessmentResult(id, attemptId). The child column
+  /// assessmentAttemptId) -> AssessmentFormResult(id, attemptId). The child column
   /// names do not have to match the parent column names, so the child field
   /// assessmentAttemptId maps onto the parent field attemptId. The parent
-  /// candidate UNIQUE key is AssessmentResult @@unique([id, attemptId]).
+  /// candidate UNIQUE key is AssessmentFormResult @@unique([id, attemptId]).
   /// Both child columns are optional, so this relation is optional too.
-  assessmentResult   AssessmentResult? @relation(fields: [assessmentResultId, assessmentAttemptId], references: [id, attemptId], onDelete: Restrict)
+  assessmentResult   AssessmentFormResult? @relation(fields: [assessmentResultId, assessmentAttemptId], references: [id, attemptId], onDelete: Restrict)
   /// Provider, model and prompt version identifiers (AI-02).
   provider    String?
   modelVersion String?
@@ -844,15 +952,15 @@ model EvaluationJob {
 
   /// TODO (E11 SQL, A-8): composite FK
   /// EvaluationJob(assessmentResultId, assessmentAttemptId)
-  ///   -> AssessmentResult(id, attemptId)
+  ///   -> AssessmentFormResult(id, attemptId)
   /// ensures the job's result belongs to the job's attempt. The child column
   /// names do not have to match the parent column names, so the child field
   /// assessmentAttemptId maps onto the parent field attemptId. This composite
   /// mapping is now declared as the Prisma relation `assessmentResult` above,
   /// which Prisma renders as the composite FK
   /// EvaluationJob(assessmentResultId, assessmentAttemptId)
-  ///   -> AssessmentResult(id, attemptId)
-  /// together with the parent candidate UNIQUE key AssessmentResult(id,
+  ///   -> AssessmentFormResult(id, attemptId)
+  /// together with the parent candidate UNIQUE key AssessmentFormResult(id,
   /// attemptId). E11 still has to confirm the generated migration matches this
   /// mapping and keeps onDelete Restrict on the composite FK.
 
@@ -896,11 +1004,20 @@ model EvaluationResult {
 /// versions sharing one predecessor) and `@@unique([attemptId, version])`
 /// fixes the version number inside an attempt. Historical results are never
 /// overwritten.
-model AssessmentResult {
+///
+/// RENAMED from `AssessmentResult` (collision with E03's assessment.prisma
+/// `AssessmentResult`). E03's result is JOB-bound — it requires a jobId and an
+/// evaluationRevision and carries evidenceHash/breakdown/analysis, and it has
+/// no successor pointer at all, so it cannot carry D-5's chain. This result is
+/// CHAIN-bound: it carries the linear supersedes history, the course outcome
+/// and the provisional/final lifecycle. The rename is name-only: fields,
+/// constraints, indexes and deletion behaviour are unchanged, and D-5 is
+/// preserved in full.
+model AssessmentFormResult {
   id          String   @id @default(uuid())
   workspaceId String
   attemptId   String
-  attempt     AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  attempt     AssessmentFormAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
   /// The form the attempt was launched against, kept on the result so the
   /// result chain carries its own form reference.
   assessmentFormId String
@@ -910,25 +1027,30 @@ model AssessmentResult {
   ///
   /// SCOPE NOTE (unresolved, no approved decision covers this model): the
   /// approved D-4 Option B and the E11 CHECK/composite-FK list apply to
-  /// AssessmentAttempt only. D-4's approved scope does NOT extend to
-  /// AssessmentResult, so the both-NULL-or-both-populated rule and the
+  /// AssessmentFormAttempt only. D-4's approved scope does NOT extend to
+  /// AssessmentFormResult, so the both-NULL-or-both-populated rule and the
   /// "version belongs to profile" rule are NOT currently DB-enforced here,
   /// and no E11 item covers them. The two single-column relations below prove
   /// EXISTENCE only, never RELATIONSHIP. This is a reported finding, not an
-  /// approved constraint: extending D-4 to AssessmentResult needs a new
+  /// approved constraint: extending D-4 to AssessmentFormResult needs a new
   /// decision and would add two E11 items (a CHECK and the composite FK
-  /// AssessmentResult(expertiseProfileId, expertiseVersionId)
-  /// -> ExpertiseVersion(expertiseProfileId, id)).
+  /// AssessmentFormResult(expertiseProfileId, expertiseProfileVersionId)
+  /// -> ExpertiseProfileVersion(expertiseProfileId, id)).
+  ///
+  /// COLUMN RENAME (name-only, no decision change): `expertiseVersionId` is
+  /// now `expertiseProfileVersionId`, matching the rename of the referenced
+  /// M7 model to `ExpertiseProfileVersion` (E03 owns the model name
+  /// `ExpertiseVersion` for a different concept).
   expertiseProfileId String?
-  expertiseVersionId String?
+  expertiseProfileVersionId String?
   expertiseProfile   ExpertiseProfile? @relation(fields: [expertiseProfileId], references: [id], onDelete: Restrict)
-  expertiseVersion   ExpertiseVersion? @relation(fields: [expertiseVersionId], references: [id], onDelete: Restrict)
+  expertiseProfileVersion ExpertiseProfileVersion? @relation(fields: [expertiseProfileVersionId], references: [id], onDelete: Restrict)
 
   /// Linear version chain (D-5).
   version     Int      @default(1)
   supersedesId String?
-  supersedes   AssessmentResult?  @relation("ResultVersions", fields: [supersedesId], references: [id], onDelete: Restrict)
-  supersededBy AssessmentResult[] @relation("ResultVersions")
+  supersedes   AssessmentFormResult?  @relation("ResultVersions", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy AssessmentFormResult[] @relation("ResultVersions")
 
   score       Decimal? @db.Decimal(10, 2)
   maxScore    Decimal? @db.Decimal(10, 2)
@@ -957,7 +1079,7 @@ model AssessmentResult {
   @@unique([attemptId, version])
   /// Candidate unique key required by the A-8 composite FK:
   /// EvaluationJob(assessmentResultId, assessmentAttemptId)
-  ///   -> AssessmentResult(id, attemptId).
+  ///   -> AssessmentFormResult(id, attemptId).
   /// Column order matches the child key order. Not contradictory with
   /// @@unique([attemptId, version]) — a different column set.
   /// This is the criterion referenced by the Prisma relation
@@ -966,7 +1088,7 @@ model AssessmentResult {
 
   /// TODO (E11 SQL, D-5 — E11 IMPLEMENTATION RECOMMENDATION): at most one
   /// root result per attempt, enforced by the partial unique index
-  /// AssessmentResult(attemptId) WHERE "supersedesId" IS NULL.
+  /// AssessmentFormResult(attemptId) WHERE "supersedesId" IS NULL.
   /// Requires previewFeatures = ["partialIndexes"] in base.prisma (E11 file).
   /// NOT added here because base.prisma must not be modified and the preview
   /// feature is not enabled. Recorded as an E11 implementation recommendation,
@@ -977,7 +1099,7 @@ model AssessmentResult {
   /// the chain cannot form a cycle; historical results are never overwritten.
 
   /// TODO (E11 SQL, A-15 — PENDING SCOPE SELECTION): see the note on
-  /// AssessmentAttempt. No A-15 composite FK and no A-15-specific parent
+  /// AssessmentFormAttempt. No A-15 composite FK and no A-15-specific parent
   /// unique key are added here.
 
   @@index([workspaceId, status])
@@ -991,9 +1113,9 @@ model Appeal {
   id          String   @id @default(uuid())
   workspaceId String
   assessmentResultId String
-  assessmentResult   AssessmentResult @relation(fields: [assessmentResultId], references: [id], onDelete: Restrict)
+  assessmentResult   AssessmentFormResult @relation(fields: [assessmentResultId], references: [id], onDelete: Restrict)
   attemptId   String
-  attempt     AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  attempt     AssessmentFormAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
   traineeId   String
   reason      String
   status      AppealStatus @default(SUBMITTED)
@@ -1025,8 +1147,8 @@ model Recommendation {
   /// Every recommendation is anchored to an expertise profile.
   expertiseProfileId String
   expertiseProfile   ExpertiseProfile @relation(fields: [expertiseProfileId], references: [id], onDelete: Restrict)
-  expertiseVersionId String?
-  expertiseVersion   ExpertiseVersion? @relation(fields: [expertiseVersionId], references: [id], onDelete: Restrict)
+  expertiseProfileVersionId String?
+  expertiseProfileVersion   ExpertiseProfileVersion? @relation(fields: [expertiseProfileVersionId], references: [id], onDelete: Restrict)
   skillId     String?
   skill       Skill?   @relation(fields: [skillId], references: [id], onDelete: Restrict)
   /// The catalog course this recommendation points at, when it is
@@ -1037,7 +1159,7 @@ model Recommendation {
   /// The result this recommendation was derived from. NULL for a profile-only
   /// suggestion.
   assessmentResultId String?
-  assessmentResult   AssessmentResult? @relation(fields: [assessmentResultId], references: [id], onDelete: Restrict)
+  assessmentResult   AssessmentFormResult? @relation(fields: [assessmentResultId], references: [id], onDelete: Restrict)
 
   skillStatus RecommendationSkillStatus
   /// Human-readable gap, reason and priority for the report.
@@ -1067,11 +1189,21 @@ model Recommendation {
   /// question Q-PM-4.
 
   /// TODO (E11 SQL, A-12): composite FK
-  /// Recommendation(expertiseProfileId, expertiseVersionId)
-  ///   -> ExpertiseVersion(expertiseProfileId, id)
+  /// Recommendation(expertiseProfileId, expertiseProfileVersionId)
+  ///   -> ExpertiseProfileVersion(expertiseProfileId, id)
   /// Today this is an application rule only; the composite FK is not
-  /// expressible in Prisma's DSL and needs E11 raw SQL. The parent candidate
-  /// UNIQUE key ExpertiseVersion(expertiseProfileId, id) is required.
+  /// expressible in Prisma's DSL for this model and needs E11 raw SQL. The
+  /// parent candidate UNIQUE key
+  /// ExpertiseProfileVersion(expertiseProfileId, id) is required and is
+  /// declared on that model.
+  ///
+  /// COLUMN RENAME (name-only, no decision change): `expertiseVersionId` is
+  /// now `expertiseProfileVersionId`, matching the rename of the referenced
+  /// M7 model to `ExpertiseProfileVersion` (E03 owns the model name
+  /// `ExpertiseVersion` for a different concept).
+  ///
+  /// NOTE: D-4's approved scope covers AssessmentFormAttempt, not
+  /// Recommendation; the both-NULL-or-both-populated rule is not claimed here.
 
   @@index([workspaceId])
   @@index([expertiseProfileId])

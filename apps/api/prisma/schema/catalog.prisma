@@ -1,8 +1,39 @@
-// ============================================================================
-// Owner: E04 (catalog, assignments, requests)
-// Planned records (SRS p.8): Course, CourseVersion, Topic, Resource, Assignment, Request
-//
-// Empty on purpose. Add your models here AFTER your data model
-// (docs/data-model/<module>.md) is approved by E01 on Day 4.
-// Rules and an example: see README.md in this folder.
-// ============================================================================
+// 1. Main Course Template (Global & Reusable)
+model Course {
+  id             String         @id @default(uuid())
+  title          String         @unique //  unique for duplicate course
+  slug           String         @unique
+  description    String         @db.Text
+  targetSkills   String[]       // e.g., ["React", "TypeScript", "Next.js"]
+  isApproved     Boolean        @default(false) // after PM approve will be true
+  approvedByPmId String?        // PM user ID
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  modules        CourseModule[]
+}
+
+// 2. Course Modules (Roadmap Structure)
+model CourseModule {
+  id          String          @id @default(uuid())
+  courseId    String
+  title       String          // e.g., "Module 1: Advanced Hooks"
+  description String?         @db.Text
+  order       Int             // 1, 2, 3...
+
+  course      Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     LessonContent[]
+}
+
+// 3. Lesson Content (Markdown, Code Snippets & AI External Sources)
+model LessonContent {
+  id              String        @id @default(uuid())
+  moduleId        String
+  title           String        // Lesson / Topic title
+  filePath        String           // Path of Supabase private bucket (e.g., "lessons/react-hooks.md")
+  codeExamples    Json?         // Array of code objects: [{ "lang": "typescript", "code": "..." }]
+  references      Json          // External source docs: [{ "source": "React Docs", "url": "https://..." }]
+  createdAt       DateTime      @default(now())
+
+  module          CourseModule  @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+}

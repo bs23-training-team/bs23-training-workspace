@@ -1,14 +1,14 @@
 
 // ============================================================
-// E07 - Attendance & Leave Management
+// E08/M08 - Attendance & Leave Management
 // File: attendance.prisma
 //
 // Note:
-// - User and TraineeProfile are owned by other modules.
+// - User and TraineeProfile models are owned by other modules.
 // - traineeId and reviewerId are scalar references for now.
 // - Relations to those models will be added after their models
 //   are available and reviewed by their owners.
-// - Original ERP and Teams source records remain unchanged.
+// - Original ERP and Teams source records must remain unchanged.
 // ============================================================
 
 
@@ -107,6 +107,7 @@ model TeamsMeeting {
 
   externalMeetingId String
   title             String?
+
   scheduledStart    DateTime @db.Timestamptz(6)
   scheduledEnd      DateTime? @db.Timestamptz(6)
 
@@ -126,25 +127,25 @@ model TeamsMeeting {
 // ------------------------------------------------------------
 
 model MeetingAttendance {
-  id              String                  @id @default(uuid())
-  workspaceId     String
+  id             String                  @id @default(uuid())
+  workspaceId    String
 
-  meetingId       String
-  traineeId       String?
-  teamsUserId     String
+  meetingId      String
+  traineeId      String?
+  teamsUserId    String
 
-  firstJoinAt     DateTime?               @db.Timestamptz(6)
+  firstJoinAt    DateTime?               @db.Timestamptz(6)
   durationMinutes Int?
-  lateMinutes     Int?
+  lateMinutes    Int?
 
-  status          MeetingAttendanceStatus @default(PENDING)
+  status         MeetingAttendanceStatus @default(PENDING)
 
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
 
-  meeting         TeamsMeeting             @relation(fields: [meetingId], references: [id], onDelete: Restrict)
+  meeting        TeamsMeeting             @relation(fields: [meetingId], references: [id], onDelete: Restrict)
 
-  intervals       MeetingAttendanceInterval[]
+  intervals      MeetingAttendanceInterval[]
   reconciliationRequests ReconciliationRequest[]
 
   @@index([workspaceId])
@@ -163,17 +164,16 @@ model MeetingAttendanceInterval {
   workspaceId         String
   meetingAttendanceId String
 
-  joinedAt            DateTime @db.Timestamptz(6)
+  joinedAt            DateTime  @db.Timestamptz(6)
   leftAt              DateTime? @db.Timestamptz(6)
 
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   meetingAttendance   MeetingAttendance @relation(fields: [meetingAttendanceId], references: [id], onDelete: Restrict)
 
   @@index([workspaceId])
   @@index([meetingAttendanceId])
-  @@index([workspaceId, meetingAttendanceId])
 }
 
 
@@ -227,12 +227,13 @@ model ReconciliationRequest {
 
   reviewerId          String?
   reviewedAt          DateTime?                 @db.Timestamptz(6)
-  reviewNote          String?                   @db.Text
+  reviewNote           String?                   @db.Text
 
   createdAt           DateTime                  @default(now())
   updatedAt           DateTime                  @updatedAt
 
   attendanceRecord    AttendanceRecord?         @relation(fields: [attendanceRecordId], references: [id], onDelete: Restrict)
+
   meetingAttendance   MeetingAttendance?        @relation(fields: [meetingAttendanceId], references: [id], onDelete: Restrict)
 
   @@index([workspaceId])

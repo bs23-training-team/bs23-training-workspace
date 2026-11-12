@@ -2,9 +2,164 @@
 // Owner: E10 (quests, leaderboard, hackathons, kudos)
 // Planned records (SRS p.8): Quest, QuestProgress, LeaderboardPreference, Hackathon, HackathonEntry, Kudos, KudosReview
 //
-// Empty until you write your draft. Add your models here (Day 2-3), check them
-// with `pnpm db:validate`, then push to the branch schema/v1.
-// A short design note in docs/data-model/<module>.md is optional and does NOT replace
-// this file: E10 combines the .prisma drafts on Day 4.
+// Engagement | schema/v1 draft | 2026-11-11
+// Edit ONLY the existing apps/api/prisma/schema/engagement.prisma.
+// No generator/datasource here; base.prisma is owned by E11.
 // Rules and an example: see README.md in this folder.
+//
+// This module never writes XP. It requests awards from E09 (growth-core.prisma) through the
+// service or an outbox event, so xpEventId on Kudos is a plain reference, NOT a relation.
+//
+// Cross-module references (no relation, so no change to other owners' files):
+// - workspaceId is the E01 Workspace.id.
+// - traineeUserId, fromUserId, toUserId and every *ByUserId field is an E01 User.id.
+//   Backend checks that the user belongs to the workspace and has the right role.
+// - E02 resolves trainee profile details from the user id.
+// - xpEventId (Kudos) is an E09 XpEvent.id.
+// When E01/E02/E09 are merged, these scalars can become relations with named inverse fields.
+// All internal relations include workspaceId. Do not format the full schema folder:
+// that can change other owners' files.
+// API/business validation enforces: kudos send limit, cooldown and received cap (limits come
+// from the active E09 XpRuleSet), and immutable published hackathons.
+//
+// Backend rules (SRS-D FR-GAM-08/09/10):
+// - Self-kudos (fromUserId = toUserId) is blocked. Reciprocal kudos in the same week are
+//   flagged suspicious for PM review.
+// - A hackathon is published once. Publishing requests participation and winner XP from E09
+//   (one key per hackathon, trainee and source, e.g. xp:hackathon.winner:<hackathonId>:<traineeUserId>),
+//   so each XP event is created exactly once.
+// - The leaderboard hides names for rows with hideName, but the trainee still sees their own rank.
+//
+// Open items (SRS-D open item 4), no fields added until the PM decides:
+// - Whether quest completion awards XP, and under which XpSource.
+// - Whether the hackathon winner bonus is a separate amount from hackathonXp.
 // ============================================================================
+
+enum KudosCategory {
+  HELPFUL
+  GREAT_EXPLANATION
+  TEAMWORK
+}
+
+// ---------- Quests ----------
+
+model Quest {
+  id              String   @id @default(uuid())
+  workspaceId     String
+  name            String
+  description     String   @default("") @db.Text
+  goal            String
+  target          Int
+  rewardXp        Int      @default(0)
+  startDate       DateTime @db.Date
+  endDate         DateTime @db.Date
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  progress QuestProgress[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, startDate, endDate])
+}
+
+model QuestProgress {
+  id               String    @id @default(uuid())
+  workspaceId      String
+  questId          String
+  traineeUserId    String
+  count            Int       @default(0)
+  verifiedByUserId String?
+  verifiedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  quest Quest @relation(fields: [workspaceId, questId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, questId, traineeUserId])
+  @@index([workspaceId, traineeUserId])
+}
+
+// ---------- Hackathons ----------
+
+model Hackathon {
+  id                String    @id @default(uuid())
+  workspaceId       String
+  name              String
+  brief             String    @db.Text
+  scheduledAt       DateTime
+  durationMin       Int
+  createdByUserId   String
+  published         Boolean   @default(false)
+  publishedAt       DateTime?
+  publishedByUserId String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  entries HackathonEntry[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, scheduledAt])
+}
+
+model HackathonEntry {
+  id             String    @id @default(uuid())
+  workspaceId    String
+  hackathonId    String
+  traineeUserId  String
+  url            String
+  notes          String    @default("") @db.Text
+  score          Int? // 0-100, validated by backend
+  feedback       String?   @db.Text
+  isWinner       Boolean   @default(false)
+  scoredByUserId String?
+  scoredAt       DateTime?
+  submittedAt    DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  hackathon Hackathon @relation(fields: [workspaceId, hackathonId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, hackathonId, traineeUserId])
+  @@index([workspaceId, traineeUserId])
+}
+
+// ---------- Kudos and leaderboard ----------
+
+// xpEventId is the E09 XpEvent created for this kudos (null while pending or when no XP is given).
+model Kudos {
+  id               String        @id @default(uuid())
+  workspaceId      String
+  fromUserId       String
+  toUserId         String
+  category         KudosCategory
+  message          String        @db.Text
+  sentAt           DateTime      @default(now())
+  weekStart        DateTime      @db.Date
+  suspicious       Boolean       @default(false)
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  xpEventId        String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, xpEventId])
+  @@index([workspaceId, fromUserId, weekStart])
+  @@index([workspaceId, fromUserId, toUserId, sentAt])
+  @@index([workspaceId, toUserId, weekStart])
+}
+
+model LeaderboardPreference {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  traineeUserId String
+  hideName      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, traineeUserId])
+}

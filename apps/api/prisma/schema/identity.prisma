@@ -154,4 +154,78 @@ model PasswordResetToken {
   @@index([workspaceId])
   @@index([userId])
   @@index([expiresAt])
+
+}
+model PasswordResetToken {
+  id          String    @id @default(uuid())
+  workspaceId String
+  userId      String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+ 
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+ 
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([expiresAt])
+  }
+
+model Notification {
+  id          String    @id @default(uuid())
+  workspaceId String
+  recipientId String
+  type        String
+  title       String
+  message     String
+  link        String?
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  recipient User      @relation(fields: [recipientId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, recipientId])
+  @@index([recipientId, readAt])
+  @@index([createdAt])
+}
+
+model Preference {
+  id           String  @id @default(uuid())
+  workspaceId  String
+  userId       String
+  category     String
+  emailEnabled Boolean @default(true)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, category])
+  @@index([workspaceId])
+}
+
+model OutboxEvent {
+  id            String    @id @default(uuid())
+  eventType     String
+  eventVersion  Int       @default(1)
+  workspaceId   String
+  aggregateType String
+  aggregateId   String
+  actorUserId   String?
+  payload       Json
+  occurredAt    DateTime  @default(now())
+  publishedAt   DateTime?
+  attempts      Int       @default(0)
+  lastError     String?
+  createdAt     DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  actor     User?      @relation("OutboxEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId])
+  @@index([publishedAt, createdAt])
+  @@index([aggregateType, aggregateId])
 }

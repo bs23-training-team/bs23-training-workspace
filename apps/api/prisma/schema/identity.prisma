@@ -17,6 +17,16 @@ model Workspace {
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
 
+  // E08: Attendance inverse relations
+  attendanceRecords          AttendanceRecord[]
+  teamsMeetings              TeamsMeeting[]
+  meetingAttendances         MeetingAttendance[]
+  meetingAttendanceIntervals MeetingAttendanceInterval[]
+  leaveRequests              LeaveRequest[]
+  reconciliationRequests     ReconciliationRequest[]
+  teamsIdentityMappings      TeamsIdentityMapping[]
+  integrationSyncStatuses    IntegrationSyncStatus[]
+
   // E03: Assessment inverse relations
   e03ExpertiseVersion            ExpertiseVersion[]            @relation("E03ExpertiseVersionWorkspace")
   e03ExpertiseAnalysis           ExpertiseAnalysis[]           @relation("E03ExpertiseAnalysisWorkspace")

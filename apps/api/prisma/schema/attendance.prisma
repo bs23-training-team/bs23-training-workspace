@@ -8,6 +8,7 @@
 // - traineeId and reviewerId are scalar references for now.
 // - Relations to those models will be added after their models
 //   are available and reviewed by their owners.
+// - workspaceId links to Workspace (owned by the identity module).
 // - Original ERP and Teams source records must remain unchanged.
 // ============================================================
 
@@ -87,6 +88,8 @@ model AttendanceRecord {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
   reconciliationRequests ReconciliationRequest[]
 
   @@index([workspaceId])
@@ -112,6 +115,8 @@ model TeamsMeeting {
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
 
   attendanceRecords MeetingAttendance[]
 
@@ -142,6 +147,8 @@ model MeetingAttendance {
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
 
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
   meeting            TeamsMeeting            @relation(fields: [meetingId], references: [id], onDelete: Restrict)
 
   intervals          MeetingAttendanceInterval[]
@@ -160,6 +167,7 @@ model MeetingAttendance {
 
 model MeetingAttendanceInterval {
   id                  String   @id @default(uuid())
+  workspaceId         String
   meetingAttendanceId String
 
   joinedAt            DateTime @db.Timestamptz(6)
@@ -168,8 +176,11 @@ model MeetingAttendanceInterval {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
   meetingAttendance   MeetingAttendance @relation(fields: [meetingAttendanceId], references: [id], onDelete: Restrict)
 
+  @@index([workspaceId])
   @@index([meetingAttendanceId])
 }
 
@@ -196,6 +207,8 @@ model LeaveRequest {
 
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
 
   @@index([workspaceId])
   @@index([traineeId])
@@ -229,6 +242,8 @@ model ReconciliationRequest {
   createdAt           DateTime                  @default(now())
   updatedAt           DateTime                  @updatedAt
 
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
   attendanceRecord    AttendanceRecord?         @relation(fields: [attendanceRecordId], references: [id], onDelete: Restrict)
 
   meetingAttendance   MeetingAttendance?        @relation(fields: [meetingAttendanceId], references: [id], onDelete: Restrict)
@@ -255,6 +270,8 @@ model TeamsIdentityMapping {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
   @@unique([workspaceId, teamsUserId])
   @@index([workspaceId])
   @@index([traineeId])
@@ -278,6 +295,8 @@ model IntegrationSyncStatus {
 
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
 
   @@unique([workspaceId, provider])
   @@index([workspaceId])

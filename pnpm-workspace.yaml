@@ -6,6 +6,8 @@ packages:
 # true  = allowed to run, false = intentionally skipped (prebuilt binaries are used instead).
 allowBuilds:
   "@prisma/engines": true
+  esbuild: set this to true or false
   prisma: true
+  protobufjs: true
   sharp: false
   unrs-resolver: false

@@ -26,7 +26,8 @@
 // - Self-kudos (fromUserId = toUserId) is blocked. Reciprocal kudos in the same week are
 //   flagged suspicious for PM review.
 // - A hackathon is published once. Publishing requests participation and winner XP from E09
-//   (one key per hackathon and trainee), so the XP is created exactly once.
+//   (one key per hackathon, trainee and source, e.g. xp:hackathon.winner:<hackathonId>:<traineeUserId>),
+//   so each XP event is created exactly once.
 // - The leaderboard hides names for rows with hideName, but the trainee still sees their own rank.
 //
 // Open items (SRS-D open item 4), no fields added until the PM decides:

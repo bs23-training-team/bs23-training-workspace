@@ -2421,4 +2421,3 @@ model Recommendation {
   @@index([skillId])
 
 }
-//...........

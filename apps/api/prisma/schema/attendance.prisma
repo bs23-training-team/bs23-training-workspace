@@ -142,11 +142,7 @@ model MeetingAttendance {
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
 
-  meeting            TeamsMeeting            @relation(
-    fields: [meetingId],
-    references: [id],
-    onDelete: Restrict
-  )
+  meeting            TeamsMeeting            @relation(fields: [meetingId], references: [id], onDelete: Restrict)
 
   intervals          MeetingAttendanceInterval[]
   reconciliationRequests ReconciliationRequest[]
@@ -172,11 +168,7 @@ model MeetingAttendanceInterval {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  meetingAttendance   MeetingAttendance @relation(
-    fields: [meetingAttendanceId],
-    references: [id],
-    onDelete: Restrict
-  )
+  meetingAttendance   MeetingAttendance @relation(fields: [meetingAttendanceId], references: [id], onDelete: Restrict)
 
   @@index([meetingAttendanceId])
 }
@@ -237,17 +229,9 @@ model ReconciliationRequest {
   createdAt           DateTime                  @default(now())
   updatedAt           DateTime                  @updatedAt
 
-  attendanceRecord    AttendanceRecord?         @relation(
-    fields: [attendanceRecordId],
-    references: [id],
-    onDelete: Restrict
-  )
+  attendanceRecord    AttendanceRecord?         @relation(fields: [attendanceRecordId], references: [id], onDelete: Restrict)
 
-  meetingAttendance   MeetingAttendance?        @relation(
-    fields: [meetingAttendanceId],
-    references: [id],
-    onDelete: Restrict
-  )
+  meetingAttendance   MeetingAttendance?        @relation(fields: [meetingAttendanceId], references: [id], onDelete: Restrict)
 
   @@index([workspaceId])
   @@index([traineeId])

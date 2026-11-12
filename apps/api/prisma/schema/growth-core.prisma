@@ -2,9 +2,215 @@
 // Owner: E09 (XP ledger, levels, streaks, badges)
 // Planned records (SRS p.8): XPRule, XPEvent, XPReview, Level, Streak, Freeze, Badge, Audit
 //
-// Empty until you write your draft. Add your models here (Day 2-3), check them
-// with `pnpm db:validate`, then push to the branch schema/v1.
-// A short design note in docs/data-model/<module>.md is optional and does NOT replace
-// this file: E10 combines the .prisma drafts on Day 4.
+// Growth core | schema/v1 draft | 2026-11-11
+// Edit ONLY the existing apps/api/prisma/schema/growth-core.prisma.
+// No generator/datasource here; base.prisma is owned by E11.
 // Rules and an example: see README.md in this folder.
+//
+// This module is the only writer of XP awards. E10 (engagement.prisma) asks for awards
+// through the service or an outbox event and keeps only a plain xpEventId reference.
+//
+// Cross-module references (no relation, so no change to other owners' files):
+// - workspaceId is the E01 Workspace.id.
+// - traineeUserId and every *ByUserId field is an E01 User.id. Backend checks that the
+//   user belongs to the workspace and has the right role (PM or TRAINEE).
+// - E02 resolves trainee profile details (e.g. BS23001) from traineeUserId.
+// - leaveId (StreakFreeze) is an E07 LeaveRequest.id, sourceRef (XpEvent) points to the
+//   E03/E05/E06/E10 record that caused the XP.
+// When E01/E02 are merged, these scalars can become relations with named inverse fields.
+// All internal relations include workspaceId. Do not format the full schema folder:
+// that can change other owners' files.
+// API/business validation enforces: XP awarded once per key, daily/weekly caps,
+// one active rule set per workspace and the XP status lifecycle.
 // ============================================================================
+
+enum XpSource {
+  VERIFIED_MODULE
+  ON_TIME_SPRINT
+  FINAL_ASSESSMENT
+  HACKATHON_PARTICIPATION
+  HACKATHON_WINNER
+  KUDOS
+  STREAK_MILESTONE
+  MANUAL_ADJUSTMENT
+}
+
+enum XpStatus {
+  PENDING
+  AWARDED
+  HELD
+  REJECTED
+  REVERSED
+}
+
+enum BadgeKind {
+  BEHAVIORAL
+  TECHNICAL
+  SPECIAL
+}
+
+enum FreezeSource {
+  LEAVE
+  HOLIDAY
+}
+
+// ---------- Rules and levels ----------
+
+// A new version is a new row. Only one version per workspace is active (enforced by backend).
+// Kudos limits live here because E09 owns all XP rules; E10 reads them.
+model XpRuleSet {
+  id                      String   @id @default(uuid())
+  workspaceId             String
+  version                 Int
+  isActive                Boolean  @default(false)
+  verifiedModuleXp        Int      @default(10)
+  verifiedModuleDailyCap  Int      @default(30)
+  onTimeSprintXp          Int      @default(20)
+  finalAssessmentXp       Int      @default(40)
+  hackathonXp             Int      @default(80)
+  kudosXp                 Int      @default(5)
+  kudosSendLimitPerWeek   Int      @default(3)
+  kudosCooldownDays       Int      @default(7)
+  kudosReceivedCapPerWeek Int      @default(15)
+  streakMilestoneXp       Int      @default(25)
+  pmReviewMultiplier      Decimal  @default(1) @db.Decimal(4, 2)
+  engagementDropAlertPct  Int      @default(30)
+  sprintCutoff            String   @default("10:00") // HH:mm
+  updatedByUserId         String
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  levels XpLevel[]
+  events XpEvent[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, version])
+  @@index([workspaceId, isActive])
+}
+
+// Example levels: Rookie 0, Builder 250, Pro 750, Expert 1500.
+model XpLevel {
+  id          String   @id @default(uuid())
+  workspaceId String
+  ruleSetId   String
+  name        String
+  minXp       Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ruleSet XpRuleSet @relation(fields: [workspaceId, ruleSetId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, ruleSetId, name])
+  @@unique([workspaceId, ruleSetId, minXp])
+}
+
+// ---------- Experience Points ----------
+
+// Ledger row, never deleted. A wrong award is REVERSED, not removed.
+// key makes an award happen once, e.g. xp:topic.verified:<attemptId>.
+model XpEvent {
+  id              String    @id @default(uuid())
+  workspaceId     String
+  traineeUserId   String
+  ruleSetId       String
+  source          XpSource
+  amount          Int
+  status          XpStatus  @default(PENDING)
+  key             String
+  sourceEvent     String?
+  sourceRef       String?
+  evidence        Json      @default("{}") @db.JsonB
+  reason          String?   @db.Text
+  suspicious      Boolean   @default(false)
+  dayOf           DateTime  @db.Date
+  weekStart       DateTime  @db.Date
+  occurredAt      DateTime
+  decidedByUserId String?
+  decidedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  ruleSet XpRuleSet @relation(fields: [workspaceId, ruleSetId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, key])
+  @@index([workspaceId, traineeUserId, status, dayOf])
+  @@index([workspaceId, status, createdAt])
+  @@index([workspaceId, weekStart, status])
+}
+
+// ---------- Streaks ----------
+
+model StreakDay {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  traineeUserId String
+  day           DateTime @db.Date
+  onTime        Boolean
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, traineeUserId, day])
+}
+
+// reason is private, PM only.
+model StreakFreeze {
+  id              String       @id @default(uuid())
+  workspaceId     String
+  traineeUserId   String
+  day             DateTime     @db.Date
+  source          FreezeSource
+  reason          String       @db.Text
+  leaveId         String?
+  grantedByUserId String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, traineeUserId, day])
+}
+
+// ---------- Badges ----------
+
+model Badge {
+  id          String    @id @default(uuid())
+  workspaceId String
+  key         String
+  name        String
+  icon        String
+  kind        BadgeKind
+  criteria    Json?     @db.JsonB
+  target      Int?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  awards BadgeAward[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, key])
+  @@index([workspaceId, kind, isActive])
+}
+
+// awardedByUserId is the PM for TECHNICAL badges. A badge is awarded once per trainee.
+model BadgeAward {
+  id                   String   @id @default(uuid())
+  workspaceId          String
+  badgeId              String
+  traineeUserId        String
+  evidence             Json     @default("{}") @db.JsonB
+  awardedByUserId      String?
+  assessmentAttemptRef String?
+  projectReviewRef     String?
+  awardedAt            DateTime @default(now())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  badge Badge @relation(fields: [workspaceId, badgeId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, badgeId, traineeUserId])
+  @@index([workspaceId, traineeUserId])
+}

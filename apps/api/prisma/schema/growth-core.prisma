@@ -22,6 +22,14 @@
 // that can change other owners' files.
 // API/business validation enforces: XP awarded once per key, daily/weekly caps,
 // one active rule set per workspace and the XP status lifecycle.
+//
+// Backend rules (SRS-D FR-GAM-02/04/11, section 5.2):
+// - Idempotency keys, e.g. xp:topic.verified:<attemptId> and
+//   xp:sprint.submitted:<traineeId>:<date>. A replayed event never creates a second XpEvent.
+// - Pending XP is excluded from level and rank. A manual adjustment never takes a total below 0.
+// - Streak is derived from E06 sprint.submitted events, so only freezes are stored here.
+// - Audit entries (adjust, reverse, rule change) go through the E01 audit log writer,
+//   so there is no Audit model in this file.
 // ============================================================================
 
 enum XpSource {
@@ -140,21 +148,9 @@ model XpEvent {
   @@index([workspaceId, weekStart, status])
 }
 
-// ---------- Streaks ----------
+// ---------- Streak freezes ----------
 
-model StreakDay {
-  id            String   @id @default(uuid())
-  workspaceId   String
-  traineeUserId String
-  day           DateTime @db.Date
-  onTime        Boolean
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@unique([workspaceId, id])
-  @@unique([workspaceId, traineeUserId, day])
-}
-
+// The streak itself is computed from sprint.submitted events; only PM-granted freezes are stored.
 // reason is private, PM only.
 model StreakFreeze {
   id              String       @id @default(uuid())
@@ -195,6 +191,9 @@ model Badge {
 }
 
 // awardedByUserId is the PM for TECHNICAL badges. A badge is awarded once per trainee.
+// TECHNICAL badges need a passed assessment (assessmentAttemptRef) and a PM-reviewed project
+// (projectReviewRef). The sprint module retired project review in SRS v1.1 but the badge rule
+// still names it, so projectReviewRef stays nullable until the source is settled.
 model BadgeAward {
   id                   String   @id @default(uuid())
   workspaceId          String

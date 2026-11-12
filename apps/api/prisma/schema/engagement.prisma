@@ -21,6 +21,17 @@
 // that can change other owners' files.
 // API/business validation enforces: kudos send limit, cooldown and received cap (limits come
 // from the active E09 XpRuleSet), and immutable published hackathons.
+//
+// Backend rules (SRS-D FR-GAM-08/09/10):
+// - Self-kudos (fromUserId = toUserId) is blocked. Reciprocal kudos in the same week are
+//   flagged suspicious for PM review.
+// - A hackathon is published once. Publishing requests participation and winner XP from E09
+//   (one key per hackathon and trainee), so the XP is created exactly once.
+// - The leaderboard hides names for rows with hideName, but the trainee still sees their own rank.
+//
+// Open items (SRS-D open item 4), no fields added until the PM decides:
+// - Whether quest completion awards XP, and under which XpSource.
+// - Whether the hackathon winner bonus is a separate amount from hackathonXp.
 // ============================================================================
 
 enum KudosCategory {

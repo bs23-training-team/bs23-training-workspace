@@ -1,41 +1,55 @@
+
 enum UserRole {
   PM
   TRAINEE
 }
- 
+
 model Workspace {
   id        String   @id @default(uuid())
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
- 
+
   users                   User[]
   credentials             Credential[]
   sessions                Session[]
   invitations             AccountInvitation[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
- 
+
   // E03: Assessment inverse relations
-  e03ExpertiseVersion           ExpertiseVersion[]           @relation("E03ExpertiseVersionWorkspace")
-  e03ExpertiseAnalysis          ExpertiseAnalysis[]          @relation("E03ExpertiseAnalysisWorkspace")
-  e03AssessmentPolicy           AssessmentPolicy[]           @relation("E03AssessmentPolicyWorkspace")
-  e03AssessmentPolicyRule       AssessmentPolicyRule[]       @relation("E03AssessmentPolicyRuleWorkspace")
-  e03AssessmentProctoringPolicy AssessmentProctoringPolicy[] @relation("E03AssessmentProctoringPolicyWorkspace")
-  e03AssessmentAttempt          AssessmentAttempt[]          @relation("E03AssessmentAttemptWorkspace")
-  e03AssessmentQuestion         AssessmentQuestion[]         @relation("E03AssessmentQuestionWorkspace")
-  e03AssessmentRubric           AssessmentRubric[]           @relation("E03AssessmentRubricWorkspace")
-  e03AssessmentResponse         AssessmentResponse[]         @relation("E03AssessmentResponseWorkspace")
-  e03AssessmentJob              AssessmentJob[]              @relation("E03AssessmentJobWorkspace")
-  e03AssessmentEvaluation       AssessmentEvaluation[]       @relation("E03AssessmentEvaluationWorkspace")
-  e03AssessmentResult           AssessmentResult[]           @relation("E03AssessmentResultWorkspace")
-  e03AssessmentRecommendation   AssessmentRecommendation[]   @relation("E03AssessmentRecommendationWorkspace")
-  e03AssessmentSession          AssessmentSession[]          @relation("E03AssessmentSessionWorkspace")
-  e03AssessmentProctoringEvent  AssessmentProctoringEvent[]  @relation("E03AssessmentProctoringEventWorkspace")
-  e03AssessmentProctoringSummary AssessmentProctoringSummary[] @relation("E03AssessmentProctoringSummaryWorkspace")
-  e03AssessmentAppeal           AssessmentAppeal[]           @relation("E03AssessmentAppealWorkspace")
+  e03ExpertiseVersion            ExpertiseVersion[]            @relation("E03ExpertiseVersionWorkspace")
+  e03ExpertiseAnalysis           ExpertiseAnalysis[]           @relation("E03ExpertiseAnalysisWorkspace")
+  e03AssessmentPolicy            AssessmentPolicy[]            @relation("E03AssessmentPolicyWorkspace")
+  e03AssessmentPolicyRule        AssessmentPolicyRule[]        @relation("E03AssessmentPolicyRuleWorkspace")
+  e03AssessmentProctoringPolicy  AssessmentProctoringPolicy[]  @relation("E03AssessmentProctoringPolicyWorkspace")
+  e03AssessmentAttempt            AssessmentAttempt[]           @relation("E03AssessmentAttemptWorkspace")
+  e03AssessmentQuestion           AssessmentQuestion[]          @relation("E03AssessmentQuestionWorkspace")
+  e03AssessmentRubric             AssessmentRubric[]            @relation("E03AssessmentRubricWorkspace")
+  e03AssessmentResponse           AssessmentResponse[]          @relation("E03AssessmentResponseWorkspace")
+  e03AssessmentJob                AssessmentJob[]               @relation("E03AssessmentJobWorkspace")
+  e03AssessmentEvaluation         AssessmentEvaluation[]        @relation("E03AssessmentEvaluationWorkspace")
+  e03AssessmentResult             AssessmentResult[]            @relation("E03AssessmentResultWorkspace")
+  e03AssessmentRecommendation     AssessmentRecommendation[]    @relation("E03AssessmentRecommendationWorkspace")
+  e03AssessmentSession            AssessmentSession[]           @relation("E03AssessmentSessionWorkspace")
+  e03AssessmentProctoringEvent    AssessmentProctoringEvent[]    @relation("E03AssessmentProctoringEventWorkspace")
+  e03AssessmentProctoringSummary  AssessmentProctoringSummary[]  @relation("E03AssessmentProctoringSummaryWorkspace")
+  e03AssessmentAppeal             AssessmentAppeal[]             @relation("E03AssessmentAppealWorkspace")
+
+  // E01: Notification, Preference and Outbox inverse relations
+  notifications Notification[]
+  preferences   Preference[]
+  outboxEvents  OutboxEvent[]
+
+  // E06: Sprint inverse relations
+  e06SprintTask        SprintTask[]       @relation("E06SprintTaskWorkspace")
+  e06SprintSubmission  SprintSubmission[] @relation("E06SprintSubmissionWorkspace")
+  e06SprintWeek        SprintWeek[]       @relation("E06SprintWeekWorkspace")
+  e06DSCell            DSCell[]           @relation("E06DSCellWorkspace")
+  e06DSCellVersion     DSCellVersion[]    @relation("E06DSCellVersionWorkspace")
+  e06DSMeeting         DSMeeting[]        @relation("E06DSMeetingWorkspace")
 }
- 
+
 model User {
   id                 String    @id @default(uuid())
   workspaceId        String
@@ -47,25 +61,40 @@ model User {
   mustChangePassword Boolean   @default(false)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
- 
+
   workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   credential Credential?
   sessions   Session[]
- 
+
   receivedInvitations AccountInvitation[] @relation("InvitedUser")
   createdInvitations  AccountInvitation[] @relation("InvitationCreator")
- 
+
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
- 
+
   // E03: Assessment inverse relations
   e03ExpertiseVersions ExpertiseVersion[] @relation("E03ExpertiseTrainee")
   e03SubmittedAppeals  AssessmentAppeal[] @relation("E03AppealSubmitter")
   e03ReviewedAppeals   AssessmentAppeal[] @relation("E03AppealReviewer")
- 
+
+  // E01: Notification, Preference and Outbox inverse relations
+  notifications Notification[]
+  preferences   Preference[]
+  outboxEvents  OutboxEvent[] @relation("OutboxEventActor")
+
+  // E06: Sprint inverse relations
+  e06SprintTasks           SprintTask[]       @relation("E06SprintTaskTrainee")
+  e06SprintSubmissions     SprintSubmission[] @relation("E06SprintSubmissionTrainee")
+  e06SprintWeeksCreated    SprintWeek[]       @relation("E06SprintWeekCreator")
+  e06DSCellsAsTrainee      DSCell[]           @relation("E06DSCellTrainee")
+  e06DSCellsAuthored       DSCell[]           @relation("E06DSCellAuthor")
+  e06DSCellsUpdated        DSCell[]           @relation("E06DSCellUpdater")
+  e06DSCellVersionsByActor DSCellVersion[]    @relation("E06DSCellVersionActor")
+  e06DSMeetingsCreated     DSMeeting[]        @relation("E06DSMeetingCreator")
+
   @@index([workspaceId])
 }
- 
+
 model Credential {
   id           String   @id @default(uuid())
   workspaceId  String
@@ -73,13 +102,13 @@ model Credential {
   passwordHash String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
- 
+
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
- 
+
   @@index([workspaceId])
 }
- 
+
 model Session {
   id               String    @id @default(uuid())
   workspaceId      String
@@ -91,15 +120,15 @@ model Session {
   lastSeenAt       DateTime?
   expiresAt        DateTime
   revokedAt        DateTime?
- 
+
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
- 
+
   @@index([workspaceId])
   @@index([userId])
   @@index([expiresAt])
 }
- 
+
 model AccountInvitation {
   id              String    @id @default(uuid())
   workspaceId     String
@@ -110,16 +139,16 @@ model AccountInvitation {
   usedAt          DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
- 
+
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   user      User      @relation("InvitedUser", fields: [userId], references: [id], onDelete: Restrict)
   createdBy User      @relation("InvitationCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
- 
+
   @@index([workspaceId])
   @@index([userId])
   @@index([expiresAt])
 }
- 
+
 model EmailVerificationToken {
   id          String    @id @default(uuid())
   workspaceId String
@@ -129,15 +158,15 @@ model EmailVerificationToken {
   usedAt      DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
- 
+
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
- 
+
   @@index([workspaceId])
   @@index([userId])
   @@index([expiresAt])
 }
- 
+
 model PasswordResetToken {
   id          String    @id @default(uuid())
   workspaceId String
@@ -147,14 +176,13 @@ model PasswordResetToken {
   usedAt      DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
- 
+
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
- 
+
   @@index([workspaceId])
   @@index([userId])
   @@index([expiresAt])
-
 }
 
 model Notification {

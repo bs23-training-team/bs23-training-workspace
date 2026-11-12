@@ -1,7 +1,8 @@
 // 1. Main Course Template (Global & Reusable)
 model Course {
   id             String         @id @default(uuid())
-  title          String         @unique //  unique for duplicate course
+  workspaceId    String
+  title          String         @unique // unique for duplicate course
   slug           String         @unique
   description    String         @db.Text
   targetSkills   String[]       // e.g., ["React", "TypeScript", "Next.js"]
@@ -9,31 +10,44 @@ model Course {
   approvedByPmId String?        // PM user ID
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
-
+ 
+  workspace      Workspace     @relation("CatalogCourseWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict)
   modules        CourseModule[]
+ 
+  @@index([workspaceId])
 }
-
+ 
 // 2. Course Modules (Roadmap Structure)
 model CourseModule {
-  id          String          @id @default(uuid())
+  id          String         @id @default(uuid())
+  workspaceId String
   courseId    String
-  title       String          // e.g., "Module 1: Advanced Hooks"
-  description String?         @db.Text
-  order       Int             // 1, 2, 3...
-
-  course      Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String         // e.g., "Module 1: Advanced Hooks"
+  description String?        @db.Text
+  order       Int            // 1, 2, 3...
+ 
+  workspace   Workspace      @relation("CatalogModuleWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict)
+  course      Course         @relation(fields: [courseId], references: [id], onDelete: Restrict)
   lessons     LessonContent[]
+ 
+  @@index([workspaceId])
+  @@index([courseId])
 }
-
+ 
 // 3. Lesson Content (Markdown, Code Snippets & AI External Sources)
 model LessonContent {
-  id              String        @id @default(uuid())
-  moduleId        String
-  title           String        // Lesson / Topic title
-  filePath        String           // Path of Supabase private bucket (e.g., "lessons/react-hooks.md")
-  codeExamples    Json?         // Array of code objects: [{ "lang": "typescript", "code": "..." }]
-  references      Json          // External source docs: [{ "source": "React Docs", "url": "https://..." }]
-  createdAt       DateTime      @default(now())
-
-  module          CourseModule  @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  id           String       @id @default(uuid())
+  workspaceId  String
+  moduleId     String
+  title        String       // Lesson / Topic title
+  filePath     String       // Path of Supabase private bucket (e.g., "lessons/react-hooks.md")
+  codeExamples Json?        // Array of code objects: [{ "lang": "typescript", "code": "..." }]
+  references   Json         // External source docs: [{ "source": "React Docs", "url": "https://..." }]
+  createdAt    DateTime     @default(now())
+ 
+  workspace    Workspace    @relation("CatalogLessonWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict)
+  module       CourseModule @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+ 
+  @@index([workspaceId])
+  @@index([moduleId])
 }

@@ -1,6 +1,6 @@
 // ============================================================================
-// Owner: E10 (quests, leaderboard, hackathons, kudos)
-// Planned records (SRS p.8): Quest, QuestProgress, LeaderboardPreference, Hackathon, HackathonEntry, Kudos, KudosReview
+// Owner: E10 (quests, leaderboard, kudos). Hackathons are deferred to v2.
+// Planned records (SRS p.8): Quest, QuestProgress, LeaderboardPreference, Kudos, KudosReview
 //
 // Engagement | schema/v1 draft | 2026-11-11
 // Edit ONLY the existing apps/api/prisma/schema/engagement.prisma.
@@ -20,19 +20,15 @@
 // All internal relations include workspaceId. Do not format the full schema folder:
 // that can change other owners' files.
 // API/business validation enforces: kudos send limit, cooldown and received cap (limits come
-// from the active E09 XpRuleSet), and immutable published hackathons.
+// from the active E09 XpRuleSet).
 //
-// Backend rules (SRS-D FR-GAM-08/09/10):
+// Backend rules (SRS-D FR-GAM-08/10):
 // - Self-kudos (fromUserId = toUserId) is blocked. Reciprocal kudos in the same week are
 //   flagged suspicious for PM review.
-// - A hackathon is published once. Publishing requests participation and winner XP from E09
-//   (one key per hackathon, trainee and source, e.g. xp:hackathon.winner:<hackathonId>:<traineeUserId>),
-//   so each XP event is created exactly once.
 // - The leaderboard hides names for rows with hideName, but the trainee still sees their own rank.
 //
 // Open items (SRS-D open item 4), no fields added until the PM decides:
 // - Whether quest completion awards XP, and under which XpSource.
-// - Whether the hackathon winner bonus is a separate amount from hackathonXp.
 // ============================================================================
 
 enum KudosCategory {
@@ -78,51 +74,6 @@ model QuestProgress {
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, questId, traineeUserId])
-  @@index([workspaceId, traineeUserId])
-}
-
-// ---------- Hackathons ----------
-
-model Hackathon {
-  id                String    @id @default(uuid())
-  workspaceId       String
-  name              String
-  brief             String    @db.Text
-  scheduledAt       DateTime
-  durationMin       Int
-  createdByUserId   String
-  published         Boolean   @default(false)
-  publishedAt       DateTime?
-  publishedByUserId String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-
-  entries HackathonEntry[]
-
-  @@unique([workspaceId, id])
-  @@index([workspaceId, scheduledAt])
-}
-
-model HackathonEntry {
-  id             String    @id @default(uuid())
-  workspaceId    String
-  hackathonId    String
-  traineeUserId  String
-  url            String
-  notes          String    @default("") @db.Text
-  score          Int? // 0-100, validated by backend
-  feedback       String?   @db.Text
-  isWinner       Boolean   @default(false)
-  scoredByUserId String?
-  scoredAt       DateTime?
-  submittedAt    DateTime  @default(now())
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  hackathon Hackathon @relation(fields: [workspaceId, hackathonId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
-
-  @@unique([workspaceId, id])
-  @@unique([workspaceId, hackathonId, traineeUserId])
   @@index([workspaceId, traineeUserId])
 }
 

@@ -36,8 +36,6 @@ enum XpSource {
   VERIFIED_MODULE
   ON_TIME_SPRINT
   FINAL_ASSESSMENT
-  HACKATHON_PARTICIPATION
-  HACKATHON_WINNER
   KUDOS
   STREAK_MILESTONE
   MANUAL_ADJUSTMENT
@@ -75,7 +73,6 @@ model XpRuleSet {
   verifiedModuleDailyCap  Int      @default(30)
   onTimeSprintXp          Int      @default(20)
   finalAssessmentXp       Int      @default(40)
-  hackathonXp             Int      @default(80)
   kudosXp                 Int      @default(5)
   kudosSendLimitPerWeek   Int      @default(3)
   kudosCooldownDays       Int      @default(7)

@@ -31,8 +31,8 @@ Some of us assumed each member builds a separate database and E10 merges them at
   (Build Plan p.10)
 - **Every owner writes their own models** first, as a draft in their own placeholder file
   (`apps/api/prisma/schema/<module>.prisma`) on the shared branch `schema/v1`.
-- **E10** reviews all drafts on Day 4 and combines them into **one `schema.prisma`** with one section
-  per module (team decision at the kickoff, 2026-11-06). E10 also supports shared UI components and
+- **E11** reviews all drafts on Day 4 and combines them into **one `schema.prisma`** with one section
+  per module (changed on 2026-11-16; the kickoff plan gave this to E10). E10 supports shared UI components and
   integration fixtures, and owns the engagement module (quests, leaderboards, hackathons, kudos).
 - **E11** sets up the Prisma tooling, creates the initial migration on Day 4 and runs migrations on
   staging/production through the pipeline. E11 does not write everyone's business models (Build Plan p.2).
@@ -65,7 +65,7 @@ day is how the plan avoids that.
 | 3 | E08 | Report / snapshot schema and all-source fixtures |
 | 3 | E09 | Reward key / status contract |
 | 3 | E10 | Engagement entities and shared components |
-| 4 | E10 + E11 | E10 reviews and combines the drafts into `schema.prisma`; E11 applies the first migration to an isolated PostgreSQL and merges `schema/v1` into `develop`. |
+| 4 | E11 | E11 reviews and combines the drafts into `schema.prisma`, applies the first migration to an isolated PostgreSQL and merges `schema/v1` into `develop`. |
 | 4 | E11 | Locked builds, CI and staging skeleton |
 | 5 | All | Demo: PM creates trainee → trainee signs in. Verify IDs/access/fixtures across modules. Re-estimate workload. |
 
@@ -87,7 +87,7 @@ fixtures (fake sample data) instead of waiting for you.
    `docs/data-model/<module>.md`, using [the template](data-model/_TEMPLATE.md).
 
 Do **not** run `pnpm db:migrate` and do **not** open a schema PR into `develop` before Day 4.
-On Day 4, E10 combines the drafts and E11 creates the single initial migration.
+On Day 4, E11 combines the drafts and creates the single initial migration.
 
 ---
 

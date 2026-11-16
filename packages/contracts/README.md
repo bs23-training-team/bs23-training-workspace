@@ -19,7 +19,7 @@ src/
 - One folder per module, owned by that module's developer.
 - Every relative import ends in `.js` (ESM): `export * from './catalog/index.js';`
 - Changing an existing type can break other modules. Announce it in the team group first, and
-  E01 reviews (see CODEOWNERS).
+  E11 reviews (see CODEOWNERS).
 - Never put private fields here (password hashes, answer keys, leave reasons).
 
 ## Use it

@@ -293,7 +293,7 @@ point to the same Docker database.
 
 - **Two long-lived branches:** `develop` (integration, default branch, deploys to staging) and `main` (production, merged from `develop` at release time by E11/E01 only).
 - **Short-lived task branches** (1–3 days) off `develop`: `feat/e04-course-requests`, `fix/e07-leave-dates`, `chore/e11-ci-cache`. No long-lived per-member branches: they cause late, painful integration.
-- **Branch rulesets on `main` and `develop`:** `protect-main-develop` requires a PR, 1 approval and the CI check, and blocks force-pushes; repository admins can bypass it for PRs only, which lets E11 merge its own PRs without an approval. `ci-required` (added 2026-11-16) requires the **CI check**, blocks force-pushes and deletion, and has an empty bypass list, so nobody can merge with a red or running CI.
+- **Branch ruleset on `main` and `develop`** (`protect-main-develop`): PR required, 1 approval, **CI check required**, no force-push, no deletion. Repository admins can bypass for PRs only. E11 uses this to merge its own PRs without an approval, and only when CI is green: the bypass also skips the CI check, so waiting for green CI is E11's own responsibility.
 - **Shared draft branch `schema/v1`:** unprotected, used only for the Day 2–4 schema drafts (§6.1), merged into `develop` by one PR and then retired.
 - PR authors merge their own approved PRs into `develop`.
 - **Squash merge** with Conventional Commit titles (`feat(catalog): add course request API`).
@@ -431,4 +431,4 @@ analysis (already in scope for code quality, QUALITY-01).
 | Review | E11 is the only reviewer for every PR. `.github/CODEOWNERS` has active rules for E11 only; module owners are kept as a commented ownership map with their GitHub usernames. |
 | Schema | E11 (earlier: E10) reviews and combines the module drafts into `schema.prisma` and reviews every schema PR. |
 | Architecture | Architecture and data-model questions go to E11 (earlier: E01). |
-| Rulesets | Second ruleset `ci-required` on `main` and `develop` (CI check, no force-push, no deletion) with an empty bypass list. The admin bypass in `protect-main-develop` skips the approval but not the CI check. |
+| Rulesets | A second ruleset `ci-required` (CI check only, empty bypass list) was tried, so that the admin bypass would skip the approval but not CI. While it was active, GitHub did not offer the bypass option on PR #11 even though CI had passed, so it was switched off. One ruleset, `protect-main-develop`, remains. |

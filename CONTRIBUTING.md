@@ -29,7 +29,7 @@ Each member owns one module. Work **inside your own folders**:
 | E10 | `engagement` (+ `packages/ui`) | `engagement` |
 | E11 | `infra/`, `.github/`, root config, `docs/runbooks/` | — |
 
-- Changing another person's folder is allowed, but **that owner must review** the PR.
+- Changing another person's folder is allowed, but **tell that owner before you open the PR**.
 - A module never writes directly to another module's database tables. Use that module's exported
   service or an outbox event.
 - Business rules (permissions, scores, approvals, XP) live **only in the NestJS API**. Next.js
@@ -100,7 +100,9 @@ Format: `type(module): short description in present tense`.
    pnpm build
    ```
 5. CI must be green (CI checks are being added). **Red CI = no merge**, no exceptions.
-6. You need **1 approval**: from the code owner of the folders you changed, or from E11/E01.
+6. You need **1 approval from E11**. E11 is the reviewer for every PR and is requested
+   automatically (see CODEOWNERS). E11's own PRs may be merged without an approval (repository
+   admin bypass in the ruleset), but only after CI is green.
 7. After approval, **you merge your own PR** using **Squash and merge**, then delete the branch.
 
 Reviewers: review within one working day. If you can't, say so in the PR.
@@ -118,14 +120,14 @@ change it, so these rules are strict:
 2. **Never edit a migration that is already merged** into `develop`.
 3. If `develop` received a new migration while you were working: rebase, **delete your
    migration folder, generate it again**, and re-test.
-4. **Dropping or renaming** a column/table: talk to E10 and E11 **before** writing it. We do
+4. **Dropping or renaming** a column/table: talk to E11 **before** writing it. We do
    these in steps (add new → copy data → remove old) so no history is lost.
 5. Nobody runs migrations against staging or production from their laptop. Only the deploy
    pipeline does that.
 6. Seed data (including the 50-course catalog) is for local/test/staging only, never production.
 
 After Day 4 all models live in one file, `apps/api/prisma/schema/schema.prisma`, with one section
-per module. **Edit only your own section.** Schema PRs always need review from E10 + E11 (see CODEOWNERS).
+per module. **Edit only your own section.** Schema PRs are approved by E11.
 Before Day 4, schema drafts go only to the `schema/v1` branch (see `docs/week1-team-brief.md`).
 
 ---
@@ -151,7 +153,7 @@ enough. The key must be revoked and replaced, because the repo is public.
 
 - `packages/contracts` (shared types/DTOs) and `packages/ui` (shared components) are used by
   everyone. Before changing them, **post in the team group** what you are changing and why.
-- Breaking changes to shared code need review from E01 (contracts) or E10 (ui).
+- Breaking changes to shared code are approved by E11.
 
 ---
 
@@ -168,7 +170,7 @@ enough. The key must be revoked and replaced, because the repo is public.
 ## 9. Getting help
 
 - Setup problems: [docs/setup.md#troubleshooting](docs/setup.md#troubleshooting), then E11.
-- Architecture / data model questions: E01.
+- Architecture / data model questions: E11.
 - CI, Docker, deployment, environments: E11.
 
 When asking for help, include: what you ran, the full error text, and your branch name.

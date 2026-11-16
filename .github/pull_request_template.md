@@ -22,7 +22,7 @@
 
 - [ ] This PR includes a Prisma migration
 - [ ] The migration was regenerated after rebasing on the latest `develop`
-- [ ] No column/table is dropped or renamed (otherwise E01 + E11 agreed on the plan beforehand)
+- [ ] No column/table is dropped or renamed (otherwise E11 agreed on the plan beforehand)
 
 ## Environment variables
 
@@ -38,5 +38,5 @@
 
 - [ ] `pnpm lint`, `pnpm test` and `pnpm build` pass locally
 - [ ] No secrets, `.env` files or real user data are included
-- [ ] I only changed other modules' folders where necessary, and their owners are requested as reviewers
+- [ ] I only changed other modules' folders where necessary, and I told their owners before opening this PR
 - [ ] The PR is small enough to review (ideally under ~400 changed lines)

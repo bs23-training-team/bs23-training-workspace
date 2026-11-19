@@ -1,6 +1,6 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import type { HealthResponse } from '@bs23/contracts';
-import { PrismaService } from '../prisma/prisma.service.js';
+import { HealthService } from './health.service.js';
 
 /**
  * Used by hosting platforms, CI smoke tests and monitoring.
@@ -9,22 +9,19 @@ import { PrismaService } from '../prisma/prisma.service.js';
  */
 @Controller('health')
 export class HealthController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly health: HealthService) {}
 
   @Get('live')
   live(): HealthResponse {
-    return { status: 'ok', checks: {} };
+    return this.health.live();
   }
 
   @Get('ready')
   async ready(): Promise<HealthResponse> {
-    try {
-      await this.prisma.$queryRaw`SELECT 1`;
-      return { status: 'ok', checks: { database: 'up' } };
-    } catch {
-      // Do not leak connection details in the response.
-      const body: HealthResponse = { status: 'error', checks: { database: 'down' } };
-      throw new ServiceUnavailableException(body);
+    const result = await this.health.ready();
+    if (result.status === 'error') {
+      throw new ServiceUnavailableException(result);
     }
+    return result;
   }
 }

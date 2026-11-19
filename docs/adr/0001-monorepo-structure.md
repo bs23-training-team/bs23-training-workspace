@@ -110,7 +110,7 @@ bs23-training-workspace/
 │   │   │   ├── catalog.prisma        ← E04 │
 │   │   │   ├── learning.prisma       ← E05 │ empty now,
 │   │   │   ├── sprint.prisma         ← E06 │ drafts on Day 2–3,
-│   │   │   ├── attendance.prisma     ← E07 │ combined by E10 into one file on Day 4
+│   │   │   ├── attendance.prisma     ← E07 │ combined by E11 into one file on Day 4
 │   │   │   ├── reports.prisma        ← E08 │
 │   │   │   ├── growth-core.prisma    ← E09 │
 │   │   │   ├── engagement.prisma     ← E10 ┘
@@ -203,9 +203,10 @@ This matches the SRS ownership boundary (e.g. *E09 alone writes core awards; E10
 
 ### CODEOWNERS
 
-The live file is `.github/CODEOWNERS`. Module lines are activated as each member's GitHub username
-is mapped to their E number. Schema changes (`apps/api/prisma/`) are reviewed by **E10 + E11**,
-shared contracts by **E01 + E11**, shared UI by **E10**.
+The live file is `.github/CODEOWNERS`. E11 is the only reviewer (decided 2026-11-16): the active
+rules name only E11, so every PR requests E11. The module lines are kept as comments, as an ownership
+map with each member's GitHub username. Schema changes (`apps/api/prisma/`), shared contracts and
+shared UI are all reviewed by **E11**.
 
 ---
 
@@ -218,7 +219,7 @@ The SRS requires one canonical schema and one migration history. Team decision (
 1. **Day 2–3 (drafts):** on the shared branch `schema/v1`, each owner writes their models in their own
    placeholder file (`identity.prisma` … `engagement.prisma`). No migrations yet, no PR to `develop`.
    Cross-module links are written as plain ID columns with a comment (`traineeId String // → TraineeProfile (E02)`).
-2. **Day 4 (combine):** **E10** reviews every draft, removes duplicates, adds the `@relation`s and
+2. **Day 4 (combine):** **E11** reviews every draft, removes duplicates, adds the `@relation`s and
    combines everything into **one file, `schema.prisma`**, with one commented section per module.
    The ten draft files are deleted. `base.prisma` (generator + datasource) stays separate.
 3. **Day 4 (migrate):** **E11** creates the single initial migration (`pnpm db:migrate --name init`)
@@ -292,7 +293,7 @@ point to the same Docker database.
 
 - **Two long-lived branches:** `develop` (integration, default branch, deploys to staging) and `main` (production, merged from `develop` at release time by E11/E01 only).
 - **Short-lived task branches** (1–3 days) off `develop`: `feat/e04-course-requests`, `fix/e07-leave-dates`, `chore/e11-ci-cache`. No long-lived per-member branches: they cause late, painful integration.
-- **Branch ruleset on `main` and `develop`:** PR required, 1 approval, **CI check required**, no force-push, no deletion. Repository admins can bypass for PRs only, used only when CI is green and no second reviewer exists yet.
+- **Branch ruleset on `main` and `develop`** (`protect-main-develop`): PR required, 1 approval, **CI check required**, no force-push, no deletion. Repository admins can bypass for PRs only. E11 uses this to merge its own PRs without an approval, and only when CI is green: the bypass also skips the CI check, so waiting for green CI is E11's own responsibility.
 - **Shared draft branch `schema/v1`:** unprotected, used only for the Day 2–4 schema drafts (§6.1), merged into `develop` by one PR and then retired.
 - PR authors merge their own approved PRs into `develop`.
 - **Squash merge** with Conventional Commit titles (`feat(catalog): add course request API`).
@@ -365,7 +366,7 @@ analysis (already in scope for code quality, QUALITY-01).
 
 **Negative / costs**
 - Everyone must learn basic pnpm/Turborepo commands (covered in `docs/setup.md`).
-- The shared migration history still needs discipline (§6.2). E10 + E11 review all schema PRs.
+- The shared migration history still needs discipline (§6.2). E11 reviews all schema PRs.
 - One combined `schema.prisma` means every schema PR touches the same file; owners must stay inside their own section.
 - Redis adds one more service to host and monitor.
 - Monorepo CI needs caching to stay fast as the code grows.
@@ -390,7 +391,7 @@ analysis (already in scope for code quality, QUALITY-01).
 
 1. ~~Repo, rules, skeleton, local infra, Prisma, contracts, health checks, CI, docs.~~ Done (PR #1–#5).
 2. Every developer follows `docs/setup.md` and confirms the stack runs locally.
-3. Day 2–4: schema drafts → E10 combine → E11 initial migration (§6.1).
+3. Day 2–4: schema drafts → E11 combine → E11 initial migration (§6.1).
 4. E11: Neon staging, hosting choice and first deploy (Phase 3).
 5. Module owners build their modules inside their folders (§5).
 
@@ -422,3 +423,12 @@ analysis (already in scope for code quality, QUALITY-01).
 | Windows | Team machines run Windows: Git Bash + Docker Desktop instead of WSL/Ubuntu (`docs/setup.md`). |
 | Docs | PRD/SRS v3.2 added as markdown (`docs/prd.md`, `docs/srs.md`); module folders created with owner READMEs; `docs/repo-structure.md` explains every folder. |
 | Layout | §4 now shows the exact repository tree on `develop` (commit `127dd1e`) instead of the target sketch. |
+
+**2026-11-16: review and schema roles**
+
+| Area | Decision / finding |
+|---|---|
+| Review | E11 is the only reviewer for every PR. `.github/CODEOWNERS` has active rules for E11 only; module owners are kept as a commented ownership map with their GitHub usernames. |
+| Schema | E11 (earlier: E10) reviews and combines the module drafts into `schema.prisma` and reviews every schema PR. |
+| Architecture | Architecture and data-model questions go to E11 (earlier: E01). |
+| Rulesets | A second ruleset `ci-required` (CI check only, empty bypass list) was tried, so that the admin bypass would skip the approval but not CI. While it was active, GitHub did not offer the bypass option on PR #11 even though CI had passed, so it was switched off. One ruleset, `protect-main-develop`, remains. |

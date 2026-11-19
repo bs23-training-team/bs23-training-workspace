@@ -10,8 +10,8 @@ infrastructure and documentation. Why a monorepo: [ADR 0001](adr/0001-monorepo-s
 | A screen, form or table for my module | `apps/web/src/features/<my-module>/` | me |
 | A page/route that shows my feature | `apps/web/src/app/...` (thin, imports my feature; agree the route with E01) | E01 + me |
 | An API route or business rule | `apps/api/src/modules/<my-module>/` | me |
-| Database tables | my section in `apps/api/prisma/schema/` | me (reviewed by E10 + E11) |
-| A type both web and API need | `packages/contracts/src/<my-module>/` | me (reviewed by E01 + E11) |
+| Database tables | my section in `apps/api/prisma/schema/` | me (reviewed by E11) |
+| A type both web and API need | `packages/contracts/src/<my-module>/` | me (reviewed by E11) |
 | A UI building block several modules use | `packages/ui/src/` | E10 |
 | Docker, CI, build config | `infra/`, `.github/`, root files | E11 |
 

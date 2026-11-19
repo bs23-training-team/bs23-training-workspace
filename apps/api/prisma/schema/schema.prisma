@@ -1,0 +1,2120 @@
+// ============================================================================
+// BS23 Training Workspace · Schema v1 FINAL (combined, E01–E10)
+//
+// Built from: the current UI (src/lib/types.ts, api.ts, navigation.md) + the team
+// guide rules + the E04 catalog draft (Course / CourseModule / LessonContent).
+// Checked against: PRD v1 (final), 17 Nov 2026. Changes from that check are
+// marked "PRD v1:" next to the line they changed.
+//
+// Rules followed
+//  - every model has id, workspaceId (relation to Workspace), createdAt, updatedAt.
+//    Exception: Pm and User use their login ID as the primary key (pmId, userId)
+//  - every relation uses onDelete: Restrict. No Cascade; history and proof are never deleted
+//  - "removed" things keep their row and get a status / archivedAt (history is kept)
+//  - PM (admin) and the 4 resource types are separate tables:
+//      Pm   · pmId   e.g. "PM002"
+//      User · userId e.g. "BS23001" (Trainee, Central L&D, Industrial Attachment, SBU)
+//  - "userId" always points to User.userId, "pmId" and "...ById" always point to Pm.pmId
+//  - tables used by both (Credential, AuthToken, Session, Notification,
+//    NotificationPreference, DsSheetCell, DsSheetCellVersion) have a pmId and a userId
+//    column, both optional; DB: CHECK that exactly one is set
+//  - generator and datasource are NOT here, they live in base.prisma
+//  - Model names PascalCase, columns camelCase
+//  - rules Prisma cannot express are written as "DB:" comments for the migration
+//
+// UI notes
+//  - UI "Topic"    = CourseModule
+//  - UI "Subtopic" = LessonContent
+//  - UI "User ID" (BS23001) = User.userId
+//  - PM login ID (PM002)    = Pm.pmId
+//  - Removed on purpose in the UI (so NOT modelled): Hackathon, Audit log,
+//    planned start/end on sprint tasks, Question Sets settings page.
+// ============================================================================
+
+// ============================================================================
+// ===== E01 · identity · Identity, notification, outbox =====================
+// ============================================================================
+
+model Workspace {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // back-relations (generated)
+  pms                        Pm[]
+  users                      User[]
+  credentials                Credential[]
+  authTokens                 AuthToken[]
+  sessions                   Session[]
+  notifications              Notification[]
+  notificationPreferences    NotificationPreference[]
+  outboxEvents               OutboxEvent[]
+  integrations               Integration[]
+  userSkills                 UserSkill[]
+  teams                      Team[]
+  memberships                Membership[]
+  feedbackVersions           FeedbackVersion[]
+  skills                     Skill[]
+  questionSets               QuestionSet[]
+  rubrics                    Rubric[]
+  questions                  Question[]
+  questionOptions            QuestionOption[]
+  expertiseVersions          ExpertiseVersion[]
+  proctoringViolations       ProctoringViolation[]
+  expertiseTechnologyResults ExpertiseTechnologyResult[]
+  expertiseAnswers           ExpertiseAnswer[]
+  attempts                   Attempt[]
+  integrityEvents            IntegrityEvent[]
+  responses                  Response[]
+  appeals                    Appeal[]
+  recommendations            Recommendation[]
+  retakeRequests             RetakeRequest[]
+  sectorSnapshots            SectorSnapshot[]
+  courses                    Course[]
+  courseModules              CourseModule[]
+  modulePrerequisites        ModulePrerequisite[]
+  lessonContents             LessonContent[]
+  courseAssignments          CourseAssignment[]
+  courseRequests             CourseRequest[]
+  learnerTopicStates         LearnerTopicState[]
+  lessonProgresses           LessonProgress[]
+  completionEvents           CompletionEvent[]
+  taskOwners                 TaskOwner[]
+  sprintTasks                SprintTask[]
+  sprintSubmissions          SprintSubmission[]
+  sprintWeeks                SprintWeek[]
+  dssheetCells               DsSheetCell[]
+  dssheetCellVersions        DsSheetCellVersion[]
+  dsMeetings                 DsMeeting[]
+  identityMappings           IdentityMapping[]
+  attendances                Attendance[]
+  meetingAttendances         MeetingAttendance[]
+  meetingIntervals           MeetingInterval[]
+  syncRuns                   SyncRun[]
+  leaveRequests              LeaveRequest[]
+  leaveDecisions             LeaveDecision[]
+  reconciliationRequests     ReconciliationRequest[]
+  reconciliationDates        ReconciliationDate[]
+  reports                    Report[]
+  reportVersions             ReportVersion[]
+  publicHolidays             PublicHoliday[]
+  reportFiles                ReportFile[]
+  mailDeliveries             MailDelivery[]
+  mailAttempts               MailAttempt[]
+  xpRule                     XpRule?
+  levels                     Level[]
+  xpEvents                   XpEvent[]
+  xpReviews                  XpReview[]
+  streaks                    Streak[]
+  streakFreezes              StreakFreeze[]
+  badges                     Badge[]
+  badgeAwards                BadgeAward[]
+  quests                     Quest[]
+  questProgresses            QuestProgress[]
+  leaderboardPreferences     LeaderboardPreference[]
+  kudos                      Kudos[]
+}
+
+// A resource: one of the 4 types (Trainee, Central L&D, Industrial Attachment, SBU).
+// A separate table from Pm. Replaces the old User + userProfile pair.
+// PM = admin. A separate table from the 4 resource types (User).
+model Pm {
+  pmId               String   @id // login ID of the PM, e.g. "PM002"
+  workspaceId        String
+  email              String // DB: an email must not exist in both Pm and User (login looks up both)
+  name               String
+  mustChangePassword Boolean  @default(false) // true while the temporary password is in use
+  emailVerified      Boolean  @default(false)
+  photoPath          String? // storage path only; storage provider not decided yet
+  bio                String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  // login, notification (shared with User: each row has pmId or userId)
+  credential              Credential?
+  authTokens              AuthToken[]
+  sessions                Session[]
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+
+  // users this PM manages
+  managedUsers User[]
+
+  // DS sheet edits made by a PM
+  dssheetCellsAuthored      DsSheetCell[]        @relation("dsSheetCellAuthorPm")
+  dssheetCellsUpdated       DsSheetCell[]        @relation("dsSheetCellUpdaterPm")
+  dssheetCellVersionsEdited DsSheetCellVersion[] @relation("dsSheetCellVersionEditorPm")
+
+  // PM actions ("...ById" columns)
+  coursesApproved                    Course[]                @relation("CourseApprover")
+  coursesCreated                     Course[]                @relation("CourseCreator")
+  teamsAsPm                          Team[]                  @relation("TeamPm")
+  feedbackVersionsAsAuthor           FeedbackVersion[]       @relation("FeedbackAuthor")
+  questionSetsAsApprovedBy           QuestionSet[]           @relation("QuestionSetApprover")
+  attemptsAsFinalisedBy              Attempt[]               @relation("AttemptFinaliser")
+  appealsAsResolvedBy                Appeal[]                @relation("AppealResolver")
+  recommendationsAsApprovedBy        Recommendation[]        @relation("RecommendationApprover")
+  retakeRequestsAsDecidedBy          RetakeRequest[]         @relation("RetakeDecider")
+  courseAssignmentsAsAssignedBy      CourseAssignment[]      @relation("AssignmentAssigner")
+  courseRequestsAsReviewedBy         CourseRequest[]         @relation("CourseRequestReviewer")
+  dsMeetingsAsCreatedBy              DsMeeting[]             @relation("DsMeetingCreator")
+  identityMappingsAsMappedBy         IdentityMapping[]       @relation("IdentityMapper")
+  attendancesAsEnteredBy             Attendance[]            @relation("AttendanceEnteredBy")
+  leaveDecisionsAsDecidedBy          LeaveDecision[]         @relation("LeaveDecider")
+  reconciliationRequestsAsResolvedBy ReconciliationRequest[] @relation("ReconciliationResolver")
+  reportVersionsAsSavedBy            ReportVersion[]         @relation("ReportVersionSaver")
+  reportVersionsAsPublishedBy        ReportVersion[]         @relation("ReportVersionPublisher")
+  sprintTasksAsOwnerReplyBy          SprintTask[]            @relation("SprintTaskOwnerReply")
+  reportFilesAsGeneratedBy           ReportFile[]            @relation("ReportFileGenerator")
+  xpRulesAsUpdatedBy                 XpRule[]                @relation("XpRuleUpdater")
+  xpReviewsAsReviewer                XpReview[]              @relation("XpReviewer")
+  streakFreezesAsGrantedBy           StreakFreeze[]          @relation("StreakFreezeGrantor")
+  badgeAwardsAsAwardedBy             BadgeAward[]            @relation("BadgeAwarder")
+  badgeAwardsAsRevokedBy             BadgeAward[]            @relation("BadgeRevoker")
+  badgesAsRetiredBy                  Badge[]                 @relation("BadgeRetirer")
+  badgesAsCreatedBy                  Badge[]                 @relation("BadgeCreator")
+  questsAsCreatedBy                  Quest[]                 @relation("QuestCreator")
+  questProgressesAsVerifiedBy        QuestProgress[]         @relation("QuestVerifier")
+
+  @@unique([workspaceId, email])
+}
+
+model User {
+  userId                 String         @id // login ID, e.g. "BS23001", shown as "User ID" in the UI
+  workspaceId            String
+  email                  String // DB: an email must not exist in both Pm and User (login looks up both)
+  name                   String
+  mustChangePassword     Boolean        @default(false) // true while the temporary password is in use
+  emailVerified          Boolean        @default(false)
+  photoPath              String? // storage path only; storage provider not decided yet
+  bio                    String?        @db.Text
+  resource               UserResource // TRAINEE / CENTRAL_LND / INDUSTRIAL_ATTACHMENT / SBU
+  pmId                   String // the PM who manages this user
+  position               Position
+  attendanceMode         AttendanceMode
+  onboardDate            DateTime       @db.Date
+  departureDate          DateTime?      @db.Date // empty only for a reactivated user; DB: must be after onboardDate
+  skillAssessmentMinutes Int? // set by the PM, 1-180 (DB: CHECK)
+  skillAssessmentMarks   Int? // set by the PM, 1-1000 (DB: CHECK)
+  archivedAt             DateTime? // set when departureDate passes; cleared when the PM reactivates
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  pm        Pm        @relation(fields: [pmId], references: [pmId], onDelete: Restrict)
+
+  // login, notification (shared with Pm: each row has pmId or userId)
+  credential              Credential?
+  authTokens              AuthToken[]
+  sessions                Session[]
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+
+  kudosSent     Kudos[] @relation("KudosSent")
+  kudosReceived Kudos[] @relation("KudosReceived")
+
+  // DS sheet: the user's own rows, and edits made by the user
+  dssheetCells              DsSheetCell[]        @relation("dsSheetCellRow")
+  dssheetCellsAuthored      DsSheetCell[]        @relation("dsSheetCellAuthorUser")
+  dssheetCellsUpdated       DsSheetCell[]        @relation("dsSheetCellUpdaterUser")
+  dssheetCellVersionsEdited DsSheetCellVersion[] @relation("dsSheetCellVersionEditorUser")
+
+  // back-relations (generated)
+  userSkills             UserSkill[]
+  memberships            Membership[]
+  feedbackVersions       FeedbackVersion[]
+  expertiseVersions      ExpertiseVersion[]
+  attempts               Attempt[]
+  appeals                Appeal[]
+  recommendations        Recommendation[]
+  retakeRequests         RetakeRequest[]
+  courseAssignments      CourseAssignment[]
+  courseRequests         CourseRequest[]
+  learnerTopicStates     LearnerTopicState[]
+  lessonProgresses       LessonProgress[]
+  completionEvents       CompletionEvent[]
+  sprintTasks            SprintTask[]
+  sprintSubmissions      SprintSubmission[]
+  identityMappings       IdentityMapping[]
+  attendances            Attendance[]
+  meetingAttendances     MeetingAttendance[]
+  leaveRequests          LeaveRequest[]
+  reconciliationRequests ReconciliationRequest[]
+  reports                Report[]
+  xpEvents               XpEvent[]
+  streak                 Streak?
+  streakFreezes          StreakFreeze[]
+  badgeAwards            BadgeAward[]
+  questProgresses        QuestProgress[]
+  leaderboardPreference  LeaderboardPreference?
+
+  @@unique([workspaceId, email])
+  @@index([workspaceId, resource])
+  @@index([workspaceId, archivedAt])
+  @@index([pmId])
+}
+
+model Credential {
+  id                String    @id @default(uuid())
+  workspaceId       String
+  pmId              String?   @unique // set for a PM
+  userId            String?   @unique // set for a user
+  passwordHash      String // salted slow hash (never the plain password)
+  passwordChangedAt DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  pm        Pm?       @relation(fields: [pmId], references: [pmId], onDelete: Restrict)
+  user      User?     @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  // DB: CHECK exactly one of pmId / userId is set
+}
+
+enum AuthTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET // expires in 30 minutes in the UI
+}
+
+model AuthToken {
+  id          String        @id @default(uuid())
+  workspaceId String
+  pmId        String?
+  userId      String?
+  type        AuthTokenType
+  tokenHash   String        @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  pm        Pm?       @relation(fields: [pmId], references: [pmId], onDelete: Restrict)
+  user      User?     @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  // DB: CHECK exactly one of pmId / userId is set
+
+  @@index([pmId, type])
+  @@index([userId, type])
+}
+
+model Session {
+  id          String    @id @default(uuid())
+  workspaceId String
+  pmId        String?
+  userId      String?
+  tokenHash   String    @unique // PRD v1: hash of the session / refresh token; the raw token is never stored
+  device      String
+  remembered  Boolean   @default(false)
+  expiresAt   DateTime // PRD v1: longer when "remember me" is ticked
+  lastSeenAt  DateTime  @default(now())
+  endedAt     DateTime? // sign out or auto-archive ends the session; the row stays
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  pm        Pm?       @relation(fields: [pmId], references: [pmId], onDelete: Restrict)
+  user      User?     @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  // DB: CHECK exactly one of pmId / userId is set
+
+  @@index([pmId, endedAt])
+  @@index([userId, endedAt])
+}
+
+model Notification {
+  id              String    @id @default(uuid())
+  workspaceId     String
+  pmId            String? // recipient, when the recipient is a PM
+  userId          String? // recipient, when the recipient is a user
+  category        String // e.g. "Course assigned", "Leave decided", "Retake request"
+  title           String
+  message         String    @db.Text
+  link            String? // page to open when clicked
+  retakeRequestId String? // retake notifications open the approval pop-up
+  readAt          DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  pm            Pm?            @relation(fields: [pmId], references: [pmId], onDelete: Restrict)
+  user          User?          @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  retakeRequest RetakeRequest? @relation(fields: [retakeRequestId], references: [id], onDelete: Restrict)
+  // DB: CHECK exactly one of pmId / userId is set
+
+  @@index([pmId, readAt])
+  @@index([userId, readAt])
+  @@index([workspaceId, createdAt])
+}
+
+model NotificationPreference {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  pmId         String?
+  userId       String?
+  category     String
+  emailEnabled Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  pm        Pm?       @relation(fields: [pmId], references: [pmId], onDelete: Restrict)
+  user      User?     @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  // DB: CHECK exactly one of pmId / userId is set
+
+  @@unique([pmId, category])
+  @@unique([userId, category])
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+model OutboxEvent {
+  id          String       @id @default(uuid())
+  workspaceId String
+  type        String // e.g. "mail.report", "notification.email"
+  payload     Json
+  status      OutboxStatus @default(PENDING)
+  attempts    Int          @default(0)
+  lastError   String?
+  availableAt DateTime     @default(now())
+  processedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  @@index([status, availableAt])
+}
+
+enum IntegrationKey {
+  ERP
+  TEAMS
+  YOUTUBE
+  AI
+  EMAIL
+  ROADMAP
+}
+
+enum IntegrationStatus {
+  DISCONNECTED
+  AUTHORIZATION_REQUIRED
+  FAILED_RETRY_AVAILABLE
+  STALE_CACHED_DATA
+  CONNECTED
+}
+
+model Integration {
+  id          String            @id @default(uuid())
+  workspaceId String
+  key         IntegrationKey
+  name        String
+  status      IntegrationStatus @default(DISCONNECTED)
+  lastSyncAt  DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, key])
+}
+
+// ============================================================================
+// ===== E02 · directory · Trainee directory, team, L&D ======================
+// ============================================================================
+
+enum Position {
+  FRONTEND
+  BACKEND
+  FULLSTACK
+  QA
+}
+
+enum AttendanceMode {
+  PHYSICAL
+  ONLINE
+}
+
+enum UserResource {
+  TRAINEE
+  CENTRAL_LND
+  INDUSTRIAL_ATTACHMENT
+  SBU
+}
+
+model UserSkill {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String
+  skillId     String // → Skill (E03)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  skill     Skill     @relation(fields: [skillId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, skillId])
+  @@index([skillId])
+}
+
+model Team {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  pmId        String
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  pm        Pm        @relation("TeamPm", fields: [pmId], references: [pmId], onDelete: Restrict)
+
+  // back-relations (generated)
+  memberships Membership[]
+  sprintWeeks SprintWeek[]
+  dsMeetings  DsMeeting[]
+
+  @@unique([workspaceId, name])
+}
+
+model Membership {
+  id          String    @id @default(uuid())
+  workspaceId String
+  teamId      String
+  userId      String
+  leftAt      DateTime? // leaving a team keeps the row (history)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  team      Team      @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+// L&D feedback written by a PM. Every edit is a new version, nothing is overwritten.
+model FeedbackVersion {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String
+  authorId    String
+  version     Int
+  text        String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  author    Pm        @relation("FeedbackAuthor", fields: [authorId], references: [pmId], onDelete: Restrict)
+
+  @@unique([userId, version])
+}
+
+// ============================================================================
+// ===== E03 · assessment · Expertise, assessment, AI evaluation =============
+// ============================================================================
+
+enum SkillStatus {
+  STRONG
+  DEVELOPING
+  NEEDS_REVISION
+  NOT_ASSESSED
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum QuestionLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum QuestionType {
+  MCQ
+  SHORT
+}
+
+enum QuestionSetType {
+  SUBTOPIC
+  FULL_TOPIC
+  COURSE_FINAL
+}
+
+enum QuestionSetSource {
+  AI_DRAFT
+  APPROVED_POOL
+}
+
+enum AttemptStatus {
+  PROVISIONAL
+  FINAL
+  PENDING_OFFLINE
+}
+
+enum SubmitReason {
+  SUBMITTED
+  TIME_UP
+  TAB_HIDDEN
+  OFFLINE
+}
+
+enum IntegrityEventType {
+  TAB_HIDDEN
+  COPY_BLOCKED
+  CONTEXT_MENU_BLOCKED
+  OFFLINE
+}
+
+enum ProctorRule {
+  TAB_HIDDEN
+  FULLSCREEN_EXIT
+  COPY_PASTE
+  RIGHT_CLICK
+  PAGE_RELOAD
+}
+
+enum QuizEndReason {
+  SUBMITTED
+  TIME_UP
+  VIOLATIONS // three rule breaches auto-submit
+}
+
+enum AppealStatus {
+  OPEN
+  RESOLVED
+}
+
+enum RecommendationStatus {
+  SUGGESTED
+  APPROVED // PM approved the suggestion (it still does not assign the course)
+}
+
+enum RetakeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  USED // one approval allows one retake
+}
+
+enum Sector {
+  FRONTEND
+  BACKEND
+  FULLSTACK
+  SQA
+}
+
+// A technology / skill (HTML & CSS, React, SQL ...). Used by the skill quiz bank,
+// trainee skills and the skill filter on All Users.
+model Skill {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  // back-relations (generated)
+  userSkills                 UserSkill[]
+  questions                  Question[]
+  expertiseTechnologyResults ExpertiseTechnologyResult[]
+  expertiseAnswers           ExpertiseAnswer[]
+
+  @@unique([workspaceId, name])
+}
+
+// Course quizzes (per subtopic / full topic / course final).
+model QuestionSet {
+  id             String            @id @default(uuid())
+  workspaceId    String
+  courseId       String // → Course (E04)
+  moduleId       String? // → CourseModule (E04). Empty for COURSE_FINAL
+  type           QuestionSetType
+  title          String
+  durationMin    Int
+  attemptLimit   Int // DB: CHECK >= 1
+  source         QuestionSetSource @default(AI_DRAFT)
+  contentVersion String
+  approvedById   String?
+  approvedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  workspace  Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  course     Course        @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  module     CourseModule? @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+  approvedBy Pm?           @relation("QuestionSetApprover", fields: [approvedById], references: [pmId], onDelete: Restrict)
+
+  // back-relations (generated)
+  rubrics   Rubric[]
+  questions Question[]
+  attempts  Attempt[]
+
+  @@index([courseId])
+  @@index([moduleId])
+}
+
+// Marking guide of a question set. A new rubric text is a new version.
+model Rubric {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  questionSetId String
+  version       String
+  text          String   @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  questionSet QuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Restrict)
+
+  @@unique([questionSetId, version])
+}
+
+// A question lives either in a QuestionSet (course quiz) or in the skill quiz bank (skillId + level).
+model Question {
+  id            String         @id @default(uuid())
+  workspaceId   String
+  questionSetId String?
+  skillId       String?
+  level         QuestionLevel? // skill bank questions only
+  type          QuestionType
+  text          String         @db.Text
+  order         Int?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  questionSet QuestionSet? @relation(fields: [questionSetId], references: [id], onDelete: Restrict)
+  skill       Skill?       @relation(fields: [skillId], references: [id], onDelete: Restrict)
+
+  // back-relations (generated)
+  questionOptions  QuestionOption[]
+  expertiseAnswers ExpertiseAnswer[]
+  responses        Response[]
+
+  @@index([questionSetId])
+  @@index([skillId, level])
+}
+
+model QuestionOption {
+  id          String   @id @default(uuid())
+  workspaceId String
+  questionId  String
+  order       Int
+  text        String
+  isCorrect   Boolean  @default(false) // UI "answerKey"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  question  Question  @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  // back-relations (generated)
+  expertiseAnswers ExpertiseAnswer[]
+  responses        Response[]
+
+  @@unique([questionId, order])
+}
+
+enum ExpertiseStatus {
+  IN_PROGRESS // PRD v1: a reload resumes with the remaining time (FR-RTK-06, US-53)
+  SUBMITTED
+}
+
+// First-login / retake skill assessment. Every submission is a new version (v1, v2 ...).
+model ExpertiseVersion {
+  id               String          @id @default(uuid())
+  workspaceId      String
+  userId           String
+  version          Int
+  retakeRequestId  String?         @unique // set when this was a retake
+  joiningRole      String
+  experience       String // Beginner / Intermediate / Advanced
+  confidence       String // Not confident ... Very confident
+  improvements     String[]
+  goals            String          @db.Text
+  practicalAnswer  String?         @db.Text // PRD v1: empty until submitted
+  intake           Json? // the 10-question intake answers (Q1-Q10, Q5-Q7 repeat per skill)
+  status           ExpertiseStatus @default(IN_PROGRESS) // PRD v1
+  startedAt        DateTime        @default(now()) // PRD v1: remaining time = durationMin - (now - startedAt)
+  submittedAt      DateTime? // PRD v1
+  level            String? // Beginner / Intermediate / Advanced. PRD v1: empty until submitted
+  score            Int? // PRD v1: empty until submitted
+  total            Int? // PRD v1: empty until submitted
+  analysis         Json? // PRD v1: strengths, gaps, required skills per role from the skill-analysis service (US-54)
+  analysedAt       DateTime? // PRD v1: when the service returned the analysis
+  // proctored quiz
+  durationMin      Int?
+  timeTakenSec     Int?
+  totalMarks       Int? // set by the PM, shared equally over the questions
+  marksPerQuestion Decimal?        @db.Decimal(8, 2)
+  marksObtained    Decimal?        @db.Decimal(8, 2)
+  endReason        QuizEndReason?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user          User           @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  retakeRequest RetakeRequest? @relation(fields: [retakeRequestId], references: [id], onDelete: Restrict)
+
+  // back-relations (generated)
+  proctoringViolations       ProctoringViolation[]
+  expertiseTechnologyResults ExpertiseTechnologyResult[]
+  expertiseAnswers           ExpertiseAnswer[]
+  recommendations            Recommendation[]
+
+  @@unique([userId, version])
+}
+
+model ProctoringViolation {
+  id                 String      @id @default(uuid())
+  workspaceId        String
+  expertiseVersionId String
+  rule               ProctorRule
+  occurredAt         DateTime
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  expertiseVersion ExpertiseVersion @relation(fields: [expertiseVersionId], references: [id], onDelete: Restrict)
+
+  @@index([expertiseVersionId])
+}
+
+// Result per technology inside one assessment.
+model ExpertiseTechnologyResult {
+  id                 String      @id @default(uuid())
+  workspaceId        String
+  expertiseVersionId String
+  skillId            String
+  correct            Int
+  total              Int
+  skipped            Int
+  status             SkillStatus
+  priority           Priority
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  expertiseVersion ExpertiseVersion @relation(fields: [expertiseVersionId], references: [id], onDelete: Restrict)
+  skill            Skill            @relation(fields: [skillId], references: [id], onDelete: Restrict)
+
+  @@unique([expertiseVersionId, skillId])
+  @@index([skillId])
+}
+
+model ExpertiseAnswer {
+  id                 String   @id @default(uuid())
+  workspaceId        String
+  expertiseVersionId String
+  skillId            String
+  questionId         String
+  selectedOptionId   String? // empty when skipped
+  correct            Boolean
+  skipped            Boolean
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  expertiseVersion ExpertiseVersion @relation(fields: [expertiseVersionId], references: [id], onDelete: Restrict)
+  skill            Skill            @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  question         Question         @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  selectedOption   QuestionOption?  @relation(fields: [selectedOptionId], references: [id], onDelete: Restrict)
+
+  @@unique([expertiseVersionId, questionId])
+  @@index([questionId])
+}
+
+// A trainee's try at a course quiz. The original objective score is never changed;
+// the PM's reviewed score goes into finalScore.
+model Attempt {
+  id             String        @id @default(uuid())
+  workspaceId    String
+  userId         String
+  questionSetId  String
+  attemptNo      Int // DB: must not pass QuestionSet.attemptLimit
+  objectiveScore Int
+  objectiveTotal Int
+  finalScore     Int? // percentage 0-100 after PM review (DB: CHECK)
+  status         AttemptStatus
+  submitReason   SubmitReason
+  mastered       Boolean       @default(false) // PM marked the topic / course as mastered
+  finalisedById  String?
+  finalisedAt    DateTime?
+  startedAt      DateTime
+  submittedAt    DateTime
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user        User        @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  questionSet QuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Restrict)
+  finalisedBy Pm?         @relation("AttemptFinaliser", fields: [finalisedById], references: [pmId], onDelete: Restrict)
+
+  // back-relations (generated)
+  integrityEvents  IntegrityEvent[]
+  responses        Response[]
+  appeals          Appeal[]
+  completionEvents CompletionEvent[]
+  xpEvents         XpEvent[]
+  badgeAwards      BadgeAward[]
+
+  @@unique([userId, questionSetId, attemptNo])
+  @@index([questionSetId])
+}
+
+model IntegrityEvent {
+  id          String             @id @default(uuid())
+  workspaceId String
+  attemptId   String
+  type        IntegrityEventType
+  occurredAt  DateTime
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  attempt   Attempt   @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+
+  @@index([attemptId])
+}
+
+model Response {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  attemptId        String
+  questionId       String
+  selectedOptionId String? // MCQ
+  answerText       String?  @db.Text // SHORT
+  isCorrect        Boolean?
+  aiScore          Decimal? @db.Decimal(6, 2) // PRD v1 (FR-ASM-02): AI-suggested score for a short answer
+  aiRationale      String?  @db.Text // PRD v1: why the AI suggested that score (against the rubric)
+  pmScore          Decimal? @db.Decimal(6, 2) // PRD v1: the score the PM gave or confirmed
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  attempt        Attempt         @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  question       Question        @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  selectedOption QuestionOption? @relation(fields: [selectedOptionId], references: [id], onDelete: Restrict)
+
+  @@unique([attemptId, questionId])
+  @@index([questionId])
+}
+
+// "Request review" of an attempt by the trainee.
+model Appeal {
+  id           String       @id @default(uuid())
+  workspaceId  String
+  attemptId    String
+  userId       String
+  reason       String       @db.Text
+  status       AppealStatus @default(OPEN)
+  resolvedById String?
+  resolvedAt   DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  attempt    Attempt   @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  user       User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  resolvedBy Pm?       @relation("AppealResolver", fields: [resolvedById], references: [pmId], onDelete: Restrict)
+
+  @@index([attemptId, status])
+  @@index([userId])
+}
+
+// Suggested course for a trainee, from the skill gaps of an assessment. Suggestions never assign.
+model Recommendation {
+  id                 String               @id @default(uuid())
+  workspaceId        String
+  userId             String
+  courseId           String // → Course (E04)
+  expertiseVersionId String?
+  reason             String // e.g. "React: Needs revision (High priority)"
+  priority           Priority
+  status             RecommendationStatus @default(SUGGESTED)
+  approvedById       String?
+  approvedAt         DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user             User              @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  course           Course            @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  expertiseVersion ExpertiseVersion? @relation(fields: [expertiseVersionId], references: [id], onDelete: Restrict)
+  approvedBy       Pm?               @relation("RecommendationApprover", fields: [approvedById], references: [pmId], onDelete: Restrict)
+
+  @@unique([userId, courseId])
+  @@index([courseId])
+}
+
+model RetakeRequest {
+  id          String       @id @default(uuid())
+  workspaceId String
+  userId      String
+  status      RetakeStatus @default(PENDING)
+  decidedById String?
+  decidedAt   DateTime?
+  minutes     Int? // set on approval, 1-180
+  totalMarks  Int? // set on approval, 1-1000
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  decidedBy Pm?       @relation("RetakeDecider", fields: [decidedById], references: [pmId], onDelete: Restrict)
+
+  // back-relations (generated)
+  notifications    Notification[]
+  expertiseVersion ExpertiseVersion?
+  // DB: partial unique index, only one PENDING or APPROVED request per trainee
+
+  @@index([userId, status])
+}
+
+// One row per sector per month, written by the monthly job (Sector Growth Analytics).
+model SectorSnapshot {
+  id          String   @id @default(uuid())
+  workspaceId String
+  month       String // YYYY-MM
+  sector      Sector
+  avgScore    Decimal  @db.Decimal(5, 2) // 0-100
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, month, sector])
+}
+
+// ============================================================================
+// ===== E04 · catalog · Course, assignment, request =========================
+// ============================================================================
+
+enum AssignmentSource {
+  DIRECT
+  TEAM
+  REQUEST
+}
+
+enum CourseRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+// 1. Main course template (global and reusable)
+model Course {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  title        String
+  slug         String
+  track        String? // Frontend, Backend, Full Stack, QA, DevOps, Foundations
+  description  String    @db.Text
+  targetSkills String[] // technologies this course covers, e.g. ["React", "TypeScript"]. Matches skill gaps
+  isApproved   Boolean   @default(false) // true after a PM approves
+  approvedById String? // PM user
+  approvedAt   DateTime?
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  approvedBy Pm?       @relation("CourseApprover", fields: [approvedById], references: [pmId], onDelete: Restrict)
+  createdBy  Pm?       @relation("CourseCreator", fields: [createdById], references: [pmId], onDelete: Restrict)
+
+  // back-relations (generated)
+  modules           CourseModule[]
+  questionSets      QuestionSet[]
+  recommendations   Recommendation[]
+  courseAssignments CourseAssignment[]
+  courseRequests    CourseRequest[]
+
+  @@unique([workspaceId, title]) // unique, no duplicate courses
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+}
+
+model CourseModule {
+  id          String   @id @default(uuid())
+  workspaceId String
+  courseId    String // FIX: was courseId with no FK; a topic belongs to a course version
+  title       String // e.g. "Module 1: Advanced Hooks"
+  description String?  @db.Text
+  order       Int // 1, 2, 3 ...
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  course    Course    @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  requires   ModulePrerequisite[] @relation("ModuleRequires")
+  requiredBy ModulePrerequisite[] @relation("ModuleRequiredBy")
+
+  // back-relations (generated)
+  questionSets       QuestionSet[]
+  lessons            LessonContent[]
+  learnerTopicStates LearnerTopicState[]
+  completionEvents   CompletionEvent[]
+
+  @@unique([courseId, order])
+  @@index([workspaceId])
+  @@index([courseId])
+}
+
+model ModulePrerequisite {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  moduleId       String
+  prerequisiteId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  module       CourseModule @relation("ModuleRequires", fields: [moduleId], references: [id], onDelete: Restrict)
+  prerequisite CourseModule @relation("ModuleRequiredBy", fields: [prerequisiteId], references: [id], onDelete: Restrict)
+
+  @@unique([moduleId, prerequisiteId])
+  @@index([prerequisiteId])
+}
+
+// 3. Lesson content (theory, example, pseudocode, resources). UI calls this a "Subtopic".
+model LessonContent {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  moduleId     String
+  title        String // Lesson / subtopic title
+  order        Int
+  videoUrl     String? // PRD v1: YouTube video of the subtopic (YouTube Data API), https only
+  filePath     String // path of the lesson file (e.g. "lessons/react-hooks.md"). Storage not decided yet
+  codeExamples Json? // [{ "lang": "typescript", "code": "..." }]
+  references   Json // [{ "source": "React Docs", "url": "https://..." }]. URLs must be https
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  module    CourseModule @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+
+  // back-relations (generated)
+  lessonProgresses LessonProgress[]
+  completionEvents CompletionEvent[]
+
+  @@unique([moduleId, order])
+  @@index([workspaceId])
+  @@index([moduleId])
+}
+
+model CourseAssignment {
+  id           String @id @default(uuid())
+  workspaceId  String
+  courseId     String
+  userId       String
+  assignedById String
+
+  source     AssignmentSource @default(DIRECT) // FIX: DIRECT, TEAM, REQUEST (FR-LRN-04)
+  dueDate    DateTime?        @db.Date // DB: not in the past when created
+  assignedAt DateTime         @default(now())
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  course    Course    @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  user       User @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  assignedBy Pm   @relation("AssignmentAssigner", fields: [assignedById], references: [pmId], onDelete: Restrict)
+
+  @@unique([userId, courseId]) // a trainee gets a course once
+  @@index([courseId])
+}
+
+model CourseRequest {
+  id           String              @id @default(uuid())
+  workspaceId  String
+  userId       String
+  courseId     String
+  reason       String              @db.Text
+  status       CourseRequestStatus @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user       User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  course     Course    @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  reviewedBy Pm?       @relation("CourseRequestReviewer", fields: [reviewedById], references: [pmId], onDelete: Restrict)
+  // DB: partial unique index, one PENDING or APPROVED request per trainee and course
+
+  @@index([userId, courseId, status])
+  @@index([courseId])
+}
+
+// ============================================================================
+// ===== E05 · learning · Learning roadmap ===================================
+// ============================================================================
+
+enum TopicStateValue {
+  NOT_STARTED
+  SELF_DONE
+  SKIPPED
+  MASTERED // only from a passed, PM-finalised assessment
+}
+
+enum CompletionEventType {
+  LESSON_COMPLETED
+  TOPIC_SELF_DONE
+  TOPIC_SKIPPED
+  TOPIC_MASTERED
+}
+
+model LearnerTopicState {
+  id          String          @id @default(uuid())
+  workspaceId String
+  userId      String
+  moduleId    String
+  state       TopicStateValue @default(NOT_STARTED)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User         @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  module    CourseModule @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, moduleId])
+  @@index([moduleId])
+}
+
+model LessonProgress {
+  id               String    @id @default(uuid())
+  workspaceId      String
+  userId           String
+  lessonId         String
+  completedAt      DateTime
+  videoCompletedAt DateTime? // PRD v1: video completion, user-only (FR-LRN-01)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User          @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  lesson    LessonContent @relation(fields: [lessonId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, lessonId])
+  @@index([lessonId])
+}
+
+// Append-only log of learning milestones.
+model CompletionEvent {
+  id          String              @id @default(uuid())
+  workspaceId String
+  userId      String
+  type        CompletionEventType
+  moduleId    String?
+  lessonId    String?
+  attemptId   String? // the finalised attempt behind TOPIC_MASTERED
+  occurredAt  DateTime            @default(now())
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User           @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  module    CourseModule?  @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+  lesson    LessonContent? @relation(fields: [lessonId], references: [id], onDelete: Restrict)
+  attempt   Attempt?       @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+
+  @@index([userId, occurredAt, moduleId])
+  @@index([moduleId])
+}
+
+// ============================================================================
+// ===== E06 · sprint · Daily sprint, sheet, DS meeting ======================
+// ============================================================================
+
+enum TaskCategory {
+  SBO // task done for an SBU
+  LND // task done for an L&D team
+}
+
+enum TaskVerification {
+  PENDING
+  VERIFIED
+  NOT_CONFIRMED
+}
+
+enum SheetColumn {
+  YESTERDAY
+  HOURS
+  TODAY
+  BLOCKERS
+  PLAN
+}
+
+// A specific L&D team or SBU that a trainee can do tasks for. They are emailed to verify the task.
+model TaskOwner {
+  id          String       @id @default(uuid())
+  workspaceId String
+  name        String
+  kind        TaskCategory
+  email       String
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  // back-relations (generated)
+  sprintTasks SprintTask[]
+
+  @@unique([workspaceId, email])
+}
+
+model SprintTask {
+  id                 String            @id @default(uuid())
+  workspaceId        String
+  userId             String
+  date               DateTime          @db.Date
+  title              String
+  description        String            @db.Text
+  category           TaskCategory
+  plannedHours       Decimal           @db.Decimal(4, 1) // DB: CHECK >= 0
+  actualHours        Decimal           @default(0) @db.Decimal(4, 1) // DB: CHECK >= 0
+  blocker            String            @default("")
+  done               Boolean           @default(false)
+  carriedFromId      String? // task carried forward from the last working day
+  ownerId            String? // L&D team or SBU asked to verify the task
+  verification       TaskVerification?
+  ownerRequestedAt   DateTime? // when the approval email was queued
+  ownerRepliedAt     DateTime? // PRD v1: when the owner's answer was recorded (decided once)
+  ownerReplyById     String? // PRD v1: in v1 the PM records (simulates) the owner's reply
+  pendingAlertSentAt DateTime? // PM told that the owner has not replied for a day
+  deletedAt          DateTime? // delete keeps the row
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  workspace    Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user         User        @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  carriedFrom  SprintTask? @relation("SprintTaskCarry", fields: [carriedFromId], references: [id], onDelete: Restrict)
+  owner        TaskOwner?  @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  ownerReplyBy Pm?         @relation("SprintTaskOwnerReply", fields: [ownerReplyById], references: [pmId], onDelete: Restrict)
+
+  // back-relations (generated)
+  sprintTasksAsCarriedFrom SprintTask[]   @relation("SprintTaskCarry")
+  mailDeliveries           MailDelivery[]
+
+  @@index([userId, date])
+  @@index([verification, ownerRequestedAt])
+  @@index([ownerId])
+}
+
+model SprintSubmission {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String
+  date        DateTime @db.Date
+  submittedAt DateTime
+  onTime      Boolean // compared with XpRule.sprintCutoff
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+
+  @@unique([userId, date]) // one sprint per day
+}
+
+model SprintWeek {
+  id          String   @id @default(uuid())
+  workspaceId String
+  teamId      String
+  weekStart   DateTime @db.Date // a Monday
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  team      Team      @relation(fields: [teamId], references: [id], onDelete: Restrict)
+
+  // back-relations (generated)
+  dssheetCells DsSheetCell[]
+
+  @@unique([teamId, weekStart])
+}
+
+// One cell of the team DS sheet. `version` is for optimistic locking (conflict dialog).
+model DsSheetCell {
+  id              String      @id @default(uuid())
+  workspaceId     String
+  weekId          String
+  userId          String // whose row this cell is in
+  date            DateTime    @db.Date
+  column          SheetColumn
+  value           String      @db.Text
+  version         Int         @default(1)
+  authorPmId      String? // who wrote the cell first: a PM ...
+  authorUserId    String? // ... or a user
+  updatedByPmId   String? // who changed it last: a PM ...
+  updatedByUserId String? // ... or a user
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  workspace     Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  week          SprintWeek @relation(fields: [weekId], references: [id], onDelete: Restrict)
+  user          User       @relation("dsSheetCellRow", fields: [userId], references: [userId], onDelete: Restrict)
+  authorPm      Pm?        @relation("dsSheetCellAuthorPm", fields: [authorPmId], references: [pmId], onDelete: Restrict)
+  authorUser    User?      @relation("dsSheetCellAuthorUser", fields: [authorUserId], references: [userId], onDelete: Restrict)
+  updatedByPm   Pm?        @relation("dsSheetCellUpdaterPm", fields: [updatedByPmId], references: [pmId], onDelete: Restrict)
+  updatedByUser User?      @relation("dsSheetCellUpdaterUser", fields: [updatedByUserId], references: [userId], onDelete: Restrict)
+
+  // back-relations (generated)
+  dssheetCellVersions DsSheetCellVersion[]
+  // DB: CHECK exactly one of authorPmId / authorUserId, and exactly one of updatedByPmId / updatedByUserId
+
+  @@unique([weekId, userId, date, column])
+  @@index([userId])
+}
+
+// Old values of a cell. Written when a cell is edited.
+model DsSheetCellVersion {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  cellId         String
+  version        Int
+  value          String   @db.Text
+  editedByPmId   String? // edited by a PM ...
+  editedByUserId String? // ... or by a user
+  editedAt       DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace    Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  cell         DsSheetCell @relation(fields: [cellId], references: [id], onDelete: Restrict)
+  editedByPm   Pm?         @relation("dsSheetCellVersionEditorPm", fields: [editedByPmId], references: [pmId], onDelete: Restrict)
+  editedByUser User?       @relation("dsSheetCellVersionEditorUser", fields: [editedByUserId], references: [userId], onDelete: Restrict)
+  // DB: CHECK exactly one of editedByPmId / editedByUserId
+
+  @@unique([cellId, version])
+}
+
+// Daily sprint meeting shown in the user's meeting banner. teamId empty = all teams.
+model DsMeeting {
+  id          String   @id @default(uuid())
+  workspaceId String
+  title       String
+  teamId      String?
+  scheduledAt DateTime
+  teamsLink   String? // https only
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  team      Team?     @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  createdBy Pm        @relation("DsMeetingCreator", fields: [createdById], references: [pmId], onDelete: Restrict)
+
+  @@index([scheduledAt])
+}
+
+// ============================================================================
+// ===== E07 · attendance · Attendance, ERP/Teams, leave =====================
+// ============================================================================
+
+enum AttendanceSource {
+  ERP
+  PM_ENTERED
+}
+
+enum IdentityKind {
+  TEAMS
+  ERP
+}
+
+enum MeetingAttendanceStatus {
+  ATTENDED
+  REPORT_PENDING
+  UNMAPPED // Teams name not mapped to a user yet
+}
+
+enum LeaveType {
+  PERSONAL
+  ANNUAL
+  OTHER_APPROVED
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+enum ReconciliationStatus {
+  OPEN
+  RESOLVED
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+// Maps a Teams / ERP identity to a trainee.
+model IdentityMapping {
+  id          String       @id @default(uuid())
+  workspaceId String
+  userId      String
+  kind        IdentityKind
+  externalId  String // Teams display name / email, or ERP employee id
+  mappedById  String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  mappedBy  Pm        @relation("IdentityMapper", fields: [mappedById], references: [pmId], onDelete: Restrict)
+
+  @@unique([workspaceId, kind, externalId])
+  @@index([userId])
+}
+
+model Attendance {
+  id          String    @id @default(uuid())
+  workspaceId String
+  userId      String
+  date        DateTime  @db.Date
+  entryTime   DateTime? @db.Time(0)
+  exitTime    DateTime? @db.Time(0) // DB: after entryTime
+
+  hours        Decimal?         @db.Decimal(4, 1)
+  lateMinutes  Int              @default(0) // FIX: "Late" (FR-ATT-03)
+  isOfficeTrip Boolean          @default(false) // FIX: "office trip" tile (FR-ATT-02)
+  source       AttendanceSource @default(ERP) // FIX: row marked "Manual (PM-entered)" (US-74)
+  enteredById  String? // FIX: the PM who entered it (FR-ATT-04)
+
+  syncedAt  DateTime? // PRD v1: empty for PM_ENTERED rows
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  enteredBy Pm?       @relation("AttendanceEnteredBy", fields: [enteredById], references: [pmId], onDelete: Restrict) // FIX: was Pm[] (accidental many-to-many)
+
+  @@unique([userId, date]) // a manual record is refused if one exists, use a reconciliation request
+  @@index([workspaceId, date])
+}
+
+model MeetingAttendance {
+  id            String  @id @default(uuid())
+  workspaceId   String
+  userId        String? // empty while UNMAPPED
+  teamsIdentity String
+  meeting       String // FIX: which meeting
+
+  scheduledStart  DateTime
+  firstJoinAt     DateTime?
+  durationMinutes Int?
+  lateMinutes     Int?
+  status          MeetingAttendanceStatus @default(REPORT_PENDING) // FIX: pending is not an absence; UNMAPPED until mapped (FR-ATT-05)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User?     @relation(fields: [userId], references: [userId], onDelete: Restrict)
+
+  // back-relations (generated)
+  meetingIntervals MeetingInterval[]
+
+  @@index([userId, scheduledStart])
+}
+
+model MeetingInterval {
+  id                  String   @id @default(uuid())
+  workspaceId         String
+  meetingAttendanceId String
+  joinedAt            DateTime
+  leftAt              DateTime
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  meetingAttendance MeetingAttendance @relation(fields: [meetingAttendanceId], references: [id], onDelete: Restrict)
+
+  @@index([meetingAttendanceId])
+}
+
+// One run of an ERP / Teams sync.
+model SyncRun {
+  id             String         @id @default(uuid())
+  workspaceId    String
+  integrationKey IntegrationKey
+  status         SyncStatus     @default(RUNNING)
+  startedAt      DateTime       @default(now())
+  finishedAt     DateTime?
+  recordsSynced  Int            @default(0)
+  error          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  @@index([integrationKey, startedAt])
+}
+
+// PRD v1: public holidays come from ERP (FR-ATT-03, Q6 decided). Written by the nightly ERP sync.
+model PublicHoliday {
+  id          String   @id @default(uuid())
+  workspaceId String
+  date        DateTime @db.Date
+  name        String // FIX: holiday name on the ERP tab
+  syncedAt    DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, date])
+}
+
+model LeaveRequest {
+  id          String      @id @default(uuid())
+  workspaceId String
+  userId      String
+  startDate   DateTime    @db.Date
+  endDate     DateTime    @db.Date // DB: not before startDate
+  type        LeaveType
+  reason      String      @db.Text
+  status      LeaveStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+
+  // back-relations (generated)
+  leaveDecision LeaveDecision? // PRD v1: one decision per request
+
+  @@index([userId, status])
+}
+
+model LeaveDecision {
+  id             String      @id @default(uuid())
+  workspaceId    String
+  leaveRequestId String
+  decidedById    String
+  outcome        LeaveStatus // APPROVED or DECLINED
+  note           String      @db.Text // required by the UI
+  decidedAt      DateTime    @default(now()) // FIX
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Restrict)
+  decidedBy    Pm           @relation("LeaveDecider", fields: [decidedById], references: [pmId], onDelete: Restrict)
+
+  @@unique([leaveRequestId]) // PRD v1: a leave request is decided once
+}
+
+// Trainee asks to correct attendance for one or more dates.
+model ReconciliationRequest {
+  id           String               @id @default(uuid())
+  workspaceId  String
+  userId       String
+  reason       String               @db.Text
+  status       ReconciliationStatus @default(OPEN)
+  resolvedById String?
+  resolvedAt   DateTime? // FIX
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user       User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  resolvedBy Pm?       @relation("ReconciliationResolver", fields: [resolvedById], references: [pmId], onDelete: Restrict)
+
+  // back-relations (generated)
+  reconciliationDates ReconciliationDate[]
+
+  @@index([userId, status])
+}
+
+model ReconciliationDate {
+  id          String   @id @default(uuid())
+  workspaceId String
+  requestId   String
+  date        DateTime @db.Date
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  request   ReconciliationRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+
+  @@unique([requestId, date])
+}
+
+// ============================================================================
+// ===== E08 · reports · Report, PDF, mail ===================================
+// ============================================================================
+
+enum ReportPeriodType {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  FULL // full training period
+}
+
+enum MailStatus {
+  QUEUED
+  ACCEPTED
+  FAILED
+}
+
+enum MailPurpose {
+  REPORT
+  TASK_OWNER_APPROVAL
+}
+
+// One report per trainee and period. `sections` is the current editable draft with the
+// 7 fixed sections: Skill analysis result, Courses result, Proctoring result,
+// L&D feedback, Attendance, Gamification, Sprint.
+model Report {
+  id          String           @id @default(uuid())
+  workspaceId String
+  userId      String
+  periodType  ReportPeriodType
+  periodStart DateTime         @db.Date
+  periodEnd   DateTime         @db.Date
+  sections    Json
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+
+  // back-relations (generated)
+  reportVersions ReportVersion[]
+  mailDeliveries MailDelivery[]
+
+  @@unique([userId, periodType, periodStart, periodEnd])
+}
+
+// PRD v1 (FR-RPT-04, FR-RPT-06): every save adds a version (v1.0, v2.0 ...). Publish marks a
+// version published; the user sees only versions with publishedAt. Replaces the earlier
+// ReportDraftVersion + ReportSnapshot pair, so drafts also get a version number in the picker.
+model ReportVersion {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  reportId      String
+  version       String // "1.0", "2.0"
+  sections      Json // the 7 sections with PM notes and source labels
+  note          String?   @db.Text
+  savedById     String
+  savedAt       DateTime  @default(now())
+  publishedById String?
+  publishedAt   DateTime? // set = visible to the user
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  report      Report    @relation(fields: [reportId], references: [id], onDelete: Restrict)
+  savedBy     Pm        @relation("ReportVersionSaver", fields: [savedById], references: [pmId], onDelete: Restrict)
+  publishedBy Pm?       @relation("ReportVersionPublisher", fields: [publishedById], references: [pmId], onDelete: Restrict)
+
+  // back-relations (generated)
+  reportFiles    ReportFile[]
+  mailDeliveries MailDelivery[]
+
+  @@unique([reportId, version])
+  @@index([reportId, publishedAt])
+}
+
+// "Make PDF". Only the path is stored, storage provider not decided yet.
+model ReportFile {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  versionId     String // PRD v1: was snapshotId
+  filePath      String
+  generatedById String
+  generatedAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  version     ReportVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  generatedBy Pm            @relation("ReportFileGenerator", fields: [generatedById], references: [pmId], onDelete: Restrict)
+
+  @@index([versionId])
+}
+
+// Email history. Used for report emails and for task-owner approval emails.
+model MailDelivery {
+  id              String      @id @default(uuid())
+  workspaceId     String
+  purpose         MailPurpose
+  reportId        String? // purpose = REPORT
+  reportVersionId String? // PRD v1: which version was emailed
+  sprintTaskId    String? // purpose = TASK_OWNER_APPROVAL
+  recipient       String
+  subject         String
+  status          MailStatus  @default(QUEUED)
+  attempts        Int         @default(0)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  report        Report?        @relation(fields: [reportId], references: [id], onDelete: Restrict)
+  reportVersion ReportVersion? @relation(fields: [reportVersionId], references: [id], onDelete: Restrict)
+  sprintTask    SprintTask?    @relation(fields: [sprintTaskId], references: [id], onDelete: Restrict)
+
+  // back-relations (generated)
+  mailAttempts MailAttempt[]
+
+  @@index([reportId])
+  @@index([sprintTaskId])
+  @@index([status])
+}
+
+model MailAttempt {
+  id          String     @id @default(uuid())
+  workspaceId String
+  deliveryId  String
+  attemptNo   Int
+  status      MailStatus
+  error       String?
+  attemptedAt DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  delivery  MailDelivery @relation(fields: [deliveryId], references: [id], onDelete: Restrict)
+
+  @@unique([deliveryId, attemptNo])
+}
+
+// ============================================================================
+// ===== E09 · growth-core · XP, level, streak, badge ========================
+// ============================================================================
+
+enum XpSource {
+  ON_TIME_SPRINT
+  VERIFIED_MODULE
+  FINAL_ASSESSMENT
+  KUDOS
+  QUEST
+  MANUAL_ADJUSTMENT
+  // PRD v1: STREAK_MILESTONE removed, never awarded in v1 (the XpRule value stays, Q12)
+}
+
+enum XpStatus {
+  PENDING
+  AWARDED
+  HELD
+  REJECTED
+  REVERSED
+}
+
+enum FreezeSource {
+  LEAVE
+  HOLIDAY
+}
+
+enum BadgeKind {
+  BEHAVIORAL
+  SPECIAL
+}
+
+enum BadgeRuleType {
+  ON_TIME_SPRINT_STREAK // threshold = consecutive on-time sprints
+  SPRINT_STREAK // threshold = streak length in working days
+  KUDOS_DISTINCT_SENDERS // threshold = approved kudos from different people
+  MANUAL // Special: the PM awards it
+}
+
+enum BadgeAwardSource {
+  AUTOMATIC
+  MANUAL
+}
+
+// XP rules for the workspace (one row). Settings > XP rules & levels. Hackathon XP removed in the UI.
+model XpRule {
+  id                      String   @id @default(uuid())
+  workspaceId             String   @unique
+  verifiedModule          Int      @default(10)
+  verifiedModuleDailyCap  Int      @default(30)
+  onTimeSprint            Int      @default(20)
+  finalAssessment         Int      @default(40)
+  kudos                   Int      @default(5)
+  kudosSendLimitPerWeek   Int      @default(3)
+  kudosCooldownDays       Int      @default(7)
+  kudosReceivedCapPerWeek Int      @default(15)
+  streakMilestone         Int      @default(25)
+  streakMilestoneDays     Int      @default(5)
+  pmReviewMultiplier      Decimal  @default(1) @db.Decimal(4, 2)
+  engagementDropAlertPct  Int      @default(30)
+  sprintCutoff            String   @default("10:00") // HH:MM, sprints after this are late
+  updatedById             String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  updatedBy Pm?       @relation("XpRuleUpdater", fields: [updatedById], references: [pmId], onDelete: Restrict)
+  // DB: CHECK all numbers >= 0
+}
+
+// Levels (Rookie 0, Builder 250 ...). First level must start at 0, thresholds increase.
+model Level {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  minXp       Int
+  retiredAt   DateTime? // an edited level set keeps the old rows
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, retiredAt])
+}
+
+// XP is an append-only ledger. `key` makes awarding idempotent (e.g. "sprint:<trainee>:<date>").
+model XpEvent {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String
+  source      XpSource
+  amount      Int
+  status      XpStatus @default(PENDING)
+  key         String
+  evidence    String
+  reason      String? // PM reason on review / adjustment
+  flag        String? // e.g. "Suspicious exchange", "Weekly received cap reached"
+  occurredOn  DateTime @db.Date
+  kudosId     String?
+  questId     String?
+  attemptId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  kudos     Kudos?    @relation(fields: [kudosId], references: [id], onDelete: Restrict)
+  quest     Quest?    @relation(fields: [questId], references: [id], onDelete: Restrict)
+  attempt   Attempt?  @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+
+  // back-relations (generated)
+  xpReviews XpReview[]
+  // DB: a trainee's AWARDED total must not go below 0 after a manual adjustment
+
+  @@unique([workspaceId, key])
+  @@index([userId, status, occurredOn])
+}
+
+// Every PM decision on an XP event (review queue). Nothing is overwritten.
+model XpReview {
+  id          String   @id @default(uuid())
+  workspaceId String
+  xpEventId   String
+  reviewerId  String
+  fromStatus  XpStatus
+  toStatus    XpStatus
+  reason      String   @db.Text // required
+  reviewedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  xpEvent   XpEvent   @relation(fields: [xpEventId], references: [id], onDelete: Restrict)
+  reviewer  Pm        @relation("XpReviewer", fields: [reviewerId], references: [pmId], onDelete: Restrict)
+
+  @@index([xpEventId])
+}
+
+// Cache of the sprint streak (consecutive working days with a sprint, freezes keep it).
+// The UI computes it from SprintSubmission + StreakFreeze; this row is only a cache.
+model Streak {
+  id                 String    @id @default(uuid())
+  workspaceId        String
+  userId             String    @unique
+  current            Int       @default(0)
+  longest            Int       @default(0)
+  lastSubmissionDate DateTime? @db.Date
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+}
+
+model StreakFreeze {
+  id          String       @id @default(uuid())
+  workspaceId String
+  userId      String
+  date        DateTime     @db.Date
+  source      FreezeSource
+  reason      String
+  grantedById String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  grantedBy Pm        @relation("StreakFreezeGrantor", fields: [grantedById], references: [pmId], onDelete: Restrict)
+
+  @@unique([userId, date])
+}
+
+model Badge {
+  id          String        @id @default(uuid())
+  workspaceId String
+  name        String
+  icon        String // emoji
+  kind        BadgeKind
+  criteria    String        @db.Text
+  ruleType    BadgeRuleType @default(MANUAL)
+  threshold   Int?
+  createdById String
+  retiredAt   DateTime?
+  retiredById String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  createdBy Pm  @relation("BadgeCreator", fields: [createdById], references: [pmId], onDelete: Restrict)
+  retiredBy Pm? @relation("BadgeRetirer", fields: [retiredById], references: [pmId], onDelete: Restrict)
+
+  // back-relations (generated)
+  badgeAwards BadgeAward[]
+
+  @@unique([workspaceId, name])
+}
+
+model BadgeAward {
+  id              String           @id @default(uuid())
+  workspaceId     String
+  badgeId         String
+  userId          String
+  source          BadgeAwardSource
+  evidence        String           @db.Text // required
+  attemptId       String? // PRD v1: TECHNICAL only, the PM-finalised (FINAL) attempt
+  projectUrl      String? // PRD v1: TECHNICAL only, https link of the reviewed project
+  projectReviewed Boolean          @default(false) // PRD v1: TECHNICAL only, PM ticked "I have reviewed this user's project"
+  awardedById     String
+  revokedById     String?
+  revokeReason    String?          @db.Text
+  awardedAt       DateTime         @default(now())
+  revokedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  badge     Badge     @relation(fields: [badgeId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  awardedBy Pm        @relation("BadgeAwarder", fields: [awardedById], references: [pmId], onDelete: Restrict)
+  revokedBy Pm?       @relation("BadgeRevoker", fields: [revokedById], references: [pmId], onDelete: Restrict)
+  attempt   Attempt?  @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  // DB: CHECK for TECHNICAL badges: attemptId, projectUrl (https) and projectReviewed = true
+
+  @@unique([badgeId, userId]) // a badge is earned once
+  @@index([userId, revokedAt])
+}
+
+// ============================================================================
+// ===== E10 · engagement · Quest, leaderboard, kudos ========================
+// ============================================================================
+
+enum KudosCategory {
+  HELPFUL
+  GREAT_EXPLANATION
+  TEAMWORK
+}
+
+model Quest {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String   @db.Text
+  target      Int // DB: CHECK >= 1
+  reward      Int // XP
+  startDate   DateTime @db.Date
+  endDate     DateTime @db.Date // DB: not before startDate
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  createdBy Pm        @relation("QuestCreator", fields: [createdById], references: [pmId], onDelete: Restrict)
+
+  // back-relations (generated)
+  xpEvents        XpEvent[]
+  questProgresses QuestProgress[]
+
+  @@index([workspaceId, startDate, endDate])
+}
+
+model QuestProgress {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  questId      String
+  userId       String
+  count        Int       @default(0)
+  verifiedById String?
+  verifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  quest      Quest     @relation(fields: [questId], references: [id], onDelete: Restrict)
+  user       User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  verifiedBy Pm?       @relation("QuestVerifier", fields: [verifiedById], references: [pmId], onDelete: Restrict)
+
+  @@unique([questId, userId])
+  @@index([userId])
+}
+
+// "Hide me from the leaderboard" (Profile & settings).
+model LeaderboardPreference {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String   @unique
+  hidden      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
+}
+
+model Kudos {
+  id          String        @id @default(uuid())
+  workspaceId String
+  fromUserId  String
+  toUserId    String
+  category    KudosCategory
+  message     String        @db.Text
+  sentOn      DateTime      @db.Date
+  suspicious  Boolean       @default(false) // mutual kudos in the same week
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  fromUser  User      @relation("KudosSent", fields: [fromUserId], references: [userId], onDelete: Restrict)
+  toUser    User      @relation("KudosReceived", fields: [toUserId], references: [userId], onDelete: Restrict)
+
+  // back-relations (generated)
+  xpEvents XpEvent[]
+  // DB: CHECK fromUserId <> toUserId
+
+  @@index([fromUserId, sentOn])
+  @@index([toUserId, sentOn])
+}

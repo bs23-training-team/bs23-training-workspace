@@ -1,83 +1,83 @@
-# Prisma schema (one schema, many files)
+# Prisma schema
 
-Prisma reads **every `.prisma` file in this folder** as one schema. There is one shared
-migration history in `../migrations`. There are no per-person databases.
+All models live in **one file**: `schema.prisma`. Prisma reads every `.prisma` file in this folder
+as one schema, so the folder has only these files:
 
 | File | Owner | Contents |
 |---|---|---|
-| `base.prisma` | E11 | generator + datasource only |
-| `identity.prisma` | E01 | User, Workspace, Session, Notification, OutboxEvent… |
-| `directory.prisma` | E02 | TraineeProfile, Team, Membership, L&D feedback… |
-| `assessment.prisma` | E03 | Expertise, questions, attempts, results, appeals… |
-| `catalog.prisma` | E04 | Course, CourseVersion, Topic, Assignment, Request… |
-| `learning.prisma` | E05 | LearnerTopicState, LessonProgress… |
-| `sprint.prisma` | E06 | Task, Submission, SheetCellVersion, DSMeeting… |
-| `attendance.prisma` | E07 | IdentityMapping, Attendance, LeaveRequest… |
-| `reports.prisma` | E08 | ReportDraftVersion, Snapshot, MailDelivery… |
-| `growth-core.prisma` | E09 | XPRule, XPEvent, Streak, Badge… |
-| `engagement.prisma` | E10 | Quest, Hackathon, Kudos, LeaderboardPreference… |
+| `base.prisma` | E11 | generator + datasource only. No models here. |
+| `schema.prisma` | E11 (combined from the E01–E10 drafts) | every model and enum, one section per module |
 
-> **Process (team decision, 2026-11-06):** Day 2–3 each owner writes a draft in their own file
-> below, on the branch `schema/v1`, without migrations. On Day 4 **E10** combines all drafts into one
-> `schema.prisma` (one section per module) and deletes these files; **E11** creates the initial
-> migration. After that, everyone edits only their own section of `schema.prisma`. The examples below
-> use a module file; after Day 4 the same steps apply to your section of `schema.prisma`.
+The migration history is in `../migrations`. The first migration, `*_init`, was merged on
+2026-11-19 (PR #12). It also contains hand-written SQL at the end (CHECK constraints, partial
+unique indexes, triggers) for the rules marked `// DB:` in `schema.prisma`.
 
-Every file already exists. Some are still empty: write your draft models there on Day 2-3, run
-`pnpm db:validate`, and push to `schema/v1`. **The `.prisma` file is the deliverable.** A short design
-note in `docs/data-model/<module>.md` is optional and does not replace it, because E10 combines the
-`.prisma` drafts on Day 4. Do not create new `.prisma` files; ask E10 + E11 if you think one is needed.
+Do not create new `.prisma` files. Ask E11 if you think one is needed.
+
+## Sections in `schema.prisma`
+
+| Section | Module | Main models |
+|---|---|---|
+| E01 · identity | E01 | Workspace, Pm, User, Credential, AuthToken, Session, Notification, OutboxEvent, Integration |
+| E02 · directory | E02 | UserSkill, Team, Membership, FeedbackVersion |
+| E03 · assessment | E03 | Skill, QuestionSet, Question, ExpertiseVersion, Attempt, Response, Appeal, RetakeRequest |
+| E04 · catalog | E04 | Course, CourseModule, LessonContent, CourseAssignment, CourseRequest |
+| E05 · learning | E05 | LearnerTopicState, LessonProgress, CompletionEvent |
+| E06 · sprint | E06 | TaskOwner, SprintTask, SprintSubmission, SprintWeek, DsSheetCell, DsMeeting |
+| E07 · attendance | E07 | IdentityMapping, Attendance, MeetingAttendance, PublicHoliday, LeaveRequest |
+| E08 · reports | E08 | Report, ReportVersion, ReportFile, MailDelivery |
+| E09 · growth-core | E09 | XpRule, Level, XpEvent, Streak, Badge, BadgeAward |
+| E10 · engagement | E10 | Quest, QuestProgress, LeaderboardPreference, Kudos |
 
 ## Rules
 
-- Edit **only your own file**. Relations to another module's model are fine
-  (e.g. `trainee TraineeProfile @relation(...)`), but changing their model needs their review.
-- Every domain model has `workspaceId`, `createdAt`, `updatedAt` (SRS p.8).
-- Use `@@unique` for the uniqueness rules in the SRS, and `@@index` on fields you filter by.
-- Never cascade-delete historical evidence (`onDelete: Restrict` is the safe default).
-- One migration per PR. Read `CONTRIBUTING.md` section 5 before creating one.
+- Change **only your own section**. A relation to another module's model is fine, but it also adds
+  a back-relation field in their section: tell them in the PR.
+- Every model has `workspaceId` (with a relation to `Workspace`), `createdAt` and `updatedAt`.
+- Every relation uses `onDelete: Restrict`. Never `Cascade`: history is never deleted.
+- A list field (`Something[]`) needs a matching `@relation(fields: [...], references: [...])` on the
+  other side. Without it Prisma silently creates a hidden join table.
+- Add `@@index` on a foreign key you will filter by. Prisma does not index foreign keys by itself.
+- A rule Prisma cannot express (CHECK, partial unique index) is written as a `// DB:` comment, and
+  its SQL goes at the end of your migration's `migration.sql`.
+- `Pm.pmId` (e.g. `PM002`) and `User.userId` (e.g. `BS23001`) are primary keys and never change.
+  See [ADR 0003](../../../../docs/adr/0003-login-ids-as-primary-keys.md).
+- Read `CONTRIBUTING.md` section 5 before creating a migration.
 
-## How to add your models (example: E04)
+## How to change the schema (example: E04 adds a column)
 
-**Order matters:** E01 (`User`, workspace) and E02 (`TraineeProfile`, `Team`) merge first, because
-almost every other model points to them.
-
-1. Start from the latest `develop` and start the local database:
+1. Start from the latest `develop`:
    ```bash
-   git checkout develop && git pull
-   git checkout -b feat/e04-catalog-schema
+   git checkout develop
+   git pull
+   git checkout -b feat/e04-course-level
+   pnpm install
    pnpm infra:up
+   pnpm db:deploy
    ```
-2. Write your models in **your** file, using your approved data model doc:
-   ```prisma
-   model Course {
-     id          String   @id @default(uuid())
-     workspaceId String
-     title       String
-     track       String
-     description String
-     createdAt   DateTime @default(now())
-     updatedAt   DateTime @updatedAt
-
-     @@unique([workspaceId, title])
-     @@index([workspaceId])
-   }
-   ```
-   A relation to another module's model (e.g. `trainee TraineeProfile @relation(...)`) also adds the
-   back-relation field in **their** file. Add them as a reviewer.
-3. Check it and create the migration on your local database:
+2. Edit your section of `schema.prisma`, then check it:
    ```bash
    pnpm db:validate
-   pnpm db:migrate --name catalog_init
-   pnpm db:studio        # optional: look at the tables in the browser
+   pnpm --filter api exec prisma format
    ```
-4. Commit **both** your `.prisma` file and the new folder in `prisma/migrations/`, then open a PR:
+3. Create the migration without applying it, and read the SQL:
    ```bash
-   git add apps/api/prisma/
-   git commit -m "feat(catalog): add Course model"
-   git push -u origin feat/e04-catalog-schema
+   pnpm db:migrate --name course_level --create-only
    ```
-   E10 + E11 review every schema PR (CODEOWNERS).
+   Open the new `migrations/*_course_level/migration.sql`. It must not contain `DROP`,
+   `ON DELETE CASCADE` or `CREATE TABLE "_` (a hidden join table). Add any `// DB:` SQL at the end.
+4. Apply it and regenerate the client:
+   ```bash
+   pnpm db:migrate
+   pnpm db:generate
+   ```
+5. Commit **both** `schema.prisma` and the new migration folder, then open a PR to `develop`.
+   E11 reviews every schema PR. Wait for the CI check to be green.
+   ```bash
+   git add apps/api/prisma
+   git commit -m "feat(catalog): add level to Course"
+   git push -u origin feat/e04-course-level
+   ```
 
 ### If someone else merged a migration before you
 
@@ -86,9 +86,9 @@ Your migration must come **after** theirs, so recreate it:
 ```bash
 git fetch origin
 git rebase origin/develop
-rm -rf apps/api/prisma/migrations/*_catalog_init
-pnpm db:migrate --name catalog_init
-git add apps/api/prisma/
+rm -rf apps/api/prisma/migrations/*_course_level
+pnpm db:migrate --name course_level
+git add apps/api/prisma
 git commit -m "feat(catalog): regenerate migration after rebase"
 git push --force-with-lease
 ```
@@ -99,8 +99,11 @@ CI fails when the schema and the migrations do not match, so this mistake is cau
 ## Commands (run from the repo root)
 
 ```bash
-pnpm db:generate                     # regenerate the TypeScript client after editing a .prisma file
-pnpm db:validate                     # check the schema is valid
-pnpm db:migrate --name catalog_init  # create + apply a migration to your LOCAL database
-pnpm db:studio                       # browse your local data in the browser
+pnpm db:validate        # check the schema is valid
+pnpm db:generate        # regenerate the TypeScript client (needed after every pull with schema changes)
+pnpm db:deploy          # apply the merged migrations to your local database
+pnpm db:migrate --name <reason> --create-only   # create a new migration without applying it
+pnpm db:migrate         # apply pending migrations to your LOCAL database
+pnpm db:status          # show which migrations are applied
+pnpm db:studio          # browse your local data in the browser
 ```

@@ -126,9 +126,10 @@ change it, so these rules are strict:
    pipeline does that.
 6. Seed data (including the 50-course catalog) is for local/test/staging only, never production.
 
-After Day 4 all models live in one file, `apps/api/prisma/schema/schema.prisma`, with one section
-per module. **Edit only your own section.** Schema PRs are approved by E11.
-Before Day 4, schema drafts go only to the `schema/v1` branch (see `docs/week1-team-brief.md`).
+All models live in one file, `apps/api/prisma/schema/schema.prisma`, with one section per module.
+**Edit only your own section.** Schema PRs are approved by E11. The step-by-step guide is in
+`apps/api/prisma/schema/README.md`. `Pm.pmId` and `User.userId` never change
+(see `docs/adr/0003-login-ids-as-primary-keys.md`).
 
 ---
 

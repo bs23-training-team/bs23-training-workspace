@@ -105,5 +105,6 @@ pnpm db:deploy          # apply the merged migrations to your local database
 pnpm db:migrate --name <reason> --create-only   # create a new migration without applying it
 pnpm db:migrate         # apply pending migrations to your LOCAL database
 pnpm db:status          # show which migrations are applied
+pnpm db:seed            # add demo data: 2 PMs, 4 users, 1 team (local/test only, safe to re-run)
 pnpm db:studio          # browse your local data in the browser
 ```

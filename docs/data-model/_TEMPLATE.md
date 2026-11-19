@@ -1,7 +1,8 @@
 # Data model: <module name> (E0X)
 
 > Copy this file to `docs/data-model/<module>.md` and fill it in.
-> Keep it short. Tables and bullet points are fine. Reviewed by E01 + affected owners.
+> Optional. The deliverable is your `apps/api/prisma/schema/<module>.prisma` draft (pushed to `schema/v1`);
+> this note only explains your design choices. Keep it short. Reviewed by E01 + affected owners.
 
 **Owner:** E0X – <your name>
 **Related requirements:** <e.g. Epic 05, US13–US15, COURSE-01..03>

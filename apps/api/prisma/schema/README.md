@@ -23,8 +23,10 @@ migration history in `../migrations`. There are no per-person databases.
 > migration. After that, everyone edits only their own section of `schema.prisma`. The examples below
 > use a module file; after Day 4 the same steps apply to your section of `schema.prisma`.
 
-Every file already exists and is **empty on purpose**. Add your models only after your data model
-is ready. Do not create new `.prisma` files; ask E10 + E11 if you think one is needed.
+Every file already exists. Some are still empty: write your draft models there on Day 2-3, run
+`pnpm db:validate`, and push to `schema/v1`. **The `.prisma` file is the deliverable.** A short design
+note in `docs/data-model/<module>.md` is optional and does not replace it, because E10 combines the
+`.prisma` drafts on Day 4. Do not create new `.prisma` files; ask E10 + E11 if you think one is needed.
 
 ## Rules
 

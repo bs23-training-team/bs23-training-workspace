@@ -1,0 +1,33 @@
+# PR title must be a Conventional Commit (see CONTRIBUTING.md section 3).
+# Squash merge uses the PR title as the commit message on develop, so it must be clean.
+name: PR title
+
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    name: PR title
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check PR title format
+        env:
+          # Passed through env, never interpolated into the script (avoids shell injection).
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|chore|docs|test|refactor)(\([a-z0-9-]+\))?: .+'
+          if printf '%s' "$PR_TITLE" | grep -Eq "$pattern"; then
+            echo "PR title OK: $PR_TITLE"
+          else
+            echo "::error::PR title must look like: type(scope): short description"
+            echo "::error::Examples: feat(catalog): add course request endpoint | fix(attendance): treat missing checkout as Unknown | chore(e11): cache pnpm store"
+            echo "::error::Allowed types: feat, fix, chore, docs, test, refactor. Edit the PR title (no new commit needed)."
+            echo "Your title was: $PR_TITLE"
+            exit 1
+          fi

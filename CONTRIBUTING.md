@@ -86,6 +86,10 @@ chore(e11): cache pnpm store in CI
 
 Format: `type(module): short description in present tense`.
 
+**The PR title must follow the same format.** CI checks it (check name: `PR title`). If it fails,
+just edit the PR title on GitHub; you do not need a new commit. Allowed types: `feat`, `fix`,
+`chore`, `docs`, `test`, `refactor`. The scope is your module name (or `e11` for infra).
+
 ---
 
 ## 4. Pull requests

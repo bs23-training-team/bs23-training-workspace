@@ -1,0 +1,36 @@
+# Adds labels (module, schema, migration, infra...) from the changed paths. Labels are only a
+# review aid; this workflow never blocks a merge.
+name: PR labels
+
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  label:
+    name: Label PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    # PRs from forks get a read-only token; skip them instead of failing.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Apply labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          labels="$(gh pr diff "$PR_NUMBER" --name-only | bash scripts/pr-labels.sh)"
+          echo "Labels: ${labels:-none}"
+          for l in $labels; do
+            gh label create "$l" --force >/dev/null 2>&1 || true
+            gh pr edit "$PR_NUMBER" --add-label "$l"
+          done

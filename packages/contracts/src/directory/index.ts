@@ -6,6 +6,9 @@ export * from './profile.js';
 export * from './edit.js';
 export * from './archive.js';
 export * from './export.js';
+export * from './me.js';
+export * from './search.js';
+export * from './skills.js';
 
 export const POSITIONS = ['FRONTEND', 'BACKEND', 'FULLSTACK', 'QA'] as const;
 export type Position = (typeof POSITIONS)[number];

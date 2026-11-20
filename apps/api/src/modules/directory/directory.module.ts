@@ -8,6 +8,12 @@ import { ExportController } from './export.controller.js';
 import { ExportService } from './export.service.js';
 import { FeedbackController } from './feedback.controller.js';
 import { FeedbackService } from './feedback.service.js';
+import { MyDirectoryController } from './my-directory.controller.js';
+import { MyDirectoryService } from './my-directory.service.js';
+import { SearchController } from './search.controller.js';
+import { SearchService } from './search.service.js';
+import { SkillsController } from './skills.controller.js';
+import { SkillsService } from './skills.service.js';
 import { TeamsController } from './teams.controller.js';
 import { TeamsService } from './teams.service.js';
 import { UserEditController } from './user-edit.controller.js';
@@ -29,6 +35,9 @@ import { UserProfileService } from './user-profile.service.js';
     UserEditController,
     ArchiveController,
     ExportController,
+    MyDirectoryController,
+    SearchController,
+    SkillsController,
   ],
   providers: [
     DirectoryService,
@@ -38,6 +47,9 @@ import { UserProfileService } from './user-profile.service.js';
     UserEditService,
     ArchiveService,
     ExportService,
+    MyDirectoryService,
+    SearchService,
+    SkillsService,
   ],
   exports: [
     DirectoryService,
@@ -47,6 +59,9 @@ import { UserProfileService } from './user-profile.service.js';
     UserEditService,
     ArchiveService,
     ExportService,
+    MyDirectoryService,
+    SearchService,
+    SkillsService,
   ],
 })
 export class DirectoryModule {}

@@ -36,6 +36,16 @@ export interface AwardedTotalsQuery {
   to?: Date;
 }
 
+export interface SumXpQuery {
+  userId: string;
+  /** Only events with one of these statuses are summed. */
+  statuses: XpStatus[];
+  source?: XpSource;
+  /** Inclusive, matched against occurredOn (a day). */
+  from: Date;
+  to: Date;
+}
+
 /**
  * The write side of the XP ledger (IF-01). Only growth-core writes XpEvent: engagement and
  * the other modules call this instead of touching the table.
@@ -45,5 +55,7 @@ export interface XpLedger {
   createEvent(input: NewXpEvent, db?: Db): Promise<CreateEventResult>;
   awardedTotal(userId: string, db?: Db): Promise<number>;
   awardedTotals(query: AwardedTotalsQuery, db?: Db): Promise<Map<string, number>>;
+  /** Sum of a user's XP for the given statuses inside a day window (for the kudos weekly cap). */
+  sumXp(query: SumXpQuery, db?: Db): Promise<number>;
   holdPending(kudosIds: string[], flag: string, db?: Db): Promise<void>;
 }

@@ -138,6 +138,25 @@ describe('XpLedgerService (database)', () => {
     expect(after.has(userB)).toBe(true); // a user with no events is still in the map, as 0
   });
 
+  it('sums a user\'s XP for chosen statuses, a source and a day window (the kudos weekly cap)', async () => {
+    const q = {
+      userId: userA,
+      statuses: ['PENDING', 'HELD', 'AWARDED'] as ('PENDING' | 'HELD' | 'AWARDED')[],
+      source: 'MANUAL_ADJUSTMENT' as const,
+      from: parseDay('2031-05-05'),
+      to: parseDay('2031-05-11'),
+    };
+    const before = await ledger.sumXp(q);
+    await ledger.createEvent(event({ amount: 4, status: 'PENDING', occurredOn: parseDay('2031-05-05') })); // edge, counts
+    await ledger.createEvent(event({ amount: 6, status: 'HELD', occurredOn: parseDay('2031-05-11') })); // edge, counts
+    await ledger.createEvent(event({ amount: 8, status: 'AWARDED', occurredOn: parseDay('2031-05-08') })); // counts
+    await ledger.createEvent(event({ amount: 100, status: 'REJECTED', occurredOn: parseDay('2031-05-08') })); // status excluded
+    await ledger.createEvent(event({ amount: 100, status: 'REVERSED', occurredOn: parseDay('2031-05-08') })); // status excluded
+    await ledger.createEvent(event({ amount: 100, status: 'AWARDED', occurredOn: parseDay('2031-05-12') })); // day outside
+    await ledger.createEvent(event({ amount: 100, status: 'AWARDED', source: 'QUEST', key: `quest:${randomUUID()}:${userA}`, occurredOn: parseDay('2031-05-08') })); // other source
+    expect(await ledger.sumXp(q)).toBe(before + 18);
+  });
+
   it('moves PENDING kudos events to HELD with a flag, leaving other statuses alone, and writes no review row', async () => {
     const mkKudos = async () => {
       const k = await prisma.kudos.create({
@@ -158,7 +177,7 @@ describe('XpLedgerService (database)', () => {
     const pending = await prisma.xpEvent.findUniqueOrThrow({ where: { workspaceId_key: { workspaceId, key: `kudos:${pendingId}` } } });
     const awarded = await prisma.xpEvent.findUniqueOrThrow({ where: { workspaceId_key: { workspaceId, key: `kudos:${awardedId}` } } });
     expect(pending).toMatchObject({ status: 'HELD', flag: 'Suspicious exchange' });
-    expect(awarded.status).toBe('AWARDED');
+    expect(awarded).toMatchObject({ status: 'AWARDED', flag: 'Suspicious exchange' }); // stays awarded, but flagged
     expect(await ownReviews()).toBe(0);
   });
 

@@ -2,8 +2,12 @@ import { Module } from '@nestjs/common';
 import { IdentityModule } from '../identity/identity.module.js';
 import { DirectoryController } from './directory.controller.js';
 import { DirectoryService } from './directory.service.js';
+import { FeedbackController } from './feedback.controller.js';
+import { FeedbackService } from './feedback.service.js';
 import { TeamsController } from './teams.controller.js';
 import { TeamsService } from './teams.service.js';
+import { UserProfileController } from './user-profile.controller.js';
+import { UserProfileService } from './user-profile.service.js';
 
 // Owner: E02. Already registered in src/app.module.ts: do not edit app.module.ts.
 // Add this module's controllers, providers (services) and exports here.
@@ -14,14 +18,20 @@ import { TeamsService } from './teams.service.js';
   controllers: [
     DirectoryController,
     TeamsController,
+    UserProfileController,
+    FeedbackController,
   ],
   providers: [
     DirectoryService,
     TeamsService,
+    UserProfileService,
+    FeedbackService,
   ],
   exports: [
     DirectoryService,
     TeamsService,
+    UserProfileService,
+    FeedbackService,
   ],
 })
 export class DirectoryModule {}

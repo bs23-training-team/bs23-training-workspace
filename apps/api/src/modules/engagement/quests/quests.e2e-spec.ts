@@ -239,6 +239,28 @@ describe('QuestsService (database)', () => {
       expect(notices.userNotices).toHaveLength(1);
     });
 
+    it('is created ONCE when two quests of one user are verified at the same moment (the user lock orders them)', async () => {
+      await ledger.createEvent({
+        workspaceId,
+        userId: U1,
+        source: 'MANUAL_ADJUSTMENT',
+        amount: 40,
+        key: `manual:${randomUUID()}`,
+        evidence: 'starting XP',
+        occurredOn: parseDay('2026-11-01'),
+      }); // 40 XP: 10 short of Builder
+      const a = (await newQuest({ target: 1, reward: 20 })).questId;
+      const b = (await newQuest({ target: 1, reward: 20 })).questId;
+      await progress(a, U1, 1);
+      await progress(b, U1, 1);
+
+      await Promise.all([verify(a, U1), verify(b, U1)]);
+
+      expect(await ledger.awardedTotal(U1)).toBe(80);
+      // 40 -> 60 crosses Builder (50); 60 -> 80 stays inside it. Without the lock both would see 40 and both notify.
+      expect(notices.userNotices.filter((n) => n.category === 'Level up')).toHaveLength(1);
+    });
+
     it('is not created when the reward stays inside a level', async () => {
       const { questId } = await newQuest({ target: 1, reward: 20 });
       await progress(questId, U1, 1);
@@ -280,6 +302,21 @@ describe('QuestsService (database)', () => {
       expect((await quests.progressForUser(workspaceId, U1)).map((p) => p.userId)).toEqual([U1]);
       expect((await quests.progressForPm(workspaceId, 'PM001')).map((p) => p.userId).sort()).toEqual([U1, U2].sort());
       expect((await quests.progressForPm(workspaceId, 'PM002')).map((p) => p.userId)).toEqual([X1]);
+    });
+
+    it('a PM can narrow progress to one quest, and a verified row shows when it was verified', async () => {
+      const first = (await newQuest({ target: 1 })).questId;
+      const second = (await newQuest({ target: 1 })).questId;
+      await progress(first, U1, 1);
+      await progress(second, U1, 1);
+      await verify(first, U1);
+
+      const onlyFirst = await quests.progressForPm(workspaceId, 'PM001', first);
+      expect(onlyFirst).toHaveLength(1);
+      expect(onlyFirst[0]).toMatchObject({ questId: first, userId: U1 });
+      expect(onlyFirst[0]?.verifiedAt).toEqual(expect.any(String)); // verified
+      const unverified = (await quests.progressForPm(workspaceId, 'PM001', second))[0];
+      expect(unverified?.verifiedAt).toBeNull();
     });
   });
 });

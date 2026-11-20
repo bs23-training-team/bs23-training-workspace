@@ -346,6 +346,22 @@ describe('KudosService (database)', () => {
     });
   });
 
+  describe('paging', () => {
+    it('returns a page with a cursor, then the rest, newest first', async () => {
+      await send(U[0]!, U[1]!);
+      await send(U[0]!, U[2]!);
+      await send(U[0]!, U[3]!);
+      const viewer = { role: 'USER', userId: U[0]! } as const;
+      const first = await query.page({ workspaceId, viewer, limit: 2 });
+      expect(first.kudos).toHaveLength(2);
+      expect(first.nextCursor).toBe('2');
+      const second = await query.page({ workspaceId, viewer, limit: 2, cursor: first.nextCursor });
+      expect(second.kudos).toHaveLength(1);
+      expect(second.nextCursor).toBeNull();
+      expect(new Set([...first.kudos, ...second.kudos].map((k) => k.toUserId)).size).toBe(3); // no row twice
+    });
+  });
+
   describe('who sees what', () => {
     it('a user sees only the kudos they sent or received; a PM only those that involve their own users', async () => {
       const own = await send(U[0]!, U[1]!); // PM001 people

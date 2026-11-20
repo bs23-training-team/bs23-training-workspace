@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import type { BadgeKind, BadgeRuleType, FreezeSource } from '../../generated/prisma/enums.js';
 import { BadgesService } from './badges/badges.service.js';
+import { GrowthError } from './errors.js';
 import { CurrentActor, GamificationHttp, Roles } from './http/actor.guard.js';
 import { pmIdOf, userIdOf, type Actor } from './http/actor.js';
 import { bodyOf, oneOf, optNum, optStr, query, str } from './http/parse.js';
@@ -38,7 +39,11 @@ export class StreakBadgesController {
   @Get('pm/streak-freezes')
   @Roles('PM')
   freezesForPm(@CurrentActor() actor: Actor, @Query('userId') userId?: unknown) {
-    return this.streaks.listFreezesForPm(actor.workspaceId, pmIdOf(actor), query(userId) ?? '');
+    const id = query(userId);
+    if (!id) {
+      throw new GrowthError('VALIDATION', 'userId is required');
+    }
+    return this.streaks.listFreezesForPm(actor.workspaceId, pmIdOf(actor), id);
   }
 
   /** A user's own freezes: the date and source only, never the reason. */

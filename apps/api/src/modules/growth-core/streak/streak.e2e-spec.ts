@@ -172,6 +172,7 @@ describe('StreakService (database)', () => {
     it("refuses another PM's user (FORBIDDEN_SCOPE), for granting and for reading reasons", async () => {
       await expect(freeze(d('17'), 'x', 'PM002')).rejects.toMatchObject({ code: 'FORBIDDEN_SCOPE' });
       await expect(streaks.listFreezesForPm(workspaceId, 'PM002', USER)).rejects.toMatchObject({ code: 'FORBIDDEN_SCOPE' });
+      await expect(streaks.listFreezesForPm(workspaceId, 'PM001', 'BS99999')).rejects.toMatchObject({ code: 'NOT_FOUND' });
       expect(await prisma.streakFreeze.count({ where: { userId: USER } })).toBe(0);
     });
 

@@ -181,6 +181,11 @@ describe('XpLedgerService (database)', () => {
     expect(await ownReviews()).toBe(0);
   });
 
+  it('returns an empty map for an empty list of users', async () => {
+    const totals = await ledger.awardedTotals({ workspaceId, userIds: [] });
+    expect(totals.size).toBe(0);
+  });
+
   it('does nothing for an empty kudos list', async () => {
     await expect(ledger.holdPending([], 'x')).resolves.toBeUndefined();
   });

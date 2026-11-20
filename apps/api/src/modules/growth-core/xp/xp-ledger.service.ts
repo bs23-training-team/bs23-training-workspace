@@ -7,6 +7,7 @@ import type {
   AwardedTotalsQuery,
   CreateEventResult,
   NewXpEvent,
+  SumXpQuery,
   XpLedger,
 } from './xp-ledger.types.js';
 
@@ -98,10 +99,24 @@ export class XpLedgerService implements XpLedger {
     return totals;
   }
 
+  /** Sum of a user's XP with the given statuses, for events whose day is inside [from, to]. */
+  async sumXp(query: SumXpQuery, db: Db = this.prisma): Promise<number> {
+    const result = await db.xpEvent.aggregate({
+      where: {
+        userId: query.userId,
+        status: { in: query.statuses },
+        ...(query.source ? { source: query.source } : {}),
+        occurredOn: { gte: query.from, lte: query.to },
+      },
+      _sum: { amount: true },
+    });
+    return result._sum.amount ?? 0;
+  }
+
   /**
    * The system moves still-PENDING kudos events to HELD and sets a flag (a suspicious
-   * exchange). This is not a PM decision, so no XpReview row is written. Events that are
-   * already AWARDED, rejected or reversed are left alone.
+   * exchange). This is not a PM decision, so no XpReview row is written. An AWARDED event keeps
+   * its status but gets the flag; rejected and reversed events are left alone.
    */
   async holdPending(kudosIds: string[], flag: string, db: Db = this.prisma): Promise<void> {
     if (kudosIds.length === 0) {
@@ -110,6 +125,11 @@ export class XpLedgerService implements XpLedger {
     await db.xpEvent.updateMany({
       where: { kudosId: { in: kudosIds }, status: 'PENDING' },
       data: { status: 'HELD', flag },
+    });
+    // An already AWARDED event stays awarded (the PM may reverse it) but carries the flag.
+    await db.xpEvent.updateMany({
+      where: { kudosId: { in: kudosIds }, status: 'AWARDED', flag: null },
+      data: { flag },
     });
   }
 

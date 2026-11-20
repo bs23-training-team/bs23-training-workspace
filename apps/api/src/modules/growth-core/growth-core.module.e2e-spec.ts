@@ -5,6 +5,7 @@ import { validateEnv } from '../../config/env.validation.js';
 import { PrismaModule } from '../../prisma/prisma.module.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { GrowthCoreModule } from './growth-core.module.js';
+import { BadgesService } from './badges/badges.service.js';
 import { LevelsService } from './levels/levels.service.js';
 import { LEVELS } from './ports/levels.port.js';
 import { StreakService } from './streak/streak.service.js';
@@ -69,6 +70,7 @@ describe('GrowthCoreModule (wired, real database)', () => {
     expect(moduleRef.get(XpReviewService)).toBeInstanceOf(XpReviewService);
     expect(moduleRef.get(LEVELS)).toBeInstanceOf(LevelsService); // the IF-02 token points at the real service
     expect(moduleRef.get(StreakService)).toBeInstanceOf(StreakService);
+    expect(moduleRef.get(BadgesService)).toBeInstanceOf(BadgesService);
   });
 
   it('creates nothing for a late sprint', async () => {

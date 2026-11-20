@@ -1,6 +1,11 @@
 import { Module } from '@nestjs/common';
+import { ACTOR_RESOLVER, DenyAllActorResolver } from './http/actor.js';
 import { LevelsService } from './levels/levels.service.js';
 import { LEVELS } from './ports/levels.port.js';
+import { SettingsController } from './settings.controller.js';
+import { StreakBadgesController } from './streak-badges.controller.js';
+import { XpController } from './xp.controller.js';
+import { XpQueryService } from './xp/xp-query.service.js';
 import { BadgesService } from './badges/badges.service.js';
 import { EmptyKudosPort } from './badges/empty-kudos-port.js';
 import { CALENDAR_SOURCE } from './ports/calendar-source.port.js';
@@ -24,13 +29,14 @@ import { XpRulesService } from './xp/xp-rules.service.js';
 // Reference shape: src/health/ (docs/adr/0002-module-layering.md).
 @Module({
   imports: [],
-  controllers: [],
+  controllers: [XpController, SettingsController, StreakBadgesController],
   providers: [
     XpLedgerService,
     XpRulesService,
     RewardService,
     XpReviewService,
     XpAdjustmentService,
+    XpQueryService,
     LevelsService,
     { provide: LEVELS, useExisting: LevelsService },
     StreakService,
@@ -41,11 +47,13 @@ import { XpRulesService } from './xp/xp-rules.service.js';
     // Stand-in until E10 (engagement) provides IF-04.
     { provide: KUDOS, useClass: EmptyKudosPort },
     { provide: CLOCK, useValue: systemClock },
+    // Nobody is signed in until real auth (E01) provides a resolver under this token: routes answer 401.
+    { provide: ACTOR_RESOLVER, useClass: DenyAllActorResolver },
     { provide: USER_DIRECTORY, useClass: PrismaUserDirectory },
     // Stand-in until E01's notifications service exists: swap this provider, nothing else.
     { provide: NOTIFICATIONS, useClass: NoopNotificationPort },
   ],
   // The ledger and reward core are what other modules (engagement, sprint, assessment) call.
-  exports: [XpLedgerService, XpRulesService, RewardService, XpReviewService, XpAdjustmentService, LevelsService, LEVELS, StreakService, BadgesService],
+  exports: [XpLedgerService, XpRulesService, RewardService, XpReviewService, XpAdjustmentService, XpQueryService, LevelsService, LEVELS, StreakService, BadgesService],
 })
 export class GrowthCoreModule {}

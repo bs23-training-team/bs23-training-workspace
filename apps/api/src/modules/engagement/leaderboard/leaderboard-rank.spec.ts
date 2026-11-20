@@ -60,6 +60,22 @@ describe('rankCandidates', () => {
   });
 });
 
+describe('rankCandidates: a fully equal tie still has a stable order', () => {
+  it('two people with the same XP and the same name are ordered by user id', () => {
+    const ranked = rankCandidates([person('b', 'Sam', 10), person('a', 'Sam', 10)]);
+    expect(ranked.map((r) => r.userId)).toEqual(['a', 'b']);
+    expect(ranked.map((r) => r.rank)).toEqual([1, 1]);
+  });
+
+  it('two hidden people with the same XP are ordered by user id, never by name', () => {
+    const ranked = rankCandidates([
+      person('b', 'Aaron', 10, { hidden: true }),
+      person('a', 'Zed', 10, { hidden: true }),
+    ]);
+    expect(ranked.map((r) => r.userId)).toEqual(['a', 'b']);
+  });
+});
+
 describe('what each viewer sees', () => {
   const ranked = rankCandidates([
     person('me', 'Me Myself', 90, { level: 'Pro' }),

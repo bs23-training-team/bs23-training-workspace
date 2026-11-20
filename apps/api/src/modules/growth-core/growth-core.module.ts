@@ -7,7 +7,8 @@ import { StreakBadgesController } from './streak-badges.controller.js';
 import { XpController } from './xp.controller.js';
 import { XpQueryService } from './xp/xp-query.service.js';
 import { BadgesService } from './badges/badges.service.js';
-import { EmptyKudosPort } from './badges/empty-kudos-port.js';
+import { KudosQueryModule } from '../engagement/kudos/kudos-query.module.js';
+import { KudosQueryService } from '../engagement/kudos/kudos-query.service.js';
 import { CALENDAR_SOURCE } from './ports/calendar-source.port.js';
 import { KUDOS } from './ports/kudos.port.js';
 import { NOTIFICATIONS } from './ports/notification.port.js';
@@ -31,7 +32,9 @@ import { XpRulesService } from './xp/xp-rules.service.js';
 @Module({
   // E01's module: the routes run its JwtAuthGuard (it sets req.user). It is re-exported below so a module
   // that imports this one (engagement) can use the same guard.
-  imports: [IdentityModule],
+  // KudosQueryModule is engagement's IF-04 reader. It has no dependency on this module, so the
+  // two modules do not form a cycle.
+  imports: [IdentityModule, KudosQueryModule],
   controllers: [XpController, SettingsController, StreakBadgesController],
   providers: [
     XpLedgerService,
@@ -49,8 +52,8 @@ import { XpRulesService } from './xp/xp-rules.service.js';
     { provide: SPRINT_SOURCE, useClass: EmptySprintSource },
     { provide: CALENDAR_SOURCE, useClass: EmptyCalendarSource },
     BadgesService,
-    // Stand-in until E10 (engagement) provides IF-04.
-    { provide: KUDOS, useClass: EmptyKudosPort },
+    // IF-04: the badge rule KUDOS_DISTINCT_SENDERS reads kudos only through engagement's reader.
+    { provide: KUDOS, useExisting: KudosQueryService },
     { provide: CLOCK, useValue: systemClock },
     { provide: USER_DIRECTORY, useClass: PrismaUserDirectory },
     // Stand-in until E01's notifications service exists: swap this provider, nothing else.

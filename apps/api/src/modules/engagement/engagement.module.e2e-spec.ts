@@ -10,6 +10,9 @@ import { parseDay } from '../growth-core/time/org-time.js';
 import { XpReviewService } from '../growth-core/xp/xp-review.service.js';
 import { EngagementModule } from './engagement.module.js';
 import { KudosQueryService } from './kudos/kudos-query.service.js';
+import { LeaderboardPreferenceService } from './leaderboard/leaderboard-preference.service.js';
+import { LeaderboardService } from './leaderboard/leaderboard.service.js';
+import { QuestsService } from './quests/quests.service.js';
 import { KudosService } from './kudos/kudos.service.js';
 
 // The real Nest wiring of both modules with the real database: engagement sends kudos through
@@ -78,6 +81,12 @@ describe('EngagementModule + GrowthCoreModule (wired, real database)', () => {
   it('builds, and growth-core\'s KUDOS token is engagement\'s real IF-04 reader (not a stand-in)', () => {
     expect(kudos).toBeInstanceOf(KudosService);
     expect(moduleRef.get(KUDOS, { strict: false })).toBeInstanceOf(KudosQueryService);
+  });
+
+  it('resolves the leaderboard, preference and quest services with their dependencies (IF-01, IF-02 through growth-core)', () => {
+    expect(moduleRef.get(LeaderboardService)).toBeInstanceOf(LeaderboardService);
+    expect(moduleRef.get(LeaderboardPreferenceService)).toBeInstanceOf(LeaderboardPreferenceService);
+    expect(moduleRef.get(QuestsService)).toBeInstanceOf(QuestsService);
   });
 
   it('kudos from three people, approved by the PM, earn the kudos badge; a reversal takes it away', async () => {

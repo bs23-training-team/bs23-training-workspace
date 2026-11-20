@@ -138,6 +138,19 @@ describe('KudosService (database)', () => {
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
 
+    it('a refused kudos creates no notice at all (self, blank, archived, limit, cooldown)', async () => {
+      await send(U[0]!, U[1]!);
+      const sentSoFar = notices.userNotices.length + notices.pmNotices.length;
+      await expect(send(U[0]!, U[0]!)).rejects.toBeDefined();
+      await expect(send(U[0]!, U[2]!, { message: ' ' })).rejects.toBeDefined();
+      await expect(send(U[0]!, ARCH)).rejects.toBeDefined();
+      await expect(send(U[0]!, U[1]!)).rejects.toBeDefined(); // cooldown
+      await send(U[0]!, U[2]!);
+      await send(U[0]!, U[3]!);
+      await expect(send(U[0]!, U[4]!)).rejects.toBeDefined(); // limit
+      expect(notices.userNotices.length + notices.pmNotices.length).toBe(sentSoFar + 2); // only the two that worked
+    });
+
     it('the database itself refuses a kudos to oneself', async () => {
       await expect(
         prisma.kudos.create({

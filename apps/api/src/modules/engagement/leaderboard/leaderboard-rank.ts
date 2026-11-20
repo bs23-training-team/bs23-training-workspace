@@ -1,8 +1,11 @@
-import { GrowthError, addDays, weekStart, type DayString } from '../../growth-core/index.js';
+import { addDays, weekStart, type DayString } from '../../growth-core/index.js';
+import { MAX_PAGE, paginate } from '../paging.js';
+
+// The leaderboard pages with the shared helper; re-exported so the board's own tests can use it.
+export { MAX_PAGE, paginate };
 
 export type LeaderboardWindow = 'weekly' | 'monthly' | 'all';
 
-export const MAX_PAGE = 100;
 export const HIDDEN_NAME = 'Hidden user';
 
 /** One person on the board, before the viewer's privacy rules are applied. */
@@ -87,18 +90,4 @@ export function toPmRows(ranked: RankedCandidate[]): PmRow[] {
     level: c.level,
     hiddenFromPeers: c.hidden,
   }));
-}
-
-/** Position-based paging: the cursor is the index of the next row. */
-export function paginate<T>(rows: T[], cursor: string | null, limit = MAX_PAGE): { rows: T[]; nextCursor: string | null } {
-  let start = 0;
-  if (cursor !== null) {
-    if (!/^\d+$/.test(cursor)) {
-      throw new GrowthError('VALIDATION', 'The cursor is not valid');
-    }
-    start = Number(cursor);
-  }
-  const size = Math.min(limit, MAX_PAGE);
-  const page = rows.slice(start, start + size);
-  return { rows: page, nextCursor: start + size < rows.length ? String(start + size) : null };
 }

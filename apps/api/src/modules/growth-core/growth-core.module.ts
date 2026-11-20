@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
 import { LevelsService } from './levels/levels.service.js';
 import { LEVELS } from './ports/levels.port.js';
+import { BadgesService } from './badges/badges.service.js';
+import { EmptyKudosPort } from './badges/empty-kudos-port.js';
 import { CALENDAR_SOURCE } from './ports/calendar-source.port.js';
+import { KUDOS } from './ports/kudos.port.js';
 import { NOTIFICATIONS } from './ports/notification.port.js';
 import { SPRINT_SOURCE } from './ports/sprint-source.port.js';
 import { EmptyCalendarSource, EmptySprintSource } from './streak/empty-sources.js';
@@ -34,12 +37,15 @@ import { XpRulesService } from './xp/xp-rules.service.js';
     // Stand-ins until E06 (sprints) and E07 (attendance) provide the real sources.
     { provide: SPRINT_SOURCE, useClass: EmptySprintSource },
     { provide: CALENDAR_SOURCE, useClass: EmptyCalendarSource },
+    BadgesService,
+    // Stand-in until E10 (engagement) provides IF-04.
+    { provide: KUDOS, useClass: EmptyKudosPort },
     { provide: CLOCK, useValue: systemClock },
     { provide: USER_DIRECTORY, useClass: PrismaUserDirectory },
     // Stand-in until E01's notifications service exists: swap this provider, nothing else.
     { provide: NOTIFICATIONS, useClass: NoopNotificationPort },
   ],
   // The ledger and reward core are what other modules (engagement, sprint, assessment) call.
-  exports: [XpLedgerService, XpRulesService, RewardService, XpReviewService, XpAdjustmentService, LevelsService, LEVELS, StreakService],
+  exports: [XpLedgerService, XpRulesService, RewardService, XpReviewService, XpAdjustmentService, LevelsService, LEVELS, StreakService, BadgesService],
 })
 export class GrowthCoreModule {}

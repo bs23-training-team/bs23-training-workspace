@@ -4,7 +4,7 @@ import type { FreezeSource } from '../../../generated/prisma/enums.js';
 import { GrowthError } from '../errors.js';
 import { lockUser } from '../locks.js';
 import { CALENDAR_SOURCE, type CalendarSourcePort } from '../ports/calendar-source.port.js';
-import type { Tx } from '../ports/db.js';
+import type { Db, Tx } from '../ports/db.js';
 import { SPRINT_SOURCE, type SprintSourcePort } from '../ports/sprint-source.port.js';
 import { CLOCK, type ClockPort } from '../time/clock.port.js';
 import { orgToday, parseDay, type DayString } from '../time/org-time.js';
@@ -63,13 +63,7 @@ export class StreakService {
     const today = asOf ?? orgToday(this.clock.now());
     const run = async (t: Tx): Promise<StreakResult> => {
       await lockUser(t, userId);
-      const [submissions, calendarDays, freezes] = await Promise.all([
-        this.sprints.submissionsOf(t, userId),
-        this.calendar.frozenDays(t, userId, workspaceId),
-        t.streakFreeze.findMany({ where: { userId }, select: { date: true } }),
-      ]);
-      const frozen = new Set<DayString>([...calendarDays, ...freezes.map((f) => dayOf(f.date))]);
-      const result = computeStreak(submissions, frozen, today);
+      const { any: result } = await this.measure(workspaceId, userId, today, t);
       const last = result.lastSubmissionDate ? parseDay(result.lastSubmissionDate) : null;
       await t.streak.upsert({
         where: { userId },
@@ -79,6 +73,29 @@ export class StreakService {
       return result;
     };
     return tx ? run(tx) : this.prisma.$transaction(run);
+  }
+
+  /**
+   * The streak numbers, read from the sprint and calendar sources and the PM freezes, without
+   * saving anything: `any` counts every submission, `onTime` only on-time ones. Badge rules use
+   * the `longest` of each.
+   */
+  async measure(
+    workspaceId: string,
+    userId: string,
+    asOf: DayString,
+    db: Db,
+  ): Promise<{ any: StreakResult; onTime: StreakResult }> {
+    const [submissions, calendarDays, freezes] = await Promise.all([
+      this.sprints.submissionsOf(db, userId),
+      this.calendar.frozenDays(db, userId, workspaceId),
+      db.streakFreeze.findMany({ where: { userId }, select: { date: true } }),
+    ]);
+    const frozen = new Set<DayString>([...calendarDays, ...freezes.map((f) => dayOf(f.date))]);
+    return {
+      any: computeStreak(submissions, frozen, asOf),
+      onTime: computeStreak(submissions, frozen, asOf, 'ON_TIME'),
+    };
   }
 
   /**

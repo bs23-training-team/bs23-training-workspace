@@ -9,3 +9,6 @@ import type { Db } from './db.js';
 export interface KudosPort {
   distinctApprovedSenders(db: Db, userId: string): Promise<number>;
 }
+
+/** Injection token for the KudosPort provider. */
+export const KUDOS = Symbol('KUDOS');

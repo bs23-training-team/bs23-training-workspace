@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service.js';
-import type { Db, KudosPort } from '../../growth-core/index.js';
+import { MAX_PAGE, parseCursor, type Db, type KudosPort } from '../../growth-core/index.js';
 
 export interface KudosView {
   id: string;
@@ -42,6 +42,31 @@ export class KudosQueryService implements KudosPort {
       select: { fromUserId: true },
     });
     return senders.length;
+  }
+
+  /**
+   * One page of kudos for a viewer: a user sees what they sent or received, a PM sees what
+   * involves their own users. Newest first; the cursor is the position of the next row.
+   */
+  async page(input: {
+    workspaceId: string;
+    viewer: { role: 'USER'; userId: string } | { role: 'PM'; pmId: string };
+    cursor?: string | null;
+    limit?: number;
+  }): Promise<{ kudos: KudosView[]; nextCursor: string | null }> {
+    const skip = parseCursor(input.cursor);
+    const take = Math.min(input.limit ?? MAX_PAGE, MAX_PAGE);
+    const who =
+      input.viewer.role === 'USER'
+        ? { OR: [{ fromUserId: input.viewer.userId }, { toUserId: input.viewer.userId }] }
+        : { OR: [{ fromUser: { pmId: input.viewer.pmId } }, { toUser: { pmId: input.viewer.pmId } }] };
+    const rows = await this.prisma.kudos.findMany({
+      where: { workspaceId: input.workspaceId, ...who },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip,
+      take: take + 1,
+    });
+    return { kudos: rows.slice(0, take).map(toView), nextCursor: rows.length > take ? String(skip + take) : null };
   }
 
   /** A user sees the kudos they sent and received, newest first. */

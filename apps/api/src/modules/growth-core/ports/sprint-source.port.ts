@@ -13,3 +13,6 @@ export interface SprintSubmissionFact {
 export interface SprintSourcePort {
   submissionsOf(db: Db, userId: string): Promise<SprintSubmissionFact[]>;
 }
+
+/** Injection token for the SprintSourcePort provider. */
+export const SPRINT_SOURCE = Symbol('SPRINT_SOURCE');

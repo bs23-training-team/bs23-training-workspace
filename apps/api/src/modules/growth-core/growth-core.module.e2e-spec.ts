@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { GrowthCoreModule } from './growth-core.module.js';
 import { LevelsService } from './levels/levels.service.js';
 import { LEVELS } from './ports/levels.port.js';
+import { StreakService } from './streak/streak.service.js';
 import { loadSeed } from './testing/test-db.js';
 import { RewardService } from './xp/reward.service.js';
 import { XpAdjustmentService } from './xp/xp-adjustment.service.js';
@@ -67,6 +68,7 @@ describe('GrowthCoreModule (wired, real database)', () => {
     expect(moduleRef.get(XpAdjustmentService)).toBeInstanceOf(XpAdjustmentService);
     expect(moduleRef.get(XpReviewService)).toBeInstanceOf(XpReviewService);
     expect(moduleRef.get(LEVELS)).toBeInstanceOf(LevelsService); // the IF-02 token points at the real service
+    expect(moduleRef.get(StreakService)).toBeInstanceOf(StreakService);
   });
 
   it('creates nothing for a late sprint', async () => {

@@ -150,7 +150,8 @@ describe('XpLedgerService (database)', () => {
     const awardedId = await mkKudos();
     await ledger.createEvent(event({ source: 'KUDOS', key: `kudos:${pendingId}`, kudosId: pendingId, status: 'PENDING' }));
     await ledger.createEvent(event({ source: 'KUDOS', key: `kudos:${awardedId}`, kudosId: awardedId, status: 'AWARDED' }));
-    const reviewsBefore = await prisma.xpReview.count({ where: { workspaceId } });
+    // Count review rows for THESE events only: other spec files write reviews in parallel.
+    const ownReviews = () => prisma.xpReview.count({ where: { xpEvent: { kudosId: { in: [pendingId, awardedId] } } } });
 
     await ledger.holdPending([pendingId, awardedId], 'Suspicious exchange');
 
@@ -158,7 +159,7 @@ describe('XpLedgerService (database)', () => {
     const awarded = await prisma.xpEvent.findUniqueOrThrow({ where: { workspaceId_key: { workspaceId, key: `kudos:${awardedId}` } } });
     expect(pending).toMatchObject({ status: 'HELD', flag: 'Suspicious exchange' });
     expect(awarded.status).toBe('AWARDED');
-    expect(await prisma.xpReview.count({ where: { workspaceId } })).toBe(reviewsBefore);
+    expect(await ownReviews()).toBe(0);
   });
 
   it('does nothing for an empty kudos list', async () => {

@@ -24,3 +24,6 @@ export interface NotificationPort {
   notifyUser(tx: Tx, notice: NoticeInput & { userId: string }): Promise<void>;
   notifyPm(tx: Tx, notice: NoticeInput & { pmId: string }): Promise<void>;
 }
+
+/** Injection token for the NotificationPort provider. */
+export const NOTIFICATIONS = Symbol('NOTIFICATIONS');

@@ -210,6 +210,10 @@ describe('growth-core HTTP routes (database, test-only actor)', () => {
       expect((await as(pm()).get('/pm/xp-events?status=PENDING&status=HELD')).status).toBe(400); // an array is refused
     });
 
+    it('filtering the queue by an unknown user is 404', async () => {
+      expect((await as(pm()).get('/pm/xp-events?userId=BS99999')).status).toBe(404);
+    });
+
     it('a user sees only their own events', async () => {
       await pendingEvent(U1);
       await pendingEvent(U2);
@@ -268,6 +272,12 @@ describe('growth-core HTTP routes (database, test-only actor)', () => {
       expect((await send({ userId: U1, date: '2026-02-30', source: 'LEAVE', reason: 'x' })).status).toBe(400);
       expect((await as(pm('PM002')).get(`/pm/streak-freezes?userId=${U1}`)).status).toBe(403);
     });
+
+    it('listing a user\'s freezes needs a userId (400), and an unknown user is 404', async () => {
+      const missing = await as(pm()).get('/pm/streak-freezes');
+      expect([missing.status, errorCode(missing)]).toEqual([400, 'VALIDATION']);
+      expect((await as(pm()).get('/pm/streak-freezes?userId=BS99999')).status).toBe(404);
+    });
   });
 
   describe('badges', () => {
@@ -289,6 +299,17 @@ describe('growth-core HTTP routes (database, test-only actor)', () => {
       const revoke = await as(pm()).post(`/pm/badge-awards/${(award.body as { awardId: string }).awardId}/revoke`).send({ reason: 'Mistake' });
       expect(revoke.status).toBe(201);
       expect((await as(user(U1)).get('/me/growth')).body).toMatchObject({ badges: [] });
+    });
+
+    it('creates a Behavioral badge with a rule and threshold; an unknown rule or a missing threshold is 400', async () => {
+      const ok = await as(pm()).post('/pm/badges').send({ name: 'Streaker', icon: '🔥', kind: 'BEHAVIORAL', criteria: '5 days in a row', ruleType: 'SPRINT_STREAK', threshold: 5 });
+      expect(ok.status).toBe(201);
+      const badRule = await as(pm()).post('/pm/badges').send({ name: 'B1', icon: '🔥', kind: 'BEHAVIORAL', criteria: 'x', ruleType: 'NOPE', threshold: 5 });
+      expect([badRule.status, errorCode(badRule)]).toEqual([400, 'VALIDATION']);
+      const noThreshold = await as(pm()).post('/pm/badges').send({ name: 'B2', icon: '🔥', kind: 'BEHAVIORAL', criteria: 'x', ruleType: 'SPRINT_STREAK' });
+      expect([noThreshold.status, errorCode(noThreshold)]).toEqual([400, 'VALIDATION']);
+      const textThreshold = await as(pm()).post('/pm/badges').send({ name: 'B3', icon: '🔥', kind: 'BEHAVIORAL', criteria: 'x', ruleType: 'SPRINT_STREAK', threshold: '5' });
+      expect([textThreshold.status, errorCode(textThreshold)]).toEqual([400, 'VALIDATION']);
     });
 
     it('refuses bad input and wrong roles: Special with a threshold 400, evidence 422, scope 403, user 403, retire twice 409', async () => {

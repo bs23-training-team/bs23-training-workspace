@@ -151,6 +151,13 @@ describe('RewardService.recordFinalAssessment', () => {
     await reward.recordFinalAssessment({ ...base, questionSetId: 'set-9', mastered: true });
     expect(ledger.events).toHaveLength(1);
   });
+
+  it('creates nothing for an unknown or archived user', async () => {
+    const { reward, ledger } = setup();
+    const out = await reward.recordFinalAssessment({ ...base, userId: 'BS99999', questionSetId: 'set-9', mastered: true });
+    expect(out).toMatchObject({ created: false, skipped: 'UNKNOWN_USER' });
+    expect(ledger.events).toHaveLength(0);
+  });
 });
 
 describe('RewardService: no other sources', () => {

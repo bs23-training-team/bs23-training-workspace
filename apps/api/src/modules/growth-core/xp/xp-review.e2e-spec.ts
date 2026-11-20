@@ -190,6 +190,21 @@ describe('XpReviewService (database)', () => {
     expect(notices.userNotices).toHaveLength(1);
   });
 
+  it('never takes the total below zero when two DIFFERENT events of one user are reversed at once', async () => {
+    const before = await ledger.awardedTotal(OWN_USER);
+    const first = await makeEvent({ source: 'MANUAL_ADJUSTMENT', amount: 15 });
+    const second = await makeEvent({ source: 'MANUAL_ADJUSTMENT', amount: 15 });
+    await makeEvent({ source: 'MANUAL_ADJUSTMENT', amount: -(before + 10) }); // leaves the total at 20
+    expect(await ledger.awardedTotal(OWN_USER)).toBe(20);
+
+    // Each reversal alone is fine (20 - 15 = 5), but both together would reach -10: the user lock decides.
+    const attempts = await Promise.allSettled([decide(first, 'REVERSED', 'Wrong'), decide(second, 'REVERSED', 'Wrong')]);
+    expect(attempts.filter((a) => a.status === 'fulfilled')).toHaveLength(1);
+    const lost = attempts.find((a) => a.status === 'rejected') as PromiseRejectedResult;
+    expect(lost.reason).toMatchObject({ code: 'NEGATIVE_TOTAL' });
+    expect(await ledger.awardedTotal(OWN_USER)).toBe(5);
+  });
+
   it('refuses a reversal that would take the awarded total below zero (NEGATIVE_TOTAL)', async () => {
     const before = await ledger.awardedTotal(OWN_USER);
     const plus = await makeEvent({ source: 'MANUAL_ADJUSTMENT', amount: 10 });

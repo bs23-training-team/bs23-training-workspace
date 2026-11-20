@@ -70,5 +70,6 @@ describe('autoEvidence', () => {
     expect(autoEvidence('SPRINT_STREAK', 5)).toContain('5');
     expect(autoEvidence('ON_TIME_SPRINT_STREAK', 3)).toContain('on time');
     expect(autoEvidence('KUDOS_DISTINCT_SENDERS', 4)).toContain('different people');
+    expect(autoEvidence('MANUAL', 1)).toContain('PM');
   });
 });

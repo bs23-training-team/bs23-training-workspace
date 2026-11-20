@@ -76,6 +76,7 @@ describe('XpRulesService update (database)', () => {
   it('returns NO_RULE for a workspace without a rules row', async () => {
     await expect(rules.update(randomUUID(), 'PM001', { kudos: 1 })).rejects.toMatchObject({ code: 'NO_RULE' });
     await expect(rules.getAll(randomUUID())).rejects.toMatchObject({ code: 'NO_RULE' });
+    await expect(rules.get(randomUUID())).rejects.toMatchObject({ code: 'NO_RULE' });
   });
 
   it('a new amount only applies to FUTURE events: the earlier event keeps its amount', async () => {

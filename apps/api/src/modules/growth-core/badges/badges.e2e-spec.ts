@@ -152,13 +152,17 @@ describe('BadgesService (database)', () => {
       expect(await prisma.xpEvent.count({ where: { userId: U1 } })).toBe(0);
     });
 
-    it('refuses a second award (ALREADY_AWARDED), and exactly one of 6 simultaneous awards wins', async () => {
+    it('refuses a second award (ALREADY_AWARDED), and exactly one of 25 simultaneous awards wins', async () => {
       const s = await special();
       await award(s.badgeId, U1);
       await expect(award(s.badgeId, U1)).rejects.toMatchObject({ code: 'ALREADY_AWARDED' });
 
-      const attempts = await Promise.allSettled(Array.from({ length: 6 }, () => award(s.badgeId, U2)));
+      const attempts = await Promise.allSettled(Array.from({ length: 25 }, () => award(s.badgeId, U2)));
       expect(attempts.filter((a) => a.status === 'fulfilled')).toHaveLength(1);
+      // The losers get the clean business error, not a raw database error.
+      for (const a of attempts.filter((x) => x.status === 'rejected')) {
+        expect((a as PromiseRejectedResult).reason).toMatchObject({ code: 'ALREADY_AWARDED' });
+      }
       expect(await prisma.badgeAward.count({ where: { badgeId: s.badgeId, userId: U2 } })).toBe(1);
     });
 

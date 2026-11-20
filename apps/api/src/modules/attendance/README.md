@@ -8,7 +8,7 @@ ERP and Teams attendance adapters and sync, identity mapping, leave requests and
 
 ```
 attendance/
-├── attendance.module.ts          # AttendanceModule: add it to `imports` in src/app.module.ts
+├── attendance.module.ts          # AttendanceModule: already registered in src/app.module.ts
 ├── attendance.controller.ts      # HTTP routes (thin: validate input, call the service)
 ├── attendance.service.ts         # business rules (uses PrismaService)
 ├── dto/                      # request/response classes; shared shapes go to packages/contracts

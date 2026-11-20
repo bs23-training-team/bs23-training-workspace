@@ -8,7 +8,7 @@ Expertise survey, initial test and retest, course exams engine, AI evaluation ad
 
 ```
 assessment/
-├── assessment.module.ts          # AssessmentModule: add it to `imports` in src/app.module.ts
+├── assessment.module.ts          # AssessmentModule: already registered in src/app.module.ts
 ├── assessment.controller.ts      # HTTP routes (thin: validate input, call the service)
 ├── assessment.service.ts         # business rules (uses PrismaService)
 ├── dto/                      # request/response classes; shared shapes go to packages/contracts

@@ -8,7 +8,7 @@ PM dashboard (All Users, Skill reports, Course requests, Leave requests work car
 
 ```
 dashboard/
-├── dashboard.module.ts          # DashboardModule: add it to `imports` in src/app.module.ts
+├── dashboard.module.ts          # DashboardModule: already registered in src/app.module.ts
 ├── dashboard.controller.ts      # HTTP routes (thin: validate input, call the service)
 ├── dashboard.service.ts         # business rules (uses PrismaService)
 ├── dto/                      # request/response classes; shared shapes go to packages/contracts

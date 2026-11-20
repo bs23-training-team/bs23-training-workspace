@@ -8,7 +8,7 @@
 
 ```
 catalog/
-├── catalog.module.ts          # CatalogModule: add it to `imports` in src/app.module.ts
+├── catalog.module.ts          # CatalogModule: already registered in src/app.module.ts
 ├── catalog.controller.ts      # HTTP routes (thin: validate input, call the service)
 ├── catalog.service.ts         # business rules (uses PrismaService)
 ├── dto/                      # request/response classes; shared shapes go to packages/contracts

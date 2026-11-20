@@ -8,7 +8,7 @@ Daily tasks, team-first sheet with seven-day week tabs, cell versions and confli
 
 ```
 sprint/
-├── sprint.module.ts          # SprintModule: add it to `imports` in src/app.module.ts
+├── sprint.module.ts          # SprintModule: already registered in src/app.module.ts
 ├── sprint.controller.ts      # HTTP routes (thin: validate input, call the service)
 ├── sprint.service.ts         # business rules (uses PrismaService)
 ├── dto/                      # request/response classes; shared shapes go to packages/contracts

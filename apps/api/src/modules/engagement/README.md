@@ -8,7 +8,7 @@ Weekly quests, leaderboards with opt-out, hackathons, kudos with caps/cooldown. 
 
 ```
 engagement/
-├── engagement.module.ts          # EngagementModule: add it to `imports` in src/app.module.ts
+├── engagement.module.ts          # EngagementModule: already registered in src/app.module.ts
 ├── engagement.controller.ts      # HTTP routes (thin: validate input, call the service)
 ├── engagement.service.ts         # business rules (uses PrismaService)
 ├── dto/                      # request/response classes; shared shapes go to packages/contracts

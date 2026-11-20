@@ -8,7 +8,7 @@ Recipient-scoped bell notifications: unread/read, mark-all-read, record links. E
 
 ```
 notifications/
-├── notifications.module.ts          # NotificationsModule: add it to `imports` in src/app.module.ts
+├── notifications.module.ts          # NotificationsModule: already registered in src/app.module.ts
 ├── notifications.controller.ts      # HTTP routes (thin: validate input, call the service)
 ├── notifications.service.ts         # business rules (uses PrismaService)
 ├── dto/                      # request/response classes; shared shapes go to packages/contracts

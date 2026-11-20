@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
+import { NOTIFICATIONS } from './ports/notification.port.js';
 import { USER_DIRECTORY } from './ports/user-directory.port.js';
+import { NoopNotificationPort } from './xp/noop-notification-port.js';
 import { PrismaUserDirectory } from './xp/prisma-user-directory.js';
 import { RewardService } from './xp/reward.service.js';
 import { XpLedgerService } from './xp/xp-ledger.service.js';
+import { XpReviewService } from './xp/xp-review.service.js';
 import { XpRulesService } from './xp/xp-rules.service.js';
 
 // Owner: E09. Already registered in src/app.module.ts: do not edit app.module.ts.
@@ -15,9 +18,12 @@ import { XpRulesService } from './xp/xp-rules.service.js';
     XpLedgerService,
     XpRulesService,
     RewardService,
+    XpReviewService,
     { provide: USER_DIRECTORY, useClass: PrismaUserDirectory },
+    // Stand-in until E01's notifications service exists: swap this provider, nothing else.
+    { provide: NOTIFICATIONS, useClass: NoopNotificationPort },
   ],
   // The ledger and reward core are what other modules (engagement, sprint, assessment) call.
-  exports: [XpLedgerService, XpRulesService, RewardService],
+  exports: [XpLedgerService, XpRulesService, RewardService, XpReviewService],
 })
 export class GrowthCoreModule {}

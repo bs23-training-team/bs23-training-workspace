@@ -32,7 +32,9 @@ describe('GrowthCoreModule (wired, real database)', () => {
     ledger = moduleRef.get(XpLedgerService);
     const seed = await loadSeed(prisma);
     workspaceId = seed.workspaceId;
-    userId = seed.users[0] as string;
+    // A user no other spec file touches with AWARDED events: files run in parallel and this
+    // spec compares an awarded total before and after.
+    userId = seed.users[1] as string;
   });
 
   afterEach(async () => {

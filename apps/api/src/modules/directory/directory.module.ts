@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
 import { IdentityModule } from '../identity/identity.module.js';
+import { ArchiveController } from './archive.controller.js';
+import { ArchiveService } from './archive.service.js';
 import { DirectoryController } from './directory.controller.js';
 import { DirectoryService } from './directory.service.js';
+import { ExportController } from './export.controller.js';
+import { ExportService } from './export.service.js';
 import { FeedbackController } from './feedback.controller.js';
 import { FeedbackService } from './feedback.service.js';
 import { TeamsController } from './teams.controller.js';
@@ -23,6 +27,8 @@ import { UserProfileService } from './user-profile.service.js';
     UserProfileController,
     FeedbackController,
     UserEditController,
+    ArchiveController,
+    ExportController,
   ],
   providers: [
     DirectoryService,
@@ -30,6 +36,8 @@ import { UserProfileService } from './user-profile.service.js';
     UserProfileService,
     FeedbackService,
     UserEditService,
+    ArchiveService,
+    ExportService,
   ],
   exports: [
     DirectoryService,
@@ -37,6 +45,8 @@ import { UserProfileService } from './user-profile.service.js';
     UserProfileService,
     FeedbackService,
     UserEditService,
+    ArchiveService,
+    ExportService,
   ],
 })
 export class DirectoryModule {}

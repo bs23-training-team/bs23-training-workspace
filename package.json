@@ -20,7 +20,8 @@
     "db:deploy": "pnpm --filter api exec prisma migrate deploy",
     "db:status": "pnpm --filter api exec prisma migrate status",
     "db:seed": "pnpm --filter api exec prisma db seed",
-    "db:studio": "pnpm --filter api exec prisma studio"
+    "db:studio": "pnpm --filter api exec prisma studio",
+    "setup:local": "bash scripts/setup-local.sh"
   },
   "devDependencies": {
     "turbo": "^2.11.10"

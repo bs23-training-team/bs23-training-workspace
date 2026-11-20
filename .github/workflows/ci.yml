@@ -16,6 +16,21 @@ permissions:
   contents: read
 
 jobs:
+  # Pull requests only: protects the migration history (see scripts/check-migrations.sh).
+  migration-guard:
+    name: Migration guard
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (full history for the diff)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check migrations
+        run: bash scripts/check-migrations.sh "origin/${{ github.base_ref }}"
+
   ci:
     name: Lint, typecheck, test, migrations, build
     runs-on: ubuntu-latest
@@ -81,6 +96,9 @@ jobs:
           else
             echo "No migrations yet. Skipping."
           fi
+
+      - name: Seed runs on the migrated database
+        run: pnpm db:seed
 
       - name: Schema and migrations are in sync
         run: |

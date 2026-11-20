@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaService } from '../../../prisma/prisma.service.js';
+import type { ActiveLevel } from '../levels/level-set.js';
+import { FakeLevelsPort } from '../testing/fake-levels-port.js';
 import { FakeNotificationPort } from '../testing/fake-notification-port.js';
 import { createTestPrisma, loadSeed } from '../testing/test-db.js';
 import { parseDay } from '../time/org-time.js';
@@ -41,15 +43,25 @@ describe('XpReviewService (database)', () => {
   const decide = (eventId: string, toStatus: Parameters<XpReviewService['decide']>[0]['toStatus'], reason = 'Checked the evidence', pmId = 'PM001') =>
     review.decide({ workspaceId, eventId, pmId, toStatus, reason });
 
+  let levelSet: ActiveLevel[];
+  let baseTotal: number;
+
   beforeAll(async () => {
     prisma = createTestPrisma();
     ledger = new XpLedgerService(prisma);
     ({ workspaceId } = await loadSeed(prisma));
+    // Two levels placed relative to the user's current total, so the level-up tests do not
+    // depend on the seeded thresholds (which other people may change).
+    baseTotal = await ledger.awardedTotal(OWN_USER);
+    levelSet = [
+      { id: 'a', name: 'Starter', minXp: 0 },
+      { id: 'b', name: 'Climber', minXp: baseTotal + 50 },
+    ];
   });
 
   beforeEach(() => {
     notices = new FakeNotificationPort();
-    review = new XpReviewService(prisma, notices, ledger);
+    review = new XpReviewService(prisma, notices, ledger, new FakeLevelsPort(notices, levelSet));
   });
 
   afterEach(async () => {
@@ -187,6 +199,48 @@ describe('XpReviewService (database)', () => {
     await expect(decide(plus, 'REVERSED', 'Wrong')).rejects.toMatchObject({ code: 'NEGATIVE_TOTAL' });
     expect((await row(plus)).status).toBe('AWARDED');
     expect(await prisma.xpReview.count({ where: { xpEventId: plus } })).toBe(0);
+  });
+
+  describe('level-up notice', () => {
+    const categories = () => notices.userNotices.map((n) => n.category);
+
+    it('is created in the same decision when an approval crosses a level threshold', async () => {
+      const id = await makeEvent({ amount: 60 });
+      await decide(id, 'AWARDED', 'Great work');
+      expect(categories()).toEqual(['XP decisions', 'Level up']);
+      expect(notices.userNotices[1]?.message).toContain('Climber');
+    });
+
+    it('is not created when the approval stays inside a level', async () => {
+      const id = await makeEvent({ amount: 20 });
+      await decide(id, 'AWARDED');
+      expect(categories()).toEqual(['XP decisions']);
+    });
+
+    it('is created when a HELD event is approved across a threshold, not when it is held', async () => {
+      const id = await makeEvent({ amount: 60 });
+      await decide(id, 'HELD', 'Checking');
+      expect(categories()).toEqual(['XP decisions']);
+      await decide(id, 'AWARDED', 'Checked');
+      expect(categories()).toEqual(['XP decisions', 'XP decisions', 'Level up']);
+    });
+
+    it('is never created by a reject or a reversal', async () => {
+      const rejected = await makeEvent({ amount: 60 });
+      await decide(rejected, 'REJECTED', 'No');
+      const reversed = await makeEvent({ amount: 60 });
+      await decide(reversed, 'AWARDED');
+      notices.userNotices.length = 0;
+      await decide(reversed, 'REVERSED', 'Mistake');
+      expect(categories()).toEqual(['XP decisions']);
+    });
+
+    it('is not repeated for a second approval inside the same level', async () => {
+      await decide(await makeEvent({ amount: 60 }), 'AWARDED');
+      notices.userNotices.length = 0;
+      await decide(await makeEvent({ amount: 10 }), 'AWARDED');
+      expect(categories()).toEqual(['XP decisions']);
+    });
   });
 
   it('rolls everything back when the notice fails', async () => {

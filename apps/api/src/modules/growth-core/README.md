@@ -8,7 +8,7 @@ XP ledger and rules, levels, streaks and private freezes, badges, review/adjust/
 
 ```
 growth-core/
-├── growth-core.module.ts          # GrowthCoreModule: add it to `imports` in src/app.module.ts
+├── growth-core.module.ts          # GrowthCoreModule: already registered in src/app.module.ts
 ├── growth-core.controller.ts      # HTTP routes (thin: validate input, call the service)
 ├── growth-core.service.ts         # business rules (uses PrismaService)
 ├── dto/                      # request/response classes; shared shapes go to packages/contracts

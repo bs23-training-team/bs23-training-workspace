@@ -8,7 +8,7 @@ Trainees, teams, memberships, full name-click evaluation profile (ten cards), on
 
 ```
 directory/
-├── directory.module.ts          # DirectoryModule: add it to `imports` in src/app.module.ts
+├── directory.module.ts          # DirectoryModule: already registered in src/app.module.ts
 ├── directory.controller.ts      # HTTP routes (thin: validate input, call the service)
 ├── directory.service.ts         # business rules (uses PrismaService)
 ├── dto/                      # request/response classes; shared shapes go to packages/contracts

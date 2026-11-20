@@ -8,7 +8,7 @@ Login, PM signup, sessions, sign-out, password/recovery, current user (`/me`), a
 
 ```
 identity/
-├── identity.module.ts          # IdentityModule: add it to `imports` in src/app.module.ts
+├── identity.module.ts          # IdentityModule: already registered in src/app.module.ts
 ├── identity.controller.ts      # HTTP routes (thin: validate input, call the service)
 ├── identity.service.ts         # business rules (uses PrismaService)
 ├── dto/                      # request/response classes; shared shapes go to packages/contracts

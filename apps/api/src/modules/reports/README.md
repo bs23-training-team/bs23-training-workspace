@@ -8,7 +8,7 @@ Weekly/Monthly/Full period reports (ten areas), report-copy versions, snapshots,
 
 ```
 reports/
-├── reports.module.ts          # ReportsModule: add it to `imports` in src/app.module.ts
+├── reports.module.ts          # ReportsModule: already registered in src/app.module.ts
 ├── reports.controller.ts      # HTTP routes (thin: validate input, call the service)
 ├── reports.service.ts         # business rules (uses PrismaService)
 ├── dto/                      # request/response classes; shared shapes go to packages/contracts

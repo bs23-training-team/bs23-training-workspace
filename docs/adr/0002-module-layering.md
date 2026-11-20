@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed**: awaiting review by E01 (architecture owner), E10 and the mentor |
+| Status | **Accepted** (2026-11-20) |
 | Date | 2026-11-11 |
 | Author | E11 (DevOps) |
-| Deciders | E01, E10, E11, all module owners E02–E09 |
+| Deciders | E11 (architecture owner), all module owners E01–E10 |
 | Related | [ADR 0001](0001-monorepo-structure.md), [repo-structure](../repo-structure.md), SRS p.9 (NestJS owns authority) |
 
 ## 1. Context
@@ -79,6 +79,11 @@ Create files only when needed. A small module may have no repository and no `dto
 `health.service.ts` (the check), `health.module.ts` and a spec for each of the two classes.
 Copy its shape when starting a module.
 
+Every feature module already has an empty `<m>.module.ts`, registered in `src/app.module.ts`,
+and an empty `packages/contracts/src/<m>/index.ts`, re-exported from `src/index.ts`. Owners add
+their controller, service and types to those files and never edit `app.module.ts` or the
+contracts `index.ts`.
+
 ## 6. Enforcement
 
 - Code review: reviewers check the six rules; E11 is a required reviewer on `packages/contracts`.
@@ -96,3 +101,4 @@ Copy its shape when starting a module.
 ## 8. Changelog
 
 - 2026-11-11: first draft.
+- 2026-11-20: accepted; empty skeletons for all 13 feature modules added and registered (E11).

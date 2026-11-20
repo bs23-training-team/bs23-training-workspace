@@ -8,7 +8,7 @@ Learning Roadmap: entitled courses, lessons, per-trainee topic state (Learning /
 
 ```
 learning/
-├── learning.module.ts          # LearningModule: add it to `imports` in src/app.module.ts
+├── learning.module.ts          # LearningModule: already registered in src/app.module.ts
 ├── learning.controller.ts      # HTTP routes (thin: validate input, call the service)
 ├── learning.service.ts         # business rules (uses PrismaService)
 ├── dto/                      # request/response classes; shared shapes go to packages/contracts

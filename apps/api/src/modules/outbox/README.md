@@ -8,7 +8,7 @@ Shared event foundation: domain state and its event are saved in one transaction
 
 ```
 outbox/
-├── outbox.module.ts          # OutboxModule: add it to `imports` in src/app.module.ts
+├── outbox.module.ts          # OutboxModule: already registered in src/app.module.ts
 ├── outbox.controller.ts      # HTTP routes (thin: validate input, call the service)
 ├── outbox.service.ts         # business rules (uses PrismaService)
 ├── dto/                      # request/response classes; shared shapes go to packages/contracts

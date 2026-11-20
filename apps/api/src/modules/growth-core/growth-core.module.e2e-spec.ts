@@ -7,7 +7,9 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { GrowthCoreModule } from './growth-core.module.js';
 import { loadSeed } from './testing/test-db.js';
 import { RewardService } from './xp/reward.service.js';
+import { XpAdjustmentService } from './xp/xp-adjustment.service.js';
 import { XpLedgerService } from './xp/xp-ledger.service.js';
+import { XpReviewService } from './xp/xp-review.service.js';
 
 // Proves the Nest wiring works with the real database: GrowthCoreModule builds, the services
 // resolve their dependencies, and a reported sprint becomes one pending XP event.
@@ -57,6 +59,11 @@ describe('GrowthCoreModule (wired, real database)', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ source: 'ON_TIME_SPRINT', status: 'PENDING', amount: 20, userId });
     expect(runTag).toContain('[test:'); // the cleanup above is by key, so no stray rows remain
+  });
+
+  it('resolves the adjustment and review services with their dependencies', () => {
+    expect(moduleRef.get(XpAdjustmentService)).toBeInstanceOf(XpAdjustmentService);
+    expect(moduleRef.get(XpReviewService)).toBeInstanceOf(XpReviewService);
   });
 
   it('creates nothing for a late sprint', async () => {

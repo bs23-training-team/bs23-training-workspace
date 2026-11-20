@@ -9,3 +9,6 @@ import type { Db } from './db.js';
 export interface CalendarSourcePort {
   frozenDays(db: Db, userId: string, workspaceId: string): Promise<Set<DayString>>;
 }
+
+/** Injection token for the CalendarSourcePort provider. */
+export const CALENDAR_SOURCE = Symbol('CALENDAR_SOURCE');

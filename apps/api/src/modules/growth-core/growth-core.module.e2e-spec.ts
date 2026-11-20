@@ -5,6 +5,8 @@ import { validateEnv } from '../../config/env.validation.js';
 import { PrismaModule } from '../../prisma/prisma.module.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { GrowthCoreModule } from './growth-core.module.js';
+import { LevelsService } from './levels/levels.service.js';
+import { LEVELS } from './ports/levels.port.js';
 import { loadSeed } from './testing/test-db.js';
 import { RewardService } from './xp/reward.service.js';
 import { XpAdjustmentService } from './xp/xp-adjustment.service.js';
@@ -64,6 +66,7 @@ describe('GrowthCoreModule (wired, real database)', () => {
   it('resolves the adjustment and review services with their dependencies', () => {
     expect(moduleRef.get(XpAdjustmentService)).toBeInstanceOf(XpAdjustmentService);
     expect(moduleRef.get(XpReviewService)).toBeInstanceOf(XpReviewService);
+    expect(moduleRef.get(LEVELS)).toBeInstanceOf(LevelsService); // the IF-02 token points at the real service
   });
 
   it('creates nothing for a late sprint', async () => {

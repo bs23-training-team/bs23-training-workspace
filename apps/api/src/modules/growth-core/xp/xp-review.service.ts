@@ -3,6 +3,7 @@ import { PrismaService } from '../../../prisma/prisma.service.js';
 import type { XpStatus } from '../../../generated/prisma/enums.js';
 import { GrowthError } from '../errors.js';
 import { lockUser } from '../locks.js';
+import { LEVELS, type LevelsPort } from '../ports/levels.port.js';
 import { NOTIFICATIONS, type NotificationPort } from '../ports/notification.port.js';
 import { isAllowedMove } from './review-moves.js';
 import { XpLedgerService } from './xp-ledger.service.js';
@@ -37,7 +38,8 @@ const NOTICE_TITLE: Partial<Record<XpStatus, string>> = {
  * checks the move is allowed, updates the status, writes one XpReview row and the user's
  * notice. If any step fails nothing is saved. The lock plus the "expected status" in the
  * update make a decision happen once: of two simultaneous decisions, one wins and the other
- * gets BAD_TRANSITION.
+ * gets BAD_TRANSITION. An approval that lifts the user over a level threshold also creates the
+ * "Level up" notice, in the same transaction.
  */
 @Injectable()
 export class XpReviewService {
@@ -45,6 +47,7 @@ export class XpReviewService {
     private readonly prisma: PrismaService,
     @Inject(NOTIFICATIONS) private readonly notifications: NotificationPort,
     @Inject(XpLedgerService) private readonly ledger: XpLedger,
+    @Inject(LEVELS) private readonly levels: Pick<LevelsPort, 'notifyIfLeveledUp'>,
   ) {}
 
   async decide(input: DecideInput): Promise<DecideResult> {
@@ -82,7 +85,8 @@ export class XpReviewService {
       // Awarded XP counts, so the total changes when it enters or leaves AWARDED.
       const delta =
         (input.toStatus === 'AWARDED' ? event.amount : 0) - (from === 'AWARDED' ? event.amount : 0);
-      if (delta !== 0 && (await this.ledger.awardedTotal(event.userId, tx)) + delta < 0) {
+      const totalBefore = await this.ledger.awardedTotal(event.userId, tx);
+      if (delta !== 0 && totalBefore + delta < 0) {
         throw new GrowthError('NEGATIVE_TOTAL', 'This would take the XP total below 0');
       }
 
@@ -112,6 +116,16 @@ export class XpReviewService {
         title: NOTICE_TITLE[input.toStatus] ?? 'XP decision',
         message: `${NOTICE_TITLE[input.toStatus] ?? 'XP decision'}: ${reason}`,
       });
+
+      // Only an approval is earned XP. A hold, reject or reversal never lifts a level.
+      if (input.toStatus === 'AWARDED') {
+        await this.levels.notifyIfLeveledUp(tx, {
+          workspaceId: input.workspaceId,
+          userId: event.userId,
+          before: totalBefore,
+          after: totalBefore + delta,
+        });
+      }
 
       return { eventId: event.id, fromStatus: from, toStatus: input.toStatus };
     });

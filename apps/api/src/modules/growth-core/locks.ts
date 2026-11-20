@@ -8,3 +8,8 @@ import type { Tx } from './ports/db.js';
 export async function lockUser(tx: Tx, userId: string): Promise<void> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`growth:user:${userId}`}))`;
 }
+
+/** Serialises saves of one workspace's level set (same rules as lockUser). */
+export async function lockLevels(tx: Tx, workspaceId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`growth:levels:${workspaceId}`}))`;
+}

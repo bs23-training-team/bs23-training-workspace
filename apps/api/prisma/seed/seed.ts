@@ -1,4 +1,4 @@
-// Local / test / staging seed data. NEVER run against production (SRS p.9, ADR 0001 §6.4).
+// Local / test / staging seed data. NEVER run against production (see docs/architecture.md §5.4).
 //
 // Run from the repo root:   pnpm db:seed
 // Safe to run many times: every row is upserted by a stable key, nothing is duplicated.

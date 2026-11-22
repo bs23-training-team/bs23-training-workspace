@@ -27,7 +27,7 @@ fi
 # 3) Forbidden / risky SQL in the new migration(s).
 for d in $new_dirs; do
   f="$d/migration.sql"
-  if grep -qi 'ON DELETE CASCADE' "$f"; then err "$f: ON DELETE CASCADE is not allowed (see ADR 0003 / schema README)."; fi
+  if grep -qi 'ON DELETE CASCADE' "$f"; then err "$f: ON DELETE CASCADE is not allowed (see docs/architecture.md §5.2 / schema README)."; fi
   if grep -q 'CREATE TABLE "_' "$f"; then err "$f: hidden implicit many-to-many table (CREATE TABLE \"_...\"). Use an explicit join model."; fi
   if grep -Eqi '^[[:space:]]*(DROP TABLE|DROP COLUMN|ALTER TABLE .* DROP COLUMN)' "$f"; then
     echo "::warning::$f contains DROP. Make sure data loss is intended and E11 has reviewed it."

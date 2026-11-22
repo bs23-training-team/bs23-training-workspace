@@ -41,7 +41,7 @@ Do not create new `.prisma` files. Ask E11 if you think one is needed.
 - A rule Prisma cannot express (CHECK, partial unique index) is written as a `// DB:` comment, and
   its SQL goes at the end of your migration's `migration.sql`.
 - `Pm.pmId` (e.g. `PM002`) and `User.userId` (e.g. `BS23001`) are primary keys and never change.
-  See [ADR 0003](../../../../docs/adr/0003-login-ids-as-primary-keys.md).
+  See [docs/architecture.md §4.1](../../../../docs/architecture.md#41-login-ids-are-primary-keys).
 - Read `CONTRIBUTING.md` section 5 before creating a migration.
 
 ## How to change the schema (example: E04 adds a column)

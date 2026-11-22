@@ -4,7 +4,7 @@ These rules keep 10 developers working in one repository without breaking each o
 Read this once fully before your first PR.
 
 New here? Set up your machine first: [docs/setup.md](docs/setup.md).
-Architecture decisions: [docs/adr/](docs/adr/).
+Architecture decisions: [docs/architecture.md](docs/architecture.md). Folder guide: [docs/repo-structure.md](docs/repo-structure.md).
 
 > ⚠ **This repository is public.** Anyone on the internet can read every commit.
 > Never commit passwords, API keys, tokens, real user data or `.env` files.
@@ -133,7 +133,7 @@ change it, so these rules are strict:
 All models live in one file, `apps/api/prisma/schema/schema.prisma`, with one section per module.
 **Edit only your own section.** Schema PRs are approved by E11. The step-by-step guide is in
 `apps/api/prisma/schema/README.md`. `Pm.pmId` and `User.userId` never change
-(see `docs/adr/0003-login-ids-as-primary-keys.md`).
+(see `docs/architecture.md` §4.1).
 
 ---
 

@@ -8,14 +8,17 @@ Docker locally) · Prisma · Redis · pnpm workspaces + Turborepo
 
 ## Quick start
 
+Docker Desktop must be running. `fnm use` picks Node 26 from `.nvmrc`; `pnpm setup:local` installs
+dependencies, starts Postgres + Redis, applies migrations, generates the Prisma client and adds demo data.
+
 ```bash
-fnm use                  # Node 26 from .nvmrc
-pnpm install
-pnpm infra:up            # Postgres (port 5433) + Redis in Docker
-cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env.local
-pnpm dev                 # web → http://localhost:3000, api → http://localhost:4000
+fnm use
+pnpm setup:local
+cp -n apps/web/.env.example apps/web/.env.local
+pnpm dev
 ```
+
+Web: http://localhost:3000 · API: http://localhost:4000
 
 First time? Follow the full guide: **[docs/setup.md](docs/setup.md)**.
 
@@ -24,17 +27,19 @@ First time? Follow the full guide: **[docs/setup.md](docs/setup.md)**.
 ```
 apps/web      Next.js frontend (src/features/<module> per module)
 apps/api      NestJS backend, the only place for business rules (src/modules/<module> per module)
-packages/     shared code (contracts, ui, config)
+packages/     shared code (contracts, ui)
 infra/        local Docker Compose
-docs/         setup guide, architecture decisions (adr/), runbooks
+scripts/      setup and CI helper scripts
+docs/         setup guide, architecture decisions, folder guide
 ```
 
 ## Docs
 
-- [PRD](docs/prd.md): what we build · [SRS](docs/srs.md): technical rules and acceptance tests
+- [Setup guide](docs/setup.md): first-time setup, daily commands, troubleshooting
 - [Repository structure](docs/repo-structure.md): what every folder is for and where your code goes
-- [Setup guide](docs/setup.md)
+- [Architecture and decisions](docs/architecture.md): how the system is built and why
 - [Contributing rules](CONTRIBUTING.md): branches, PRs, migrations, secrets
-- [ADR 0001: Monorepo structure](docs/adr/0001-monorepo-structure.md)
+
+The PRD and SRS are kept outside this repository; ask E11 for the current version.
 
 > ⚠ This repository is public. Never commit secrets or `.env` files.

@@ -2,8 +2,8 @@
 
 Notes for AI coding assistants working in this folder. People: see [README.md](README.md).
 
-- This is the NestJS backend of the BS23 Training Workspace. Requirements: `docs/prd.md`, `docs/srs.md`.
-  Architecture: `docs/adr/0001-monorepo-structure.md`.
+- This is the NestJS backend of the BS23 Training Workspace. Architecture and rules: `docs/architecture.md`.
+  The PRD and SRS are not in the repository; ask the module owner or E11 when a requirement is unclear.
 - ESM project: relative imports end in `.js`. Tests use Vitest, lint uses oxlint.
 - Database access only through the global `PrismaService` (`src/prisma/prisma.service.ts`), Prisma 7.10.1.
   The generated client is in `src/generated/prisma` (git-ignored, created by `pnpm db:generate`).

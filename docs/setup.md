@@ -1,7 +1,7 @@
 # Local Development Setup
 
 This guide takes you from zero to a running BS23 Training Workspace on your own machine:
-website + API + database + Redis.
+website + API + database (with demo data) + Redis.
 
 **Time needed:** about 30–60 minutes the first time (mostly downloads).
 
@@ -131,39 +131,36 @@ node --version
 
 ---
 
-## 4. Install dependencies
+## 4. One-command setup
+
+Make sure **Docker Desktop is open** (whale icon in the menu bar / system tray stops animating), then:
 
 ```bash
-pnpm install
+git checkout develop
+git pull
+pnpm setup:local
 ```
 
-Always use **pnpm**. Never run `npm install` or `yarn` in this repo.
+`pnpm setup:local` (`scripts/setup-local.sh`) does everything in order:
+
+1. installs dependencies exactly as locked (`pnpm install --frozen-lockfile`)
+2. creates `apps/api/.env` from `apps/api/.env.example` if it does not exist yet
+3. starts Postgres 18 and Redis 8 in Docker (`pnpm infra:up`)
+4. creates the database tables (`pnpm db:deploy`)
+5. generates the Prisma client (`pnpm db:generate`)
+6. adds demo data (`pnpm db:seed`)
+
+It ends with `Done. Start the apps with: pnpm dev`. It is safe to run again: the seed never creates
+duplicates. Always use **pnpm**; never run `npm install` or `yarn` in this repo.
 
 ---
 
-## 5. Start the database and Redis
+## 5. Create the web env file
 
-Make sure **Docker Desktop is open** (whale icon in the menu bar / system tray), then:
-
-```bash
-pnpm infra:up
-```
-
-Both containers should end as **Healthy**. Other commands:
-
-| Command | What it does |
-|---|---|
-| `pnpm infra:up` | Start Postgres + Redis |
-| `pnpm infra:down` | Stop them (your data is kept) |
-| `pnpm infra:logs` | Show their logs (Ctrl+C to exit) |
-
----
-
-## 6. Create your local env files
+`setup:local` creates only the API file. Create the web one by hand, once:
 
 ```bash
-cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env.local
+cp -n apps/web/.env.example apps/web/.env.local
 ```
 
 The default values already match the Docker setup. **Never commit `.env` or `.env.local`.**
@@ -171,7 +168,7 @@ Git is set up to ignore them.
 
 ---
 
-## 7. Run the apps
+## 6. Run and check
 
 ```bash
 pnpm dev
@@ -179,28 +176,79 @@ pnpm dev
 
 Open in your browser:
 
-- http://localhost:3000 → Next.js page ✅
-- http://localhost:4000 → `Hello World!` ✅
+- http://localhost:3000 → Next.js page
+- http://localhost:4000 → `Hello World!`
+- http://localhost:4000/health/ready → status `ok` (the API can reach the database)
 
-Stop with **Ctrl+C**.
+In a second terminal, check the database:
 
-**🎉 Done.** Post a screenshot of both pages in the team group.
+```bash
+pnpm db:status
+```
+
+`Database schema is up to date!` means every migration has run. Stop the apps with **Ctrl+C**.
+
+**Done.** Post a screenshot of the pages in the team group.
+
+### Demo accounts (local only)
+
+All demo accounts use the password `Password123!`. Never use it anywhere real.
+
+| Account | Logs in with | Type |
+|---|---|---|
+| PM001, PM002 | `pm001@bs23.test`, `pm002@bs23.test` | PM |
+| BS23001 | `BS23001` | TRAINEE |
+| BS23002 | `BS23002` | CENTRAL_LND |
+| BS23003 | `BS23003` | INDUSTRIAL_ATTACHMENT |
+| BS23004 | `BS23004` | SBU |
+
+The seed also creates the workspace `bs23`, a team, 6 skills, an XP rule and 2 levels. Login itself is
+built by E01; until it is merged these accounts are only rows in the database.
 
 ---
 
 ## Daily workflow (short version)
 
+Start every new task like this:
+
+`pnpm setup:local` picks up new dependencies and other people's migrations.
+
 ```bash
 cd ~/projects/bs23-training-workspace
 git checkout develop
 git pull
-pnpm install            # in case dependencies changed
-pnpm infra:up           # if Docker containers are not running
+pnpm setup:local
 git checkout -b feat/e04-your-task-name
 pnpm dev
 ```
 
-Full rules for branches, commits and PRs: [CONTRIBUTING.md](../CONTRIBUTING.md).
+Rules for branches, commits and PRs: [CONTRIBUTING.md](../CONTRIBUTING.md). The step-by-step task flow
+(rehearsal branch, testing with seed data, push) is in the team beginner guide shared by E11.
+
+### Useful commands
+
+| Command | What it does |
+|---|---|
+| `pnpm setup:local` | full local setup (install, Docker, migrations, client, seed) |
+| `pnpm infra:up` / `pnpm infra:down` | start / stop Postgres + Redis (data is kept) |
+| `pnpm infra:logs` | show their logs (Ctrl+C to exit) |
+| `pnpm dev` | run web + API with auto-reload |
+| `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm build` | the same checks CI runs |
+| `pnpm --filter api test:e2e` | API tests that need the local database |
+| `pnpm db:status` | are all migrations applied? |
+| `pnpm db:studio` | browse the local database in the browser |
+| `pnpm db:seed` | add the demo data again |
+
+### Start the database from scratch
+
+Deletes only your local test data:
+
+```bash
+docker compose -f infra/docker-compose.yml down -v
+pnpm setup:local
+```
+
+Never run this, or any migration or seed, against a Neon / staging / production database.
 
 ---
 
@@ -212,13 +260,24 @@ the project, and check again. Run `which node`. The path should contain `fnm`.
 
 **`failed to connect to the docker API` / `Cannot connect to the Docker daemon`**
 Docker Desktop is not running. Open it (macOS: `open -a Docker`), wait until the whale icon
-stops animating, then try again.
+stops animating, check with `docker info`, then run `pnpm setup:local` again.
 
-**`port is already allocated` when running `pnpm infra:up`**
+**`P1001: Can't reach database server at localhost:5433`**
+Postgres is not running. Open Docker Desktop, run `pnpm infra:up`, and check that `docker ps`
+shows `bs23-postgres-1` as `healthy`.
+
+**`pnpm db:status` says migrations "have not yet been applied", or `No migration found`**
+Your database is behind `develop`. Run `pnpm setup:local`.
+
+**TypeScript says `Property 'xyz' does not exist` on a Prisma model**
+The Prisma client is old. Run `pnpm db:generate`.
+
+**`port is already allocated` when Docker starts**
 Something else is already using port 5433 or 6379. Find it with:
 ```bash
-lsof -i :5433 -i :6379      # macOS / Linux
+lsof -i :5433 -i :6379
 ```
+(macOS / Linux.)
 Tell E11 what is listed before stopping anything.
 
 **Port 3000 or 4000 already in use when running `pnpm dev`**
@@ -228,6 +287,12 @@ Another app (maybe an old `pnpm dev`) is still running. Close other terminals, o
 **Database connection / authentication errors from the API**
 Check that `apps/api/.env` exists and that `DATABASE_URL` uses port **5433**. Port 5432 is often
 used by a Postgres that is already installed on your machine, not our Docker one.
+
+**zsh error such as `cd: too many arguments` after pasting a command**
+The pasted line ended with a `# comment`. Run it again without the `#` part.
+
+**pnpm prints "Update available! 12.16.1 → …"**
+Ignore it. Everyone stays on 12.16.1.
 
 **pnpm warns that commands are "shadowed" or you have two pnpm versions**
 Run `which -a pnpm`. If more than one path is listed, tell E11. The extra one has to be removed.

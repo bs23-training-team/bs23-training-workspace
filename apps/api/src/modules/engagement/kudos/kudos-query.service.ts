@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service.js';
-import { MAX_PAGE, parseCursor, type Db, type KudosPort } from '../../growth-core/index.js';
+// growth-core imports this file (IF-04), so these come from growth-core's leaf files and NOT from its index.
+// Importing the index would make a file cycle: growth-core/index -> growth-core.module -> kudos-query.module
+// -> kudos-query.service -> growth-core/index. The types are `import type`, erased at build time.
+import { MAX_PAGE, parseCursor } from '../../growth-core/paging.js';
+import type { Db } from '../../growth-core/ports/db.js';
+import type { KudosPort } from '../../growth-core/ports/kudos.port.js';
 
 export interface KudosView {
   id: string;

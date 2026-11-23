@@ -98,6 +98,20 @@ describe('GrowthErrorFilter', () => {
     ['REASON_REQUIRED', 422],
     ['NEGATIVE_TOTAL', 422],
     ['COOLDOWN', 422],
+    ['NAME_REQUIRED', 422],
+    ['BADGE_RULE', 422],
+    ['NOT_SPECIAL', 422],
+    ['NAME_TAKEN', 409],
+    ['RULE_VALUE', 422],
+    ['LEVELS_EMPTY', 422],
+    ['LEVEL_NAME', 422],
+    ['LEVEL_NAME_DUP', 422],
+    ['LEVEL_XP', 422],
+    ['LEVEL_FIRST', 422],
+    ['LEVEL_ORDER', 422],
+    ['TARGET', 422],
+    ['REWARD', 422],
+    ['COUNT', 422],
   ])('maps %s to %i and keeps the code and the message', (code, status) => {
     const sent = respond(new GrowthError(code, 'A clear message'));
     expect(sent.status).toBe(status);

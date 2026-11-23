@@ -100,10 +100,11 @@ describe('BadgesService (database)', () => {
       });
     });
 
-    it('refuses a Special badge with a threshold, and a Behavioral badge without one (VALIDATION)', async () => {
+    it('refuses a Special badge with a threshold, and a Behavioral badge without one (BADGE_RULE), and a blank name (NAME_REQUIRED)', async () => {
       const base = { workspaceId, pmId: 'PM001', icon: '🏅', criteria: 'x' };
-      await expect(badges.create({ ...base, name: 'A', kind: 'SPECIAL', threshold: 3 })).rejects.toMatchObject({ code: 'VALIDATION' });
-      await expect(badges.create({ ...base, name: 'B', kind: 'BEHAVIORAL', ruleType: 'SPRINT_STREAK' })).rejects.toMatchObject({ code: 'VALIDATION' });
+      await expect(badges.create({ ...base, name: 'A', kind: 'SPECIAL', threshold: 3 })).rejects.toMatchObject({ code: 'BADGE_RULE' });
+      await expect(badges.create({ ...base, name: 'B', kind: 'BEHAVIORAL', ruleType: 'SPRINT_STREAK' })).rejects.toMatchObject({ code: 'BADGE_RULE' });
+      await expect(badges.create({ ...base, name: ' ', kind: 'SPECIAL' })).rejects.toMatchObject({ code: 'NAME_REQUIRED' });
       await expect(badges.create({ ...base, name: 'C', kind: 'TECHNICAL' as never })).rejects.toMatchObject({ code: 'VALIDATION' });
       expect(await prisma.badge.count({ where: { workspaceId } })).toBe(0);
     });
@@ -116,11 +117,11 @@ describe('BadgesService (database)', () => {
       await expect(prisma.badge.create({ data: { ...data, name: 'D4', kind: 'SPECIAL', retiredAt: new Date() } })).rejects.toThrow(); // retiredAt without retiredById
     });
 
-    it('refuses a duplicate name in the workspace (DUPLICATE_NAME)', async () => {
+    it('refuses a duplicate name in the workspace (NAME_TAKEN)', async () => {
       await badges.create({ workspaceId, pmId: 'PM001', name: 'Same', icon: '🏅', kind: 'SPECIAL', criteria: 'x' });
       await expect(
         badges.create({ workspaceId, pmId: 'PM001', name: 'Same', icon: '⭐', kind: 'SPECIAL', criteria: 'y' }),
-      ).rejects.toMatchObject({ code: 'DUPLICATE_NAME' });
+      ).rejects.toMatchObject({ code: 'NAME_TAKEN' });
     });
 
     it('retires a badge once; a retired badge cannot be awarded, existing awards stay', async () => {
@@ -173,7 +174,7 @@ describe('BadgesService (database)', () => {
       await expect(award(s.badgeId, 'BS99999')).rejects.toMatchObject({ code: 'NOT_FOUND' });
       await expect(award(randomUUID())).rejects.toMatchObject({ code: 'NOT_FOUND' });
       const b = await behavioral('SPRINT_STREAK', 3);
-      await expect(award(b.badgeId)).rejects.toMatchObject({ code: 'WRONG_KIND' });
+      await expect(award(b.badgeId)).rejects.toMatchObject({ code: 'NOT_SPECIAL' });
       expect(await prisma.badgeAward.count({ where: { workspaceId } })).toBe(0);
     });
 

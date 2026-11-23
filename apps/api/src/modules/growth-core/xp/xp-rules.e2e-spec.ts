@@ -66,10 +66,10 @@ describe('XpRulesService update (database)', () => {
     expect(await rules.get(workspaceId)).toMatchObject({ onTimeSprint: 35, sprintCutoff: '09:30' });
   });
 
-  it('refuses a bad edit (VALIDATION) and changes nothing', async () => {
+  it('refuses a bad edit (RULE_VALUE) and changes nothing', async () => {
     const before = await rules.getAll(workspaceId);
-    await expect(rules.update(workspaceId, 'PM001', { onTimeSprint: -5, kudos: 9 })).rejects.toMatchObject({ code: 'VALIDATION' });
-    await expect(rules.update(workspaceId, 'PM001', { sprintCutoff: '25:00' })).rejects.toMatchObject({ code: 'VALIDATION' });
+    await expect(rules.update(workspaceId, 'PM001', { onTimeSprint: -5, kudos: 9 })).rejects.toMatchObject({ code: 'RULE_VALUE' });
+    await expect(rules.update(workspaceId, 'PM001', { sprintCutoff: '25:00' })).rejects.toMatchObject({ code: 'RULE_VALUE' });
     expect(await rules.getAll(workspaceId)).toEqual(before);
   });
 

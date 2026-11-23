@@ -86,11 +86,11 @@ describe('LevelsService (database)', () => {
     expect(swapped.map((l) => [l.name, l.minXp])).toEqual([['B', 0], ['A', 100]]);
   });
 
-  it('refuses an invalid set (VALIDATION) and changes nothing', async () => {
+  it('refuses an invalid set (LEVEL_FIRST) and changes nothing', async () => {
     await levels.save(workspaceId, FOUR);
     await expect(
       levels.save(workspaceId, [{ name: 'Rookie', minXp: 5 }, { name: 'Builder', minXp: 250 }]),
-    ).rejects.toMatchObject({ code: 'VALIDATION' });
+    ).rejects.toMatchObject({ code: 'LEVEL_FIRST' });
     expect((await activeRows()).map((l) => l.name)).toEqual(['Rookie', 'Builder', 'Pro', 'Expert']);
     expect(await prisma.level.count({ where: { workspaceId } })).toBe(4);
   });

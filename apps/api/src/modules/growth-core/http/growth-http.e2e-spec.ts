@@ -239,12 +239,15 @@ describe('growth-core HTTP routes (database, req.user set by the test)', () => {
   });
 
   describe('XP rules and levels', () => {
-    it('a PM reads and edits the rules; the editing PM is recorded; bad edits are 400', async () => {
+    it('a PM reads and edits the rules; the editing PM is recorded; a value that is not allowed is 422 RULE_VALUE, a wrong shape is 400', async () => {
       expect((await as(pm()).get('/pm/xp-rules')).body).toMatchObject({ onTimeSprint: 20, kudos: 5, updatedById: null });
       const edit = await as(pm()).put('/pm/xp-rules').send({ onTimeSprint: 25 });
       expect(edit.status).toBe(200);
       expect(edit.body).toMatchObject({ onTimeSprint: 25, updatedById: 'PM001' });
-      expect((await as(pm()).put('/pm/xp-rules').send({ onTimeSprint: -1 })).status).toBe(400);
+      const negativeRule = await as(pm()).put('/pm/xp-rules').send({ onTimeSprint: -1 });
+      expect([negativeRule.status, errorCode(negativeRule)]).toEqual([422, 'RULE_VALUE']);
+      const badCutoff = await as(pm()).put('/pm/xp-rules').send({ sprintCutoff: '25:00' });
+      expect([badCutoff.status, errorCode(badCutoff)]).toEqual([422, 'RULE_VALUE']);
       expect((await as(pm()).put('/pm/xp-rules').send({})).status).toBe(400);
       expect((await as(pm()).put('/pm/xp-rules').send({ luckyBonus: 1 })).status).toBe(400);
       expect((await as(user(U1)).get('/pm/xp-rules')).status).toBe(403);
@@ -257,7 +260,8 @@ describe('growth-core HTTP routes (database, req.user set by the test)', () => {
       const read = await as(user(U1)).get('/levels');
       expect((read.body as { name: string }[]).map((l) => l.name)).toEqual(['Rookie', 'Builder']);
 
-      expect((await as(pm()).put('/pm/levels').send({ levels: [{ name: 'Only', minXp: 10 }] })).status).toBe(400); // first must be 0
+      const firstNotZero = await as(pm()).put('/pm/levels').send({ levels: [{ name: 'Only', minXp: 10 }] }); // first must be 0
+      expect([firstNotZero.status, errorCode(firstNotZero)]).toEqual([422, 'LEVEL_FIRST']);
       expect((await as(pm()).put('/pm/levels').send({ levels: 'nope' })).status).toBe(400);
       expect((await as(pm()).put('/pm/levels').send({ levels: [{ name: 'A', minXp: '0' }] })).status).toBe(400);
       expect((await as(user(U1)).put('/pm/levels').send({ levels: [] })).status).toBe(403);
@@ -300,7 +304,7 @@ describe('growth-core HTTP routes (database, req.user set by the test)', () => {
       expect(created.status).toBe(201);
       const badgeId = (created.body as { badgeId: string }).badgeId;
       const dup = await as(pm()).post('/pm/badges').send({ name: 'Mentor', icon: '⭐', kind: 'SPECIAL', criteria: 'x' });
-      expect([dup.status, errorCode(dup)]).toEqual([409, 'DUPLICATE_NAME']);
+      expect([dup.status, errorCode(dup)]).toEqual([409, 'NAME_TAKEN']);
 
       const award = await as(pm()).post(`/pm/badges/${badgeId}/awards`).send({ userId: U1, evidence: 'Led the demo' });
       expect(award.status).toBe(201);
@@ -315,20 +319,22 @@ describe('growth-core HTTP routes (database, req.user set by the test)', () => {
       expect((await as(user(U1)).get('/me/growth')).body).toMatchObject({ badges: [] });
     });
 
-    it('creates a Behavioral badge with a rule and threshold; an unknown rule or a missing threshold is 400', async () => {
+    it('creates a Behavioral badge with a rule and threshold; an unknown rule or a text threshold is 400, a missing threshold is 422 BADGE_RULE', async () => {
       const ok = await as(pm()).post('/pm/badges').send({ name: 'Streaker', icon: '🔥', kind: 'BEHAVIORAL', criteria: '5 days in a row', ruleType: 'SPRINT_STREAK', threshold: 5 });
       expect(ok.status).toBe(201);
       const badRule = await as(pm()).post('/pm/badges').send({ name: 'B1', icon: '🔥', kind: 'BEHAVIORAL', criteria: 'x', ruleType: 'NOPE', threshold: 5 });
       expect([badRule.status, errorCode(badRule)]).toEqual([400, 'VALIDATION']);
       const noThreshold = await as(pm()).post('/pm/badges').send({ name: 'B2', icon: '🔥', kind: 'BEHAVIORAL', criteria: 'x', ruleType: 'SPRINT_STREAK' });
-      expect([noThreshold.status, errorCode(noThreshold)]).toEqual([400, 'VALIDATION']);
+      expect([noThreshold.status, errorCode(noThreshold)]).toEqual([422, 'BADGE_RULE']);
       const textThreshold = await as(pm()).post('/pm/badges').send({ name: 'B3', icon: '🔥', kind: 'BEHAVIORAL', criteria: 'x', ruleType: 'SPRINT_STREAK', threshold: '5' });
       expect([textThreshold.status, errorCode(textThreshold)]).toEqual([400, 'VALIDATION']);
     });
 
-    it('refuses bad input and wrong roles: Special with a threshold 400, evidence 422, scope 403, user 403, retire twice 409', async () => {
+    it('refuses bad input and wrong roles: Special with a threshold 422, blank name 422, evidence 422, scope 403, user 403, retire twice 409', async () => {
       const bad = await as(pm()).post('/pm/badges').send({ name: 'X', icon: '🏅', kind: 'SPECIAL', criteria: 'x', threshold: 3 });
-      expect([bad.status, errorCode(bad)]).toEqual([400, 'VALIDATION']);
+      expect([bad.status, errorCode(bad)]).toEqual([422, 'BADGE_RULE']);
+      const noName = await as(pm()).post('/pm/badges').send({ name: ' ', icon: '🏅', kind: 'SPECIAL', criteria: 'x' });
+      expect([noName.status, errorCode(noName)]).toEqual([422, 'NAME_REQUIRED']);
       const typeBad = await as(pm()).post('/pm/badges').send({ name: 'X', icon: '🏅', kind: 'TECHNICAL', criteria: 'x' });
       expect(typeBad.status).toBe(400);
 

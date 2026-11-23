@@ -42,23 +42,23 @@ export function validateNewBadge(input: NewBadgeInput): ValidBadge {
   const icon = input.icon.trim();
   const criteria = input.criteria.trim();
   if (name === '' || icon === '' || criteria === '') {
-    throw new GrowthError('VALIDATION', 'A badge needs a name, an icon and its criteria');
+    throw new GrowthError('NAME_REQUIRED', 'A badge needs a name, an icon and its criteria');
   }
   const ruleType = input.ruleType ?? 'MANUAL';
   const threshold = input.threshold ?? null;
 
   if (input.kind === 'SPECIAL') {
     if (ruleType !== 'MANUAL' || threshold !== null) {
-      throw new GrowthError('VALIDATION', 'A Special badge is awarded by a PM: no rule and no threshold');
+      throw new GrowthError('BADGE_RULE', 'A Special badge is awarded by a PM: no rule and no threshold');
     }
     return { name, icon, kind: 'SPECIAL', criteria, ruleType: 'MANUAL', threshold: null };
   }
   if (input.kind === 'BEHAVIORAL') {
     if (ruleType === 'MANUAL') {
-      throw new GrowthError('VALIDATION', 'A Behavioral badge needs an automatic rule');
+      throw new GrowthError('BADGE_RULE', 'A Behavioral badge needs an automatic rule');
     }
     if (threshold === null || !Number.isInteger(threshold) || threshold < 1 || threshold > MAX_THRESHOLD) {
-      throw new GrowthError('VALIDATION', 'A Behavioral badge needs a whole threshold of 1 or more');
+      throw new GrowthError('BADGE_RULE', 'A Behavioral badge needs a whole threshold of 1 or more');
     }
     return { name, icon, kind: 'BEHAVIORAL', criteria, ruleType, threshold };
   }

@@ -19,19 +19,20 @@ describe('validateLevelSet', () => {
     expect(validateLevelSet([{ name: 'Only', minXp: 0 }])).toHaveLength(1);
   });
 
-  const bad: [string, { name: string; minXp: number }[]][] = [
-    ['an empty set', []],
-    ['a first level that does not start at 0', [{ name: 'A', minXp: 10 }, { name: 'B', minXp: 50 }]],
-    ['thresholds that do not increase', [{ name: 'A', minXp: 0 }, { name: 'B', minXp: 50 }, { name: 'C', minXp: 50 }]],
-    ['thresholds that go down', [{ name: 'A', minXp: 0 }, { name: 'B', minXp: 50 }, { name: 'C', minXp: 20 }]],
-    ['a blank name', [{ name: 'A', minXp: 0 }, { name: '  ', minXp: 50 }]],
-    ['a duplicate name', [{ name: 'Pro', minXp: 0 }, { name: 'Pro', minXp: 50 }]],
-    ['a duplicate name in another case', [{ name: 'Pro', minXp: 0 }, { name: ' pro ', minXp: 50 }]],
-    ['a fractional threshold', [{ name: 'A', minXp: 0 }, { name: 'B', minXp: 10.5 }]],
-    ['a negative threshold', [{ name: 'A', minXp: -5 }]],
+  // SRS error table (422): LEVELS_EMPTY, LEVEL_NAME, LEVEL_NAME_DUP, LEVEL_XP, LEVEL_FIRST, LEVEL_ORDER.
+  const bad: [string, { name: string; minXp: number }[], string][] = [
+    ['an empty set', [], 'LEVELS_EMPTY'],
+    ['a first level that does not start at 0', [{ name: 'A', minXp: 10 }, { name: 'B', minXp: 50 }], 'LEVEL_FIRST'],
+    ['thresholds that do not increase', [{ name: 'A', minXp: 0 }, { name: 'B', minXp: 50 }, { name: 'C', minXp: 50 }], 'LEVEL_ORDER'],
+    ['thresholds that go down', [{ name: 'A', minXp: 0 }, { name: 'B', minXp: 50 }, { name: 'C', minXp: 20 }], 'LEVEL_ORDER'],
+    ['a blank name', [{ name: 'A', minXp: 0 }, { name: '  ', minXp: 50 }], 'LEVEL_NAME'],
+    ['a duplicate name', [{ name: 'Pro', minXp: 0 }, { name: 'Pro', minXp: 50 }], 'LEVEL_NAME_DUP'],
+    ['a duplicate name in another case', [{ name: 'Pro', minXp: 0 }, { name: ' pro ', minXp: 50 }], 'LEVEL_NAME_DUP'],
+    ['a fractional threshold', [{ name: 'A', minXp: 0 }, { name: 'B', minXp: 10.5 }], 'LEVEL_XP'],
+    ['a negative threshold', [{ name: 'A', minXp: -5 }], 'LEVEL_XP'],
   ];
-  it.each(bad)('refuses %s (VALIDATION)', (_label, levels) => {
-    expect(() => validateLevelSet(levels)).toThrowError(expect.objectContaining({ code: 'VALIDATION' }) as Error);
+  it.each(bad)('refuses %s', (_label, levels, code) => {
+    expect(() => validateLevelSet(levels)).toThrowError(expect.objectContaining({ code }) as Error);
   });
 });
 

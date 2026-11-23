@@ -68,7 +68,7 @@ export class BadgesService {
       skipDuplicates: true,
     });
     if (count === 0) {
-      throw new GrowthError('DUPLICATE_NAME', `A badge named "${badge.name}" already exists`);
+      throw new GrowthError('NAME_TAKEN', `A badge named "${badge.name}" already exists`);
     }
     const created = await this.prisma.badge.findUniqueOrThrow({
       where: { workspaceId_name: { workspaceId: input.workspaceId, name: badge.name } },
@@ -111,7 +111,7 @@ export class BadgesService {
         throw new GrowthError('NOT_FOUND', 'Badge not found');
       }
       if (badge.kind !== 'SPECIAL') {
-        throw new GrowthError('WRONG_KIND', 'Behavioral badges are awarded automatically');
+        throw new GrowthError('NOT_SPECIAL', 'Behavioral badges are awarded automatically');
       }
       if (badge.retiredAt) {
         throw new GrowthError('BADGE_RETIRED', 'This badge is retired');

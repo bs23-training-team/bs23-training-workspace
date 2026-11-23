@@ -50,24 +50,32 @@ export function validateRuleEdit(patch: Record<string, unknown>): XpRuleEdit {
   for (const [name, value] of entries) {
     if (name in INTEGER_RULES) {
       const min = INTEGER_RULES[name] as number;
-      if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > MAX_INT) {
-        throw new GrowthError('VALIDATION', `${name} must be a whole number of ${min} or more`);
+      if (typeof value !== 'number') {
+        throw new GrowthError('VALIDATION', `${name} must be a number`);
+      }
+      if (!Number.isInteger(value) || value < min || value > MAX_INT) {
+        throw new GrowthError('RULE_VALUE', `${name} must be a whole number of ${min} or more`);
       }
       edit[name] = value;
     } else if (name === 'pmReviewMultiplier') {
+      if (typeof value !== 'number') {
+        throw new GrowthError('VALIDATION', 'pmReviewMultiplier must be a number');
+      }
       if (
-        typeof value !== 'number' ||
         !Number.isFinite(value) ||
         value < 0 ||
         value > MAX_MULTIPLIER ||
         Math.abs(value * 100 - Math.round(value * 100)) > 1e-9
       ) {
-        throw new GrowthError('VALIDATION', 'pmReviewMultiplier must be 0 or more, with at most 2 decimals');
+        throw new GrowthError('RULE_VALUE', 'pmReviewMultiplier must be 0 or more, with at most 2 decimals');
       }
       edit[name] = value;
     } else if (name === 'sprintCutoff') {
-      if (typeof value !== 'string' || !CUTOFF.test(value)) {
-        throw new GrowthError('VALIDATION', 'sprintCutoff must be a time written HH:MM');
+      if (typeof value !== 'string') {
+        throw new GrowthError('VALIDATION', 'sprintCutoff must be text written HH:MM');
+      }
+      if (!CUTOFF.test(value)) {
+        throw new GrowthError('RULE_VALUE', 'sprintCutoff must be a time written HH:MM');
       }
       edit[name] = value;
     } else {

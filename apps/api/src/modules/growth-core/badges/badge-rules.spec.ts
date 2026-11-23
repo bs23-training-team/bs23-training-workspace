@@ -29,21 +29,23 @@ describe('validateNewBadge', () => {
     });
   });
 
-  const bad: [string, object][] = [
-    ['a blank name', { ...base, name: '  ', kind: 'SPECIAL' }],
-    ['a blank icon', { ...base, icon: '', kind: 'SPECIAL' }],
-    ['blank criteria', { ...base, criteria: ' ', kind: 'SPECIAL' }],
-    ['a Special badge with a threshold', { ...base, kind: 'SPECIAL', threshold: 3 }],
-    ['a Special badge with an automatic rule', { ...base, kind: 'SPECIAL', ruleType: 'SPRINT_STREAK' }],
-    ['a Behavioral badge with no rule', { ...base, kind: 'BEHAVIORAL', threshold: 3 }],
-    ['a Behavioral badge with the MANUAL rule', { ...base, kind: 'BEHAVIORAL', ruleType: 'MANUAL', threshold: 3 }],
-    ['a Behavioral badge with no threshold', { ...base, kind: 'BEHAVIORAL', ruleType: 'SPRINT_STREAK' }],
-    ['a Behavioral threshold of 0', { ...base, kind: 'BEHAVIORAL', ruleType: 'SPRINT_STREAK', threshold: 0 }],
-    ['a fractional threshold', { ...base, kind: 'BEHAVIORAL', ruleType: 'SPRINT_STREAK', threshold: 2.5 }],
-    ['a Technical badge (dropped in v1)', { ...base, kind: 'TECHNICAL' }],
+  // The SRS error table (section 7.1): a missing name is NAME_REQUIRED, a kind/rule/threshold that does not fit is BADGE_RULE
+  // (both 422); an unknown kind is an ordinary invalid value (VALIDATION).
+  const bad: [string, object, string][] = [
+    ['a blank name', { ...base, name: '  ', kind: 'SPECIAL' }, 'NAME_REQUIRED'],
+    ['a blank icon', { ...base, icon: '', kind: 'SPECIAL' }, 'NAME_REQUIRED'],
+    ['blank criteria', { ...base, criteria: ' ', kind: 'SPECIAL' }, 'NAME_REQUIRED'],
+    ['a Special badge with a threshold', { ...base, kind: 'SPECIAL', threshold: 3 }, 'BADGE_RULE'],
+    ['a Special badge with an automatic rule', { ...base, kind: 'SPECIAL', ruleType: 'SPRINT_STREAK' }, 'BADGE_RULE'],
+    ['a Behavioral badge with no rule', { ...base, kind: 'BEHAVIORAL', threshold: 3 }, 'BADGE_RULE'],
+    ['a Behavioral badge with the MANUAL rule', { ...base, kind: 'BEHAVIORAL', ruleType: 'MANUAL', threshold: 3 }, 'BADGE_RULE'],
+    ['a Behavioral badge with no threshold', { ...base, kind: 'BEHAVIORAL', ruleType: 'SPRINT_STREAK' }, 'BADGE_RULE'],
+    ['a Behavioral threshold of 0', { ...base, kind: 'BEHAVIORAL', ruleType: 'SPRINT_STREAK', threshold: 0 }, 'BADGE_RULE'],
+    ['a fractional threshold', { ...base, kind: 'BEHAVIORAL', ruleType: 'SPRINT_STREAK', threshold: 2.5 }, 'BADGE_RULE'],
+    ['a Technical badge (dropped in v1)', { ...base, kind: 'TECHNICAL' }, 'VALIDATION'],
   ];
-  it.each(bad)('refuses %s (VALIDATION)', (_label, input) => {
-    expect(() => validateNewBadge(input as never)).toThrowError(expect.objectContaining({ code: 'VALIDATION' }) as Error);
+  it.each(bad)('refuses %s', (_label, input, code) => {
+    expect(() => validateNewBadge(input as never)).toThrowError(expect.objectContaining({ code }) as Error);
   });
 });
 

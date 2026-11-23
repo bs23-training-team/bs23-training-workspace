@@ -18,28 +18,28 @@ const MAX_XP = 2 ** 31 - 1; // Level.minXp is a 32-bit integer column
  */
 export function validateLevelSet(levels: LevelInput[]): LevelInput[] {
   if (levels.length === 0) {
-    throw new GrowthError('VALIDATION', 'There must be at least one level');
+    throw new GrowthError('LEVELS_EMPTY', 'There must be at least one level');
   }
   const cleaned = levels.map((l) => ({ name: l.name.trim(), minXp: l.minXp }));
   const seen = new Set<string>();
   cleaned.forEach((level, i) => {
     if (level.name === '') {
-      throw new GrowthError('VALIDATION', 'A level name must not be blank');
+      throw new GrowthError('LEVEL_NAME', 'A level name must not be blank');
     }
     if (!Number.isInteger(level.minXp) || level.minXp < 0 || level.minXp > MAX_XP) {
-      throw new GrowthError('VALIDATION', `Level "${level.name}" needs a whole-number threshold of 0 or more`);
+      throw new GrowthError('LEVEL_XP', `Level "${level.name}" needs a whole-number threshold of 0 or more`);
     }
     const lowered = level.name.toLowerCase();
     if (seen.has(lowered)) {
-      throw new GrowthError('VALIDATION', `Two levels are named "${level.name}"`);
+      throw new GrowthError('LEVEL_NAME_DUP', `Two levels are named "${level.name}"`);
     }
     seen.add(lowered);
     if (i === 0 && level.minXp !== 0) {
-      throw new GrowthError('VALIDATION', 'The first level must start at 0 XP');
+      throw new GrowthError('LEVEL_FIRST', 'The first level must start at 0 XP');
     }
     const previous = cleaned[i - 1];
     if (previous && level.minXp <= previous.minXp) {
-      throw new GrowthError('VALIDATION', 'Level thresholds must strictly increase');
+      throw new GrowthError('LEVEL_ORDER', 'Level thresholds must strictly increase');
     }
   });
   return cleaned;

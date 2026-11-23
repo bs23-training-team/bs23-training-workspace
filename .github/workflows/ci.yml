@@ -110,7 +110,20 @@ jobs:
           echo "WEB_APP_URL=http://localhost:3000" >> "$GITHUB_ENV"
           echo "MAIL_PROVIDER=console" >> "$GITHUB_ENV"
 
-      - name: API e2e tests (real PostgreSQL)
+      # The identity e2e tests write rows, so they run on their own throwaway database
+      # (name contains "test", required by the test itself), never on bs23_ci. Without
+      # TEST_DATABASE_URL those tests are skipped silently.
+      - name: Throwaway test database for the identity e2e tests
+        run: |
+          command -v psql >/dev/null || { sudo apt-get update && sudo apt-get install -y postgresql-client; }
+          PGPASSWORD=ci psql -h localhost -U ci -d bs23_ci -v ON_ERROR_STOP=1 -c 'CREATE DATABASE bs23_test'
+          DATABASE_URL=postgresql://ci:ci@localhost:5432/bs23_test \
+          DIRECT_URL=postgresql://ci:ci@localhost:5432/bs23_test \
+          pnpm db:deploy
+          echo "TEST_DATABASE_URL=postgresql://ci:ci@localhost:5432/bs23_test" >> "$GITHUB_ENV"
+          echo "E2E_CONFIRM_TEST_DB=yes" >> "$GITHUB_ENV"
+
+      - name: API e2e tests (real PostgreSQL, includes identity)
         run: pnpm --filter api test:e2e
 
       - name: Schema and migrations are in sync

@@ -23,6 +23,7 @@ export class DirectoryService {
       archivedAt: null,
       ...(query.position && { position: query.position }),
       ...(query.resource && { resource: query.resource }),
+      // TODO(E03): reads E03's Skill table through the UserSkill relation; move to an E03 service when it exports one.
       ...(query.skill && { userSkills: { some: { skill: { name: query.skill } } } }),
       ...(q && {
         OR: [

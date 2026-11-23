@@ -22,22 +22,30 @@ export class DirectoryController {
   @Get('users')
   listUsers(
     @Req() req: RequestWithUser,
-    @Query('q') q?: string,
-    @Query('position') position?: string,
-    @Query('resource') resource?: string,
-    @Query('skill') skill?: string,
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
+    @Query('q') q?: unknown,
+    @Query('position') position?: unknown,
+    @Query('resource') resource?: unknown,
+    @Query('skill') skill?: unknown,
+    @Query('page') page?: unknown,
+    @Query('pageSize') pageSize?: unknown,
   ): Promise<UserListResponse> {
-    return this.directory.listUsers(requirePm(req), {
-      q,
-      skill,
-      position: oneOf(POSITIONS, position, 'position'),
-      resource: oneOf(USER_RESOURCES, resource, 'resource'),
-      page: toInt(page, 'page'),
-      pageSize: toInt(pageSize, 'pageSize'),
+    const actor = requirePm(req);
+    return this.directory.listUsers(actor, {
+      q: text(q, 'q'),
+      skill: text(skill, 'skill'),
+      position: oneOf(POSITIONS, text(position, 'position'), 'position'),
+      resource: oneOf(USER_RESOURCES, text(resource, 'resource'), 'resource'),
+      page: toInt(text(page, 'page'), 'page'),
+      pageSize: toInt(text(pageSize, 'pageSize'), 'pageSize'),
     });
   }
+}
+
+/** A query value must be one plain string. `?q=a&q=b` arrives as an array: answer 400, never a 500. */
+function text(value: unknown, name: string): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') throw new BadRequestException(`${name} must be given once, as text.`);
+  return value;
 }
 
 function oneOf<T extends Position | UserResource>(

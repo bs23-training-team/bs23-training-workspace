@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { ROLES_KEY } from '../identity/decorators/access.decorators.js';
 import { JwtAuthGuard } from '../identity/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../identity/guards/roles.guard.js';
@@ -21,6 +21,13 @@ describe('DirectoryController', () => {
   it('takes the caller only from req.user', async () => {
     await controller.listUsers(pmReq, 'bris', undefined, undefined, undefined, '2', '10');
     expect(directory.listUsers).toHaveBeenCalledWith(PM, expect.objectContaining({ q: 'bris', page: 2, pageSize: 10 }));
+  });
+
+  it('answers 400, not 500, when a query value is repeated or not text', () => {
+    expect(() => controller.listUsers(pmReq, ['a', 'b'])).toThrow(BadRequestException);
+    expect(() => controller.listUsers(pmReq, undefined, undefined, undefined, ['a', 'b'])).toThrow(BadRequestException);
+    expect(() => controller.listUsers(pmReq, undefined, ['BACKEND', 'FRONTEND'])).toThrow(BadRequestException);
+    expect(directory.listUsers).not.toHaveBeenCalled();
   });
 
   it('answers 401 when there is no req.user', () => {

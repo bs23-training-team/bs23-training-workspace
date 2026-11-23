@@ -4,6 +4,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { validateEnv } from '../../config/env.validation.js';
 import { PrismaModule } from '../../prisma/prisma.module.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { ensureTestJwtSecrets } from '../growth-core/testing/test-env.js';
 import { BadgesService } from '../growth-core/badges/badges.service.js';
 import { CLOCK, KUDOS } from '../growth-core/index.js';
 import { parseDay } from '../growth-core/time/org-time.js';
@@ -19,6 +20,8 @@ import { KudosService } from './kudos/kudos.service.js';
 // growth-core's ledger, a PM approves the XP, and growth-core's kudos badge rule reads kudos
 // back through engagement's IF-04 reader. Needs the local database. Run: pnpm --filter api test:e2e
 // Own temporary workspace; removed afterwards.
+
+ensureTestJwtSecrets(); // growth-core imports E01's IdentityModule, which needs JWT secrets to start
 
 describe('EngagementModule + GrowthCoreModule (wired, real database)', () => {
   const tag = randomUUID().slice(0, 6);

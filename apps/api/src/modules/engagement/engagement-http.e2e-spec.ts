@@ -7,15 +7,21 @@ import request from 'supertest';
 import { validateEnv } from '../../config/env.validation.js';
 import { PrismaModule } from '../../prisma/prisma.module.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import type { Actor, RequestUser } from '../growth-core/index.js';
+import { ensureTestJwtSecrets } from '../growth-core/testing/test-env.js';
+import { JwtAuthGuard } from '../identity/guards/jwt-auth.guard.js';
+import type { RequestUser } from '../growth-core/index.js';
 import { parseDay } from '../growth-core/time/org-time.js';
 import { EngagementModule } from './engagement.module.js';
 
-// The engagement HTTP routes (kudos, quests, leaderboard) end to end, with the real database. The test sets
-// req.user itself on the request (like E01's auth guard will); no header says who is calling. Includes a demo that crosses both modules: a user sends kudos, the PM
+// The engagement HTTP routes (kudos, quests, leaderboard) end to end, with the real database. E01's JwtAuthGuard is
+// replaced by a guard that lets everything through, and the test sets req.user itself on the request in the shape
+// E01's guard produces ({ sub, sid, workspaceId, role }); no header says who is calling. The real login is in
+// real-login.e2e-spec. Includes a demo that crosses both modules: a user sends kudos, the PM
 // reviews the XP through the growth-core routes, and the leaderboard moves.
 // Needs the local database. Run: pnpm --filter api test:e2e
 // Own temporary workspace. U1..U4 belong to PM001, X1 to PM002, ARCH is archived.
+
+ensureTestJwtSecrets(); // growth-core imports E01's IdentityModule, which needs JWT secrets to start
 
 describe('engagement HTTP routes (database, req.user set by the test)', () => {
   const tag = randomUUID().slice(0, 6);
@@ -24,8 +30,9 @@ describe('engagement HTTP routes (database, req.user set by the test)', () => {
   let prisma: PrismaService;
   let workspaceId: string;
 
-  const pm = (pmId = 'PM001'): Actor => ({ role: 'PM', pmId, workspaceId });
-  const user = (userId: string): Actor => ({ role: 'USER', userId, workspaceId });
+  // req.user as E01's JwtAuthGuard sets it: sub is the Pm.pmId or User.userId, every User has the role TRAINEE.
+  const pm = (pmId = 'PM001'): RequestUser => ({ sub: pmId, sid: 'test-session', workspaceId, role: 'PM' });
+  const user = (userId: string): RequestUser => ({ sub: userId, sid: 'test-session', workspaceId, role: 'TRAINEE' });
   // Test-only: the request reaches the app with req.user already set (no header, no shared state). null = nobody signed in.
   const target = (user: RequestUser | null): RequestListener | Server => {
     if (!user) return app.getHttpServer() as Server;
@@ -70,7 +77,10 @@ describe('engagement HTTP routes (database, req.user set by the test)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }), PrismaModule, EngagementModule],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true }) // the real guard is exercised in real-login.e2e-spec
+      .compile();
     app = moduleRef.createNestApplication();
     await app.init();
     prisma = moduleRef.get(PrismaService);
@@ -111,8 +121,8 @@ describe('engagement HTTP routes (database, req.user set by the test)', () => {
       expect(await prisma.kudos.count({ where: { workspaceId } })).toBe(0);
     });
 
-    it('treats an incomplete or ambiguous req.user as nobody: 401', async () => {
-      for (const incomplete of [{ role: 'USER', workspaceId }, { role: 'PM', userId: U1, workspaceId }, { pmId: 'PM001', userId: U1, workspaceId }, { role: 'USER', userId: U1 }, { role: 'ADMIN', userId: U1, workspaceId }]) {
+    it('treats an incomplete or unknown req.user as nobody: 401 (no sub, no workspace, a role E01 never sets, the old userId shape)', async () => {
+      for (const incomplete of [{ role: 'TRAINEE', workspaceId }, { role: 'TRAINEE', sub: U1 }, { sub: U1, workspaceId }, { role: 'USER', sub: U1, workspaceId }, { role: 'ADMIN', sub: U1, workspaceId }, { role: 'TRAINEE', sub: '', workspaceId }, { role: 'TRAINEE', userId: U1, workspaceId }]) {
         const res = await as(incomplete).get('/quests');
         expect([res.status, errorCode(res)]).toEqual([401, 'UNAUTHENTICATED']);
       }

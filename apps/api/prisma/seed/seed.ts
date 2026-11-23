@@ -26,10 +26,24 @@ if (!connectionString) {
   throw new Error('DATABASE_URL is not set. Copy apps/api/.env.example to apps/api/.env first.');
 }
 
+// The default seed password is public (this repository is public). On any database that is not on
+// this machine, a strong SEED_PASSWORD must be set explicitly.
+const databaseHost = new URL(connectionString).hostname;
+const isLocalDatabase = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(databaseHost);
+const DEFAULT_SEED_PASSWORD = 'Password123!';
+if (
+  !isLocalDatabase &&
+  (!process.env['SEED_PASSWORD'] || process.env['SEED_PASSWORD'] === DEFAULT_SEED_PASSWORD)
+) {
+  throw new Error(
+    `Refusing to seed ${databaseHost}: it is not a local database. Set SEED_PASSWORD to a strong value (not the default).`,
+  );
+}
+
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 // Same password for every seeded account. Local/test data only.
-const SEED_PASSWORD = process.env['SEED_PASSWORD'] ?? 'Password123!';
+const SEED_PASSWORD = process.env['SEED_PASSWORD'] ?? DEFAULT_SEED_PASSWORD;
 
 // Same format as E01's NestJS password service:
 //   scrypt (N=16384, r=8, p=1), 64-byte key, 16 random salt bytes as hex,

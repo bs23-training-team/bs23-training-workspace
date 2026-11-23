@@ -100,6 +100,9 @@ jobs:
       - name: Seed runs on the migrated database
         run: pnpm db:seed
 
+      - name: API e2e tests (real PostgreSQL)
+        run: pnpm --filter api test:e2e
+
       - name: Schema and migrations are in sync
         run: |
           pnpm --filter api exec prisma migrate diff \

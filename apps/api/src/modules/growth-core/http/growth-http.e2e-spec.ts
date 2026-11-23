@@ -7,15 +7,20 @@ import request from 'supertest';
 import { validateEnv } from '../../../config/env.validation.js';
 import { PrismaModule } from '../../../prisma/prisma.module.js';
 import { PrismaService } from '../../../prisma/prisma.service.js';
+import { JwtAuthGuard } from '../../identity/guards/jwt-auth.guard.js';
 import { GrowthCoreModule } from '../growth-core.module.js';
+import { ensureTestJwtSecrets } from '../testing/test-env.js';
 import { parseDay } from '../time/org-time.js';
 import { XpLedgerService } from '../xp/xp-ledger.service.js';
-import type { Actor, RequestUser } from './actor.js';
+import type { RequestUser } from './actor.js';
 
-// The growth-core HTTP routes, end to end with the real database. The test sets req.user itself on the request
-// (like E01's auth guard will); no header is ever used to say who is calling.
+// The growth-core HTTP routes, end to end with the real database. E01's JwtAuthGuard is replaced by a guard that lets
+// everything through, and the test sets req.user itself on the request in the shape E01's guard produces
+// ({ sub, sid, workspaceId, role }); no header is ever used to say who is calling. The real login is in real-login.e2e-spec.
 // Needs the local database. Run: pnpm --filter api test:e2e
 // Own temporary workspace; U1 and U2 belong to PM001, X1 to PM002.
+
+ensureTestJwtSecrets(); // the module imports E01's IdentityModule, which needs JWT secrets to start
 
 describe('growth-core HTTP routes (database, req.user set by the test)', () => {
   const tag = randomUUID().slice(0, 6);
@@ -25,8 +30,9 @@ describe('growth-core HTTP routes (database, req.user set by the test)', () => {
   let ledger: XpLedgerService;
   let workspaceId: string;
 
-  const pm = (pmId = 'PM001'): Actor => ({ role: 'PM', pmId, workspaceId });
-  const user = (userId: string): Actor => ({ role: 'USER', userId, workspaceId });
+  // req.user as E01's JwtAuthGuard sets it: sub is the Pm.pmId or User.userId, every User has the role TRAINEE.
+  const pm = (pmId = 'PM001'): RequestUser => ({ sub: pmId, sid: 'test-session', workspaceId, role: 'PM' });
+  const user = (userId: string): RequestUser => ({ sub: userId, sid: 'test-session', workspaceId, role: 'TRAINEE' });
   // Test-only: the request reaches the app with req.user already set (no header, no shared state). null = nobody signed in.
   const target = (user: RequestUser | null): RequestListener | Server => {
     if (!user) return app.getHttpServer() as Server;
@@ -73,7 +79,10 @@ describe('growth-core HTTP routes (database, req.user set by the test)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }), PrismaModule, GrowthCoreModule],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true }) // the real guard is exercised in real-login.e2e-spec
+      .compile();
     app = moduleRef.createNestApplication();
     await app.init();
     prisma = moduleRef.get(PrismaService);
@@ -130,8 +139,8 @@ describe('growth-core HTTP routes (database, req.user set by the test)', () => {
       expect(await prisma.xpEvent.count({ where: { workspaceId } })).toBe(0);
     });
 
-    it('treats an incomplete or ambiguous req.user as nobody: 401', async () => {
-      for (const incomplete of [{ role: 'PM', workspaceId }, { role: 'USER', pmId: 'PM001', workspaceId }, { pmId: 'PM001', userId: U1, workspaceId }, { role: 'PM', pmId: 'PM001' }, { role: 'ADMIN', pmId: 'PM001', workspaceId }]) {
+    it('treats an incomplete or unknown req.user as nobody: 401 (no sub, no workspace, a role E01 never sets, the old pmId shape)', async () => {
+      for (const incomplete of [{ role: 'PM', workspaceId }, { role: 'PM', sub: 'PM001' }, { sub: 'PM001', workspaceId }, { role: 'USER', sub: U1, workspaceId }, { role: 'ADMIN', sub: 'PM001', workspaceId }, { role: 'PM', sub: '', workspaceId }, { role: 'PM', pmId: 'PM001', workspaceId }]) {
         const res = await as(incomplete).get('/pm/xp-rules');
         expect([res.status, errorCode(res)]).toEqual([401, 'UNAUTHENTICATED']);
       }

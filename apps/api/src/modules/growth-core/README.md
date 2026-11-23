@@ -57,7 +57,7 @@ Other modules do not exist yet, so these are replaced by stand-ins. Swap the pro
 | Sprint submissions (`SPRINT_SOURCE`) | E06 | returns nothing (every streak is 0) |
 | Leave and holidays (`CALENDAR_SOURCE`) | E07 | returns nothing |
 | Kudos senders (`KUDOS`, IF-04) | E10 engagement | empty (replaced by engagement's reader on the E10 branch) |
-| Who is signed in (`req.user`, set by the auth guard) | E01 | nobody has a `req.user` yet: every route is 401 until real login exists; identity is never read from headers, query or body |
+| Who is signed in (`req.user`, set by E01's `JwtAuthGuard`: `{ sub, sid, workspaceId, role }`, role `PM` or `TRAINEE`) | E01 | real: every route runs `JwtAuthGuard` then our `ActorGuard`; no valid token is 401; identity is never read from headers, query or body |
 
 ## Rules for this module
 

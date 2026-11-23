@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { IdentityModule } from '../identity/identity.module.js';
 import { LevelsService } from './levels/levels.service.js';
 import { LEVELS } from './ports/levels.port.js';
 import { SettingsController } from './settings.controller.js';
@@ -28,7 +29,9 @@ import { XpRulesService } from './xp/xp-rules.service.js';
 // Add this module's controllers, providers (services) and exports here.
 // Reference shape: src/health/ (docs/architecture.md §3).
 @Module({
-  imports: [],
+  // E01's module: the routes run its JwtAuthGuard (it sets req.user). It is re-exported below so a module
+  // that imports this one (engagement) can use the same guard.
+  imports: [IdentityModule],
   controllers: [XpController, SettingsController, StreakBadgesController],
   providers: [
     XpLedgerService,
@@ -54,6 +57,6 @@ import { XpRulesService } from './xp/xp-rules.service.js';
     { provide: NOTIFICATIONS, useClass: NoopNotificationPort },
   ],
   // The ledger and reward core are what other modules (engagement, sprint, assessment) call.
-  exports: [XpLedgerService, XpRulesService, RewardService, XpReviewService, XpAdjustmentService, XpQueryService, LevelsService, LEVELS, StreakService, BadgesService, GrowthTriggersService],
+  exports: [XpLedgerService, XpRulesService, RewardService, XpReviewService, XpAdjustmentService, XpQueryService, LevelsService, LEVELS, StreakService, BadgesService, GrowthTriggersService, IdentityModule],
 })
 export class GrowthCoreModule {}

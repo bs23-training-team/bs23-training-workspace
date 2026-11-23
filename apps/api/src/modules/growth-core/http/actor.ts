@@ -3,12 +3,12 @@
  * `req.user` ONLY (docs/architecture.md section 3.3, rule 7): never from a header, a query or a
  * request body, so an HTTP caller can never act as someone else.
  *
- * `req.user` is filled in by the auth guard of the identity module (E01). Until that exists nobody
- * has a `req.user`, so every route answers 401: nothing here is open by accident. Tests build
- * `req.user` themselves (see `ActorGuard` tests and the HTTP specs); no header is ever trusted.
- *
- * The shape of `req.user` is the same one the reports module (E08) already reads:
- * `{ role?, pmId?, userId?, workspaceId? }`.
+ * `req.user` is set by E01's `JwtAuthGuard` after it has checked the access token and the live
+ * session (apps/api/src/modules/identity/README.md): `{ sub, sid, workspaceId, role }`, where `sub`
+ * is the account id (`Pm.pmId` for a PM, `User.userId` for a user) and `role` is 'PM' or 'TRAINEE'
+ * (every `User`, whatever their resource type, signs in as 'TRAINEE'). Our routes run that guard
+ * first, then `ActorGuard`, which turns `req.user` into an `Actor`. Without a usable `req.user` the
+ * answer is 401. Tests set `req.user` themselves; no header is ever trusted.
  */
 
 import { GrowthError } from '../errors.js';
@@ -19,12 +19,18 @@ export type Actor =
 
 export type Role = Actor['role'];
 
-/** What the auth guard of E01 puts on `req.user`. Every field is optional because nothing is guaranteed yet. */
+/**
+ * What E01's guard puts on `req.user` (identity `AuthUserPayload`). Every field is optional here
+ * because this module trusts nothing it has not checked.
+ */
 export interface RequestUser {
-  role?: string;
-  pmId?: string;
-  userId?: string;
+  /** Account id: `Pm.pmId` for a PM, `User.userId` for a user. */
+  sub?: string;
+  /** Id of the live session the access token belongs to. */
+  sid?: string;
   workspaceId?: string;
+  /** 'PM' or 'TRAINEE'. */
+  role?: string;
 }
 
 /** The request as this module sees it: `user` comes from E01's guard, `actor` is set by our guard. */
@@ -38,17 +44,13 @@ const present = (value: unknown): value is string => typeof value === 'string' &
 /**
  * Turns `req.user` into the signed-in person, or null when there is nobody (the caller answers 401).
  *
- * - A PM needs `pmId` and `workspaceId`; a user needs `userId` and `workspaceId`.
- * - When `role` is given it decides ('PM' or 'USER'); an unknown role is nobody.
- * - When `role` is missing, exactly one of `pmId` / `userId` must be present: a user object that
- *   claims to be both is ambiguous and is refused rather than guessed.
+ * - role 'PM' with a `sub` is the PM `sub`; role 'TRAINEE' with a `sub` is the user `sub`.
+ * - Both need a `workspaceId`. A missing role, an unknown role or an empty id is nobody.
  */
 export function actorFromRequestUser(user: RequestUser | null | undefined): Actor | null {
-  if (!user || typeof user !== 'object' || !present(user.workspaceId)) return null;
-  const wantsPm = user.role === undefined ? present(user.pmId) && !present(user.userId) : user.role === 'PM';
-  const wantsUser = user.role === undefined ? present(user.userId) && !present(user.pmId) : user.role === 'USER';
-  if (wantsPm && present(user.pmId)) return { role: 'PM', pmId: user.pmId, workspaceId: user.workspaceId };
-  if (wantsUser && present(user.userId)) return { role: 'USER', userId: user.userId, workspaceId: user.workspaceId };
+  if (!user || typeof user !== 'object' || !present(user.sub) || !present(user.workspaceId)) return null;
+  if (user.role === 'PM') return { role: 'PM', pmId: user.sub, workspaceId: user.workspaceId };
+  if (user.role === 'TRAINEE') return { role: 'USER', userId: user.sub, workspaceId: user.workspaceId };
   return null;
 }
 

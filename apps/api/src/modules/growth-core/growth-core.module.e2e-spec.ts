@@ -9,6 +9,7 @@ import { BadgesService } from './badges/badges.service.js';
 import { LevelsService } from './levels/levels.service.js';
 import { LEVELS } from './ports/levels.port.js';
 import { StreakService } from './streak/streak.service.js';
+import { ensureTestJwtSecrets } from './testing/test-env.js';
 import { loadSeed } from './testing/test-db.js';
 import { RewardService } from './xp/reward.service.js';
 import { XpAdjustmentService } from './xp/xp-adjustment.service.js';
@@ -18,6 +19,8 @@ import { XpReviewService } from './xp/xp-review.service.js';
 // Proves the Nest wiring works with the real database: GrowthCoreModule builds, the services
 // resolve their dependencies, and a reported sprint becomes one pending XP event.
 // Run: pnpm --filter api test:e2e (needs infra:up, db:deploy, db:seed).
+
+ensureTestJwtSecrets(); // the module imports E01's IdentityModule, which needs JWT secrets to start
 
 describe('GrowthCoreModule (wired, real database)', () => {
   let moduleRef: TestingModule;

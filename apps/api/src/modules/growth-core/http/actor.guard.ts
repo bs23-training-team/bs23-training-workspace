@@ -9,6 +9,7 @@ import {
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { JwtAuthGuard } from '../../identity/guards/jwt-auth.guard.js';
 import { GrowthError } from '../errors.js';
 import { GrowthErrorFilter } from './growth-error.filter.js';
 import { actorFromRequestUser, type Actor, type RequestWithActor, type Role } from './actor.js';
@@ -19,8 +20,8 @@ const ROLES_KEY = 'gamification:roles';
 export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
 
 /**
- * Reads the caller from `req.user` and nothing else (architecture.md section 3.3, rule 7):
- * 401 when there is no usable `req.user`, 403 when the route's role does not match.
+ * Reads the caller from `req.user` (set by E01's JwtAuthGuard) and nothing else (architecture.md
+ * section 3.3, rule 7): 401 when there is no usable `req.user`, 403 when the route's role does not match.
  * Headers, query and body are never looked at.
  */
 @Injectable()
@@ -51,5 +52,10 @@ export const CurrentActor = createParamDecorator((_data: unknown, context: Execu
   return actor;
 });
 
-/** Put on a controller: signs the caller in and turns GrowthError into the right HTTP status. */
-export const GamificationHttp = () => applyDecorators(UseGuards(ActorGuard), UseFilters(GrowthErrorFilter));
+/**
+ * Put on a controller. E01's JwtAuthGuard checks the access token and the live session and sets
+ * req.user (401 without a valid token); then ActorGuard turns req.user into the caller and checks the
+ * route's role; GrowthError becomes the right HTTP status. The module that declares the controller
+ * must import IdentityModule (growth-core does, and re-exports it for engagement).
+ */
+export const GamificationHttp = () => applyDecorators(UseGuards(JwtAuthGuard, ActorGuard), UseFilters(GrowthErrorFilter));

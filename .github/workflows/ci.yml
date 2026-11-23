@@ -100,6 +100,16 @@ jobs:
       - name: Seed runs on the migrated database
         run: pnpm db:seed
 
+      # Throwaway values for this run only (random, never printed, nothing stored in the repo or in
+      # GitHub settings). The e2e tests and the smoke test boot the whole AppModule, and
+      # IdentityModule refuses to start without two different JWT secrets.
+      - name: CI-only identity environment (throwaway values, not secrets)
+        run: |
+          echo "JWT_ACCESS_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "JWT_REFRESH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "WEB_APP_URL=http://localhost:3000" >> "$GITHUB_ENV"
+          echo "MAIL_PROVIDER=console" >> "$GITHUB_ENV"
+
       - name: API e2e tests (real PostgreSQL)
         run: pnpm --filter api test:e2e
 

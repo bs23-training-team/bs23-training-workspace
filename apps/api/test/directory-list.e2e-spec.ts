@@ -38,6 +38,7 @@ const suite = url ? describe : describe.skip;
 suite('directory All Users list against real PostgreSQL', () => {
   const run = randomBytes(3).toString('hex');
   const pmId = `PM9${Math.floor(100000 + Math.random() * 899999)}`;
+  const pm2Id = `PM9${Math.floor(100000 + Math.random() * 899999)}`;
   const otherPmId = `PM9${Math.floor(100000 + Math.random() * 899999)}`;
   const base = Math.floor(100000 + Math.random() * 800000);
   const id = (n: number) => `BS239${base + n}`;
@@ -89,12 +90,25 @@ suite('directory All Users list against real PostgreSQL', () => {
     });
     await newUser(id(5), 'Eve Other Workspace', otherWorkspaceId, { pmId: otherPmId });
 
+    // A second PM in the SAME workspace: their user shows in the list, but without feedback.
+    await prisma.pm.create({
+      data: { pmId: pm2Id, workspaceId, name: 'Second PM', email: `e2e-dir-pm2-${run}@example.test`, emailVerified: true },
+    });
+    await newUser(id(6), 'Zed Second PM User', workspaceId, { pmId: pm2Id });
+    await prisma.feedbackVersion.create({
+      data: { workspaceId, userId: id(1), authorId: pmId, version: 1, text: 'Own feedback.' },
+    });
+    await prisma.feedbackVersion.create({
+      data: { workspaceId, userId: id(6), authorId: pm2Id, version: 1, text: 'Other PM feedback.' },
+    });
+
     const skill = await prisma.skill.create({ data: { workspaceId, name: `Skill ${run}` } });
     await prisma.userSkill.create({ data: { workspaceId, userId: id(3), skillId: skill.id } });
   }, 60_000);
 
   afterAll(async () => {
     for (const wsId of [workspaceId, otherWorkspaceId].filter(Boolean)) {
+      await prisma.feedbackVersion.deleteMany({ where: { workspaceId: wsId } });
       await prisma.userSkill.deleteMany({ where: { workspaceId: wsId } });
       await prisma.skill.deleteMany({ where: { workspaceId: wsId } });
       await prisma.user.deleteMany({ where: { workspaceId: wsId } });
@@ -106,8 +120,15 @@ suite('directory All Users list against real PostgreSQL', () => {
 
   it('lists only active users of the PM\'s own workspace', async () => {
     const res = await service.listUsers(actor, {});
-    expect(res.items.map((u) => u.userId)).toEqual([id(1), id(2), id(3)]);
-    expect(res.total).toBe(3);
+    expect(res.items.map((u) => u.userId)).toEqual([id(1), id(2), id(3), id(6)]);
+    expect(res.total).toBe(4);
+  });
+
+  it('shows feedback only for the PM\'s own users and marks who is managed by the caller', async () => {
+    const { items } = await service.listUsers(actor, {});
+    const byId = Object.fromEntries(items.map((u) => [u.userId, u]));
+    expect(byId[id(1)]).toMatchObject({ latestFeedback: 'Own feedback.', managedByYou: true });
+    expect(byId[id(6)]).toMatchObject({ latestFeedback: null, managedByYou: false });
   });
 
   it('searches name, user ID and email case-insensitively', async () => {
@@ -133,10 +154,10 @@ suite('directory All Users list against real PostgreSQL', () => {
   it('pages the result and shows the last page when the page number is too high', async () => {
     const first = await service.listUsers(actor, { pageSize: 2, page: 1 });
     expect(first.items.map((u) => u.userId)).toEqual([id(1), id(2)]);
-    expect(first).toMatchObject({ total: 3, totalPages: 2, page: 1 });
+    expect(first).toMatchObject({ total: 4, totalPages: 2, page: 1 });
 
     const beyond = await service.listUsers(actor, { pageSize: 2, page: 99 });
-    expect(beyond.items.map((u) => u.userId)).toEqual([id(3)]);
+    expect(beyond.items.map((u) => u.userId)).toEqual([id(3), id(6)]);
     expect(beyond.page).toBe(2);
   });
 });

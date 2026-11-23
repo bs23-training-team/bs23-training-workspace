@@ -32,8 +32,13 @@ export interface UserListItem {
   skills: string[];
   onboardDate: string;
   departureDate: string | null;
-  /** Text of the newest L&D feedback version, or null when there is none. */
+  /**
+   * Text of the newest L&D feedback version. null when there is none, and always null for a user
+   * managed by another PM (feedback is written by the managing PM).
+   */
   latestFeedback: string | null;
+  /** true when the calling PM manages this user: only then may the UI offer edit and archive. */
+  managedByYou: boolean;
 }
 
 export interface UserListResponse {

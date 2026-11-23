@@ -14,7 +14,10 @@ export class DirectoryService {
 
   /**
    * The All Users list: every active (not archived) user of the PM's workspace.
-   * Decision: every PM sees every user, not only the users they manage.
+   * Decision (architecture owner, relayed by E11 in the PR #31 review): every PM sees every active
+   * user of the workspace in this list. This deviates from PRD FR-ROLE-02 and FR-DIR-01; the PRD
+   * update is with the team lead. Writes and `latestFeedback` stay scoped to the PM's own users
+   * (pmId): feedback is written by the managing PM, so for another PM's user it is null.
    */
   async listUsers(actor: PmActor, query: UserListQuery): Promise<UserListResponse> {
     const q = query.q?.trim();
@@ -47,6 +50,7 @@ export class DirectoryService {
       take: pageSize,
       select: {
         userId: true,
+        pmId: true,
         name: true,
         email: true,
         photoPath: true,
@@ -69,7 +73,8 @@ export class DirectoryService {
       skills: row.userSkills.map((s) => s.skill.name).sort(),
       onboardDate: toDateOnly(row.onboardDate),
       departureDate: row.departureDate ? toDateOnly(row.departureDate) : null,
-      latestFeedback: row.feedbackVersions[0]?.text ?? null,
+      latestFeedback: row.pmId === actor.pmId ? (row.feedbackVersions[0]?.text ?? null) : null,
+      managedByYou: row.pmId === actor.pmId,
     }));
 
     return { items, total, page, pageSize, totalPages };

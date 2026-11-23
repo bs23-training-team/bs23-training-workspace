@@ -12,6 +12,7 @@ describe('DirectoryService.listUsers', () => {
 
   const row = (over: Record<string, unknown> = {}) => ({
     userId: 'BS23001',
+    pmId: 'PM001',
     name: 'Brishty Das',
     email: 'brishty@bs23.test',
     photoPath: null,
@@ -54,8 +55,16 @@ describe('DirectoryService.listUsers', () => {
         onboardDate: '2026-09-01',
         departureDate: null,
         latestFeedback: 'Good progress.',
+        managedByYou: true,
       },
     ]);
+  });
+
+  it('hides feedback and says managedByYou: false for a user managed by another PM', async () => {
+    prisma.user.findMany.mockResolvedValue([row({ pmId: 'PM002' }), row({ userId: 'BS23002' })]);
+    const { items } = await service.listUsers(PM, {});
+    expect(items[0]).toMatchObject({ userId: 'BS23001', latestFeedback: null, managedByYou: false });
+    expect(items[1]).toMatchObject({ userId: 'BS23002', latestFeedback: 'Good progress.', managedByYou: true });
   });
 
   it('returns null feedback and a date-only departure when present', async () => {

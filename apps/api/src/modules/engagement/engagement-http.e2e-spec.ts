@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { IncomingMessage, RequestListener, Server } from 'node:http';
 import type { INestApplication } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
@@ -6,18 +7,17 @@ import request from 'supertest';
 import { validateEnv } from '../../config/env.validation.js';
 import { PrismaModule } from '../../prisma/prisma.module.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { ACTOR_RESOLVER, type Actor } from '../growth-core/index.js';
-import { HeaderActorResolver } from '../growth-core/testing/header-actor-resolver.js';
+import type { Actor, RequestUser } from '../growth-core/index.js';
 import { parseDay } from '../growth-core/time/org-time.js';
 import { EngagementModule } from './engagement.module.js';
 
-// The engagement HTTP routes (kudos, quests, leaderboard) end to end, with the real database and a
-// TEST-ONLY login (a header). Includes a demo that crosses both modules: a user sends kudos, the PM
+// The engagement HTTP routes (kudos, quests, leaderboard) end to end, with the real database. The test sets
+// req.user itself on the request (like E01's auth guard will); no header says who is calling. Includes a demo that crosses both modules: a user sends kudos, the PM
 // reviews the XP through the growth-core routes, and the leaderboard moves.
 // Needs the local database. Run: pnpm --filter api test:e2e
 // Own temporary workspace. U1..U4 belong to PM001, X1 to PM002, ARCH is archived.
 
-describe('engagement HTTP routes (database, test-only actor)', () => {
+describe('engagement HTTP routes (database, req.user set by the test)', () => {
   const tag = randomUUID().slice(0, 6);
   const [U1, U2, U3, U4, X1, ARCH] = ['U1', 'U2', 'U3', 'U4', 'X1', 'AR'].map((n) => `THE${n}${tag}`) as [string, string, string, string, string, string];
   let app: INestApplication;
@@ -26,11 +26,19 @@ describe('engagement HTTP routes (database, test-only actor)', () => {
 
   const pm = (pmId = 'PM001'): Actor => ({ role: 'PM', pmId, workspaceId });
   const user = (userId: string): Actor => ({ role: 'USER', userId, workspaceId });
-  const withActor = <T extends request.Test>(req: T, actor: Actor | null): T => (actor ? (req.set('x-test-actor', JSON.stringify(actor)) as T) : req);
-  const as = (actor: Actor | null) => ({
-    get: (url: string) => withActor(request(app.getHttpServer()).get(url), actor),
-    post: (url: string) => withActor(request(app.getHttpServer()).post(url), actor),
-    put: (url: string) => withActor(request(app.getHttpServer()).put(url), actor),
+  // Test-only: the request reaches the app with req.user already set (no header, no shared state). null = nobody signed in.
+  const target = (user: RequestUser | null): RequestListener | Server => {
+    if (!user) return app.getHttpServer() as Server;
+    const handler = app.getHttpAdapter().getInstance() as RequestListener;
+    return (req, res) => {
+      (req as IncomingMessage & { user?: RequestUser }).user = user;
+      handler(req, res);
+    };
+  };
+  const as = (user: RequestUser | null) => ({
+    get: (url: string) => request(target(user)).get(url),
+    post: (url: string) => request(target(user)).post(url),
+    put: (url: string) => request(target(user)).put(url),
   });
   const errorCode = (res: request.Response) => (res.body as { error?: { code?: string } }).error?.code;
   const sendKudos = (from: string, to: string, over: object = {}) =>
@@ -62,10 +70,7 @@ describe('engagement HTTP routes (database, test-only actor)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }), PrismaModule, EngagementModule],
-    })
-      .overrideProvider(ACTOR_RESOLVER)
-      .useValue(new HeaderActorResolver())
-      .compile();
+    }).compile();
     app = moduleRef.createNestApplication();
     await app.init();
     prisma = moduleRef.get(PrismaService);
@@ -87,19 +92,30 @@ describe('engagement HTTP routes (database, test-only actor)', () => {
   });
 
   describe('sign-in and roles', () => {
-    it('answers 401 to a caller who is not signed in, and is closed by default (the real resolver refuses everyone)', async () => {
+    it('answers 401 to a caller who has no req.user (nobody is signed in)', async () => {
       for (const [method, url] of [['get', '/kudos'], ['get', '/quests'], ['get', '/leaderboard'], ['post', '/kudos']] as const) {
         const res = await as(null)[method](url);
         expect([res.status, errorCode(res)]).toEqual([401, 'UNAUTHENTICATED']);
       }
-      const closed = await Test.createTestingModule({
-        imports: [ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }), PrismaModule, EngagementModule],
-      }).compile();
-      const closedApp = closed.createNestApplication();
-      await closedApp.init();
-      const res = await request(closedApp.getHttpServer()).get('/quests').set('x-test-actor', JSON.stringify(pm()));
-      expect(res.status).toBe(401);
-      await closedApp.close();
+    });
+
+    it('takes the caller from req.user only: identity sent in headers, query or body is ignored (rule 7)', async () => {
+      const forged = { 'x-test-actor': JSON.stringify(user(U1)), 'x-actor-pm-id': 'PM001', 'x-user-id': U1, 'x-workspace-id': workspaceId };
+      const read = await request(app.getHttpServer()).get(`/quests?userId=${U1}&workspaceId=${workspaceId}`).set(forged);
+      expect([read.status, errorCode(read)]).toEqual([401, 'UNAUTHENTICATED']);
+      const write = await request(app.getHttpServer())
+        .post('/kudos')
+        .set(forged)
+        .send({ toUserId: U2, category: 'HELPFUL', message: 'Thanks', fromUserId: U1, userId: U1, workspaceId, actor: user(U1) });
+      expect([write.status, errorCode(write)]).toEqual([401, 'UNAUTHENTICATED']);
+      expect(await prisma.kudos.count({ where: { workspaceId } })).toBe(0);
+    });
+
+    it('treats an incomplete or ambiguous req.user as nobody: 401', async () => {
+      for (const incomplete of [{ role: 'USER', workspaceId }, { role: 'PM', userId: U1, workspaceId }, { pmId: 'PM001', userId: U1, workspaceId }, { role: 'USER', userId: U1 }, { role: 'ADMIN', userId: U1, workspaceId }]) {
+        const res = await as(incomplete).get('/quests');
+        expect([res.status, errorCode(res)]).toEqual([401, 'UNAUTHENTICATED']);
+      }
     });
 
     it('answers 403 when the role is wrong: a PM cannot send kudos, a user cannot create quests or hide someone else', async () => {

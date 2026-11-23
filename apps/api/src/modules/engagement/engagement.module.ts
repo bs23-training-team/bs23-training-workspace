@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ACTOR_RESOLVER, CLOCK, DenyAllActorResolver, GrowthCoreModule, systemClock } from '../growth-core/index.js';
+import { CLOCK, GrowthCoreModule, systemClock } from '../growth-core/index.js';
 import { KudosController } from './kudos.controller.js';
 import { LeaderboardController } from './leaderboard.controller.js';
 import { QuestsController } from './quests.controller.js';
@@ -21,8 +21,6 @@ import { ENGAGEMENT_NOTIFICATIONS, NoopEngagementNotifications } from './ports/e
     LeaderboardPreferenceService,
     QuestsService,
     { provide: CLOCK, useValue: systemClock },
-    // Nobody is signed in until real auth (E01) provides a resolver under this token: routes answer 401.
-    { provide: ACTOR_RESOLVER, useClass: DenyAllActorResolver },
     // Stand-in until E01's notifications service exists: swap this provider, nothing else.
     { provide: ENGAGEMENT_NOTIFICATIONS, useClass: NoopEngagementNotifications },
   ],

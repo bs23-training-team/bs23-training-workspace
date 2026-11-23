@@ -153,6 +153,12 @@ web view ──HTTP──▶ controller ──▶ service ──▶ repository /
    them is not (for example, only growth-core writes XP and awards; engagement asks growth-core).
 6. **Shared shapes go to `packages/contracts`.** A type both web and API need lives in
    `packages/contracts/src/<m>/`.
+7. **Identity comes only from `req.user`.** The auth guard (E01) sets `req.user`; a module reads who
+   the caller is and which workspace they belong to from it and from nothing else. No `req.user`
+   means `401`. Never read identity from headers, query, or body (for example `x-actor-pm-id`,
+   `x-workspace-id`): anyone can send those. Tests build `req.user` directly (unit tests) or use
+   the test auth helper once E01 provides it. Until login exists, web pages use mock data and send
+   no identity headers.
 
 ### 3.4 Layout of one module
 
@@ -362,7 +368,7 @@ Secrets:
 | 2 | Lint / types | `pnpm lint`, `pnpm typecheck` | Done |
 | 3 | Prisma validate / generate | `pnpm db:validate`; generate runs before every task | Done |
 | 4 | Clean + upgrade migrations | `migrate deploy` on empty Postgres 18, seed, drift check | Clean + drift done; upgrade test after first release |
-| 5 | Backend / domain / access / contract / idempotency tests | Vitest unit tests (`pnpm test`) | Runner done; tests grow with modules. DB-backed `*.e2e-spec.ts` tests run locally (`pnpm --filter api test:e2e`), not yet in CI |
+| 5 | Backend / domain / access / contract / idempotency tests | Vitest unit tests (`pnpm test`); DB-backed `*.e2e-spec.ts` tests (`pnpm --filter api test:e2e`) on the migrated and seeded CI database | Runner done; tests grow with modules |
 | 6 | Production build | `pnpm build` | Done |
 | – | API smoke test | Start the built API, wait for `/health/ready` | Done |
 | 7 | PM / trainee E2E | Playwright against the built stack | Planned (Phase 3–4) |
@@ -432,4 +438,4 @@ Recommended extras (not in the SRS): secret scanning, dependency audit, SonarQub
 | 2026-11-16 | E11 becomes the only reviewer and the architecture/schema owner (earlier E01/E10). A second ruleset `ci-required` was tried and switched off. |
 | 2026-11-19 | Final v1 schema (one `schema.prisma`) and `init` migration (PR #12). Login IDs as primary keys. No `CourseVersion`, no `TECHNICAL` badge. Local seed data (PR #14). |
 | 2026-11-20 | Module layering accepted; empty skeletons for all 13 feature modules registered (PR #15). `pnpm setup:local`, `Migration guard`, seed in CI (PR #16). `PR title` check and auto labels (PR #17). Required checks: CI, `Migration guard`, `PR title`; `ci-required` ruleset deleted; head branches auto-deleted after merge. |
-| 2026-11-23 | ADR 0001, 0002 and 0003 combined into this file. PRD, SRS, week 1 brief and the data-model template removed from the repository. |
+| 2026-11-23 | ADR 0001, 0002 and 0003 combined into this file. PRD, SRS, week 1 brief and the data-model template removed from the repository. Rule 3.3 #7 (identity only from `req.user`). e2e tests run in CI. |

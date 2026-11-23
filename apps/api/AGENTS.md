@@ -12,3 +12,4 @@ Notes for AI coding assistants working in this folder. People: see [README.md](R
   Do not change another module's files or database section.
 - Observability tooling has not been chosen yet. Do not add `@nestjs/observe` or any telemetry SDK.
 - Secrets come from environment variables validated in `src/config/env.validation.ts`; never hard-code them.
+- Caller identity (user id, role, workspace) comes only from `req.user`. Never read it from headers, query or body; no `req.user` means 401 (docs/architecture.md §3.3 rule 7).

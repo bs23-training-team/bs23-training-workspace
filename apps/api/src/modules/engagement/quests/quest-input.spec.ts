@@ -15,18 +15,19 @@ describe('validateNewQuest', () => {
     expect(validateNewQuest({ ...good, endDate: '2026-12-31' }).endDate).toBe('2026-12-31');
   });
 
+  // SRS error table (422): TARGET (1 or more), REWARD (0 or more); text and dates that are not valid stay VALIDATION (400).
   it.each([
-    ['a blank name', { name: '  ' }],
-    ['a blank description', { description: '' }],
-    ['a target of 0', { target: 0 }],
-    ['a negative target', { target: -1 }],
-    ['a fractional target', { target: 2.5 }],
-    ['a negative reward', { reward: -5 }],
-    ['a fractional reward', { reward: 1.5 }],
-    ['a start date that is not a real day', { startDate: '2026-02-30' }],
-    ['an end date written wrongly', { endDate: '22/11/2026' }],
-  ])('refuses %s (VALIDATION)', (_label, change) => {
-    expect(() => validateNewQuest({ ...good, ...change })).toThrowError(expect.objectContaining({ code: 'VALIDATION' }) as Error);
+    ['a blank name', { name: '  ' }, 'VALIDATION'],
+    ['a blank description', { description: '' }, 'VALIDATION'],
+    ['a target of 0', { target: 0 }, 'TARGET'],
+    ['a negative target', { target: -1 }, 'TARGET'],
+    ['a fractional target', { target: 2.5 }, 'TARGET'],
+    ['a negative reward', { reward: -5 }, 'REWARD'],
+    ['a fractional reward', { reward: 1.5 }, 'REWARD'],
+    ['a start date that is not a real day', { startDate: '2026-02-30' }, 'VALIDATION'],
+    ['an end date written wrongly', { endDate: '22/11/2026' }, 'VALIDATION'],
+  ])('refuses %s', (_label, change, code) => {
+    expect(() => validateNewQuest({ ...good, ...change })).toThrowError(expect.objectContaining({ code }) as Error);
   });
 
   it('refuses an end date before the start date (DATES)', () => {
@@ -41,7 +42,7 @@ describe('validateCount', () => {
     expect(validateCount(0)).toBe(0);
     expect(validateCount(12)).toBe(12);
   });
-  it.each([-1, 1.5, Number.NaN, 2 ** 31])('refuses %s (VALIDATION)', (count) => {
-    expect(() => validateCount(count)).toThrowError(expect.objectContaining({ code: 'VALIDATION' }) as Error);
+  it.each([-1, 1.5, Number.NaN, 2 ** 31])('refuses %s (COUNT)', (count) => {
+    expect(() => validateCount(count)).toThrowError(expect.objectContaining({ code: 'COUNT' }) as Error);
   });
 });

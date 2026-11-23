@@ -96,9 +96,9 @@ describe('QuestsService (database)', () => {
       expect(row.startDate.toISOString().slice(0, 10)).toBe('2026-11-16');
     });
 
-    it('refuses bad input before the database (VALIDATION, DATES) and saves nothing', async () => {
-      await expect(newQuest({ target: 0 })).rejects.toMatchObject({ code: 'VALIDATION' });
-      await expect(newQuest({ reward: -1 })).rejects.toMatchObject({ code: 'VALIDATION' });
+    it('refuses bad input before the database (TARGET, REWARD, DATES) and saves nothing', async () => {
+      await expect(newQuest({ target: 0 })).rejects.toMatchObject({ code: 'TARGET' });
+      await expect(newQuest({ reward: -1 })).rejects.toMatchObject({ code: 'REWARD' });
       await expect(newQuest({ startDate: '2026-11-20', endDate: '2026-11-19' })).rejects.toMatchObject({ code: 'DATES' });
       expect(await prisma.quest.count({ where: { workspaceId } })).toBe(0);
     });
@@ -125,8 +125,8 @@ describe('QuestsService (database)', () => {
 
     it('refuses a bad count, another PM\'s user, an archived user, and an unknown quest or user', async () => {
       const { questId } = await newQuest();
-      await expect(progress(questId, U1, -1)).rejects.toMatchObject({ code: 'VALIDATION' });
-      await expect(progress(questId, U1, 1.5)).rejects.toMatchObject({ code: 'VALIDATION' });
+      await expect(progress(questId, U1, -1)).rejects.toMatchObject({ code: 'COUNT' });
+      await expect(progress(questId, U1, 1.5)).rejects.toMatchObject({ code: 'COUNT' });
       await expect(progress(questId, X1, 1)).rejects.toMatchObject({ code: 'FORBIDDEN_SCOPE' });
       await expect(progress(questId, ARCH, 1)).rejects.toMatchObject({ code: 'USER_ARCHIVED' });
       await expect(progress(questId, 'BS99999', 1)).rejects.toMatchObject({ code: 'NOT_FOUND' });

@@ -207,7 +207,8 @@ describe('engagement HTTP routes (database, req.user set by the test)', () => {
       expect((await as(pm()).post(`/pm/quests/${questId}/progress`).send({ userId: X1, count: 1 })).status).toBe(403);
       expect((await as(pm()).post(`/pm/quests/${randomUUID()}/verify`).send({ userId: U1 })).status).toBe(404);
       expect((await as(pm()).post(`/pm/quests/${questId}/progress`).send({ userId: U1, count: '2' })).status).toBe(400);
-      expect((await as(pm()).post(`/pm/quests/${questId}/progress`).send({ userId: U1, count: -1 })).status).toBe(400);
+      const negative = await as(pm()).post(`/pm/quests/${questId}/progress`).send({ userId: U1, count: -1 });
+      expect([negative.status, errorCode(negative)]).toEqual([422, 'COUNT']); // SRS: COUNT, 422
     });
 
     it('everyone lists quests; a user sees only their own progress; a PM only their own users\'', async () => {

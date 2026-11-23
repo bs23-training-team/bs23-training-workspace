@@ -13,9 +13,12 @@ export interface NewQuestInput {
 
 const MAX_INT = 2 ** 31 - 1;
 
-function whole(name: string, value: number, min: number): void {
+// The SRS names the three numbers: TARGET (1 or more), REWARD (0 or more), COUNT (0 or more).
+const NUMBER_CODE = { target: 'TARGET', reward: 'REWARD', count: 'COUNT' } as const;
+
+function whole(name: keyof typeof NUMBER_CODE, value: number, min: number): void {
   if (!Number.isInteger(value) || value < min || value > MAX_INT) {
-    throw new GrowthError('VALIDATION', `${name} must be a whole number of ${min} or more`);
+    throw new GrowthError(NUMBER_CODE[name], `${name} must be a whole number of ${min} or more`);
   }
 }
 

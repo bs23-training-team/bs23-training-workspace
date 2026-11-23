@@ -153,6 +153,8 @@ pnpm setup:local
 It ends with `Done. Start the apps with: pnpm dev`. It is safe to run again: the seed never creates
 duplicates. Always use **pnpm**; never run `npm install` or `yarn` in this repo.
 
+If you already have an `apps/api/.env` from before, the script does not change it: add `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` by hand (two different values, each from `openssl rand -hex 32`), or the API will not start.
+
 ---
 
 ## 5. Create the web env file

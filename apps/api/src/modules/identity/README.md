@@ -23,3 +23,26 @@ identity/
   to its tables.
 - Imports between our own files end in `.js` (ESM): `import { IdentityService } from './identity.service.js';`
 - Database models for this module: your section in `apps/api/prisma/schema/` (see its README).
+
+## Authenticated request user (`req.user`)
+
+`JwtAuthGuard` verifies the access token and the live session, then sets `req.user` on the request.
+Other modules read the caller's identity from `req.user` and from nothing else (never from headers,
+query or body; no `req.user` means 401).
+
+```ts
+{
+  sub: string;                  // authenticated account ID: Pm.pmId (PM) or User.userId (TRAINEE)
+  sid: string;                  // ID of the current Session (the one this access token belongs to)
+  workspaceId: string;          // the account's workspace
+  role: 'PM' | 'TRAINEE';       // PM = the Pm table; TRAINEE = any User (all four resource types)
+}
+```
+
+- The type is `AuthUserPayload` in `types.ts`; routes receive it as `AuthenticatedRequest`.
+- All four fields are loaded from the database on every request (session, then its owner). The
+  `role` and `workspaceId` claims inside the token are never used for authorisation.
+- The role is not a column: it is the table the account lives in. `TRAINEE` is the login role of
+  every `User`; the resource type (TRAINEE, CENTRAL_LND, INDUSTRIAL_ATTACHMENT, SBU) stays in
+  `User.resource`.
+- Protect a route with `@UseGuards(JwtAuthGuard, RolesGuard)` and `@Roles('PM')` or `@Roles('TRAINEE')`.

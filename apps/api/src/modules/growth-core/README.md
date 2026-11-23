@@ -57,7 +57,7 @@ Other modules do not exist yet, so these are replaced by stand-ins. Swap the pro
 | Sprint submissions (`SPRINT_SOURCE`) | E06 | returns nothing (every streak is 0) |
 | Leave and holidays (`CALENDAR_SOURCE`) | E07 | returns nothing |
 | Kudos senders (`KUDOS`, IF-04) | E10 engagement | empty (replaced by engagement's reader on the E10 branch) |
-| Who is signed in (`ACTOR_RESOLVER`) | E01 | refuses everyone: every route is 401 until real login exists |
+| Who is signed in (`req.user`, set by the auth guard) | E01 | nobody has a `req.user` yet: every route is 401 until real login exists; identity is never read from headers, query or body |
 
 ## Rules for this module
 

@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { ACTOR_RESOLVER, DenyAllActorResolver } from './http/actor.js';
 import { LevelsService } from './levels/levels.service.js';
 import { LEVELS } from './ports/levels.port.js';
 import { SettingsController } from './settings.controller.js';
@@ -47,8 +46,6 @@ import { XpRulesService } from './xp/xp-rules.service.js';
     // Stand-in until E10 (engagement) provides IF-04.
     { provide: KUDOS, useClass: EmptyKudosPort },
     { provide: CLOCK, useValue: systemClock },
-    // Nobody is signed in until real auth (E01) provides a resolver under this token: routes answer 401.
-    { provide: ACTOR_RESOLVER, useClass: DenyAllActorResolver },
     { provide: USER_DIRECTORY, useClass: PrismaUserDirectory },
     // Stand-in until E01's notifications service exists: swap this provider, nothing else.
     { provide: NOTIFICATIONS, useClass: NoopNotificationPort },

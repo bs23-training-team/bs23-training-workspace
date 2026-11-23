@@ -1,6 +1,5 @@
 import {
   createParamDecorator,
-  Inject,
   Injectable,
   SetMetadata,
   UseFilters,
@@ -12,24 +11,25 @@ import {
 import { Reflector } from '@nestjs/core';
 import { GrowthError } from '../errors.js';
 import { GrowthErrorFilter } from './growth-error.filter.js';
-import { ACTOR_RESOLVER, type Actor, type ActorResolver, type RequestWithActor, type Role } from './actor.js';
+import { actorFromRequestUser, type Actor, type RequestWithActor, type Role } from './actor.js';
 
 const ROLES_KEY = 'gamification:roles';
 
 /** Only these roles may call the route. Without it any signed-in person may. */
 export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
 
-/** Signs the caller in (401 when nobody is) and checks the route's role (403 otherwise). */
+/**
+ * Reads the caller from `req.user` and nothing else (architecture.md section 3.3, rule 7):
+ * 401 when there is no usable `req.user`, 403 when the route's role does not match.
+ * Headers, query and body are never looked at.
+ */
 @Injectable()
 export class ActorGuard implements CanActivate {
-  constructor(
-    @Inject(ACTOR_RESOLVER) private readonly resolver: ActorResolver,
-    private readonly reflector: Reflector,
-  ) {}
+  constructor(private readonly reflector: Reflector) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<RequestWithActor>();
-    const actor = await this.resolver.resolve(request);
+    const actor = actorFromRequestUser(request.user);
     if (!actor) {
       throw new GrowthError('UNAUTHENTICATED', 'Sign in to continue');
     }

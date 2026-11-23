@@ -24,7 +24,7 @@ export { addDays, isWeekend, orgToday, parseDay, weekEnd, weekStart, type DayStr
 
 // Shared HTTP building blocks (the caller, the guard, the error filter, request readers) and paging.
 export { MAX_PAGE, paginate, parseCursor } from './paging.js';
-export { ACTOR_RESOLVER, DenyAllActorResolver, pmIdOf, userIdOf, type Actor, type ActorResolver, type Role } from './http/actor.js';
+export { actorFromRequestUser, pmIdOf, userIdOf, type Actor, type RequestUser, type RequestWithActor, type Role } from './http/actor.js';
 export { ActorGuard, CurrentActor, GamificationHttp, Roles } from './http/actor.guard.js';
 export { GrowthErrorFilter } from './http/growth-error.filter.js';
 export { bodyOf, bool, list, num, oneOf, optNum, optStr, query, str, type Body } from './http/parse.js';

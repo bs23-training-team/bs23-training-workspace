@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { IncomingMessage, RequestListener, Server } from 'node:http';
 import type { INestApplication } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
@@ -7,16 +8,16 @@ import { validateEnv } from '../../../config/env.validation.js';
 import { PrismaModule } from '../../../prisma/prisma.module.js';
 import { PrismaService } from '../../../prisma/prisma.service.js';
 import { GrowthCoreModule } from '../growth-core.module.js';
-import { HeaderActorResolver } from '../testing/header-actor-resolver.js';
 import { parseDay } from '../time/org-time.js';
 import { XpLedgerService } from '../xp/xp-ledger.service.js';
-import { ACTOR_RESOLVER, type Actor } from './actor.js';
+import type { Actor, RequestUser } from './actor.js';
 
-// The growth-core HTTP routes, end to end with the real database and a TEST-ONLY login (a header).
+// The growth-core HTTP routes, end to end with the real database. The test sets req.user itself on the request
+// (like E01's auth guard will); no header is ever used to say who is calling.
 // Needs the local database. Run: pnpm --filter api test:e2e
 // Own temporary workspace; U1 and U2 belong to PM001, X1 to PM002.
 
-describe('growth-core HTTP routes (database, test-only actor)', () => {
+describe('growth-core HTTP routes (database, req.user set by the test)', () => {
   const tag = randomUUID().slice(0, 6);
   const [U1, U2, X1] = [`THU1${tag}`, `THU2${tag}`, `THX1${tag}`];
   let app: INestApplication;
@@ -26,12 +27,20 @@ describe('growth-core HTTP routes (database, test-only actor)', () => {
 
   const pm = (pmId = 'PM001'): Actor => ({ role: 'PM', pmId, workspaceId });
   const user = (userId: string): Actor => ({ role: 'USER', userId, workspaceId });
-  const as = (actor: Actor | null) => ({
-    get: (url: string) => withActor(request(app.getHttpServer()).get(url), actor),
-    post: (url: string) => withActor(request(app.getHttpServer()).post(url), actor),
-    put: (url: string) => withActor(request(app.getHttpServer()).put(url), actor),
+  // Test-only: the request reaches the app with req.user already set (no header, no shared state). null = nobody signed in.
+  const target = (user: RequestUser | null): RequestListener | Server => {
+    if (!user) return app.getHttpServer() as Server;
+    const handler = app.getHttpAdapter().getInstance() as RequestListener;
+    return (req, res) => {
+      (req as IncomingMessage & { user?: RequestUser }).user = user;
+      handler(req, res);
+    };
+  };
+  const as = (user: RequestUser | null) => ({
+    get: (url: string) => request(target(user)).get(url),
+    post: (url: string) => request(target(user)).post(url),
+    put: (url: string) => request(target(user)).put(url),
   });
-  const withActor = <T extends request.Test>(req: T, actor: Actor | null): T => (actor ? (req.set('x-test-actor', JSON.stringify(actor)) as T) : req);
   const errorCode = (res: request.Response) => (res.body as { error?: { code?: string } }).error?.code;
 
   const makeUser = (userId: string, pmId: string) =>
@@ -64,10 +73,7 @@ describe('growth-core HTTP routes (database, test-only actor)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }), PrismaModule, GrowthCoreModule],
-    })
-      .overrideProvider(ACTOR_RESOLVER)
-      .useValue(new HeaderActorResolver())
-      .compile();
+    }).compile();
     app = moduleRef.createNestApplication();
     await app.init();
     prisma = moduleRef.get(PrismaService);
@@ -112,15 +118,23 @@ describe('growth-core HTTP routes (database, test-only actor)', () => {
       }
     });
 
-    it('is closed by default: with the real default resolver nobody can sign in, even with the test header', async () => {
-      const closed = await Test.createTestingModule({
-        imports: [ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }), PrismaModule, GrowthCoreModule],
-      }).compile();
-      const closedApp = closed.createNestApplication();
-      await closedApp.init();
-      const res = await request(closedApp.getHttpServer()).get('/pm/xp-rules').set('x-test-actor', JSON.stringify(pm()));
-      expect(res.status).toBe(401);
-      await closedApp.close();
+    it('takes the caller from req.user only: identity sent in headers, query or body is ignored (rule 7)', async () => {
+      const forged = { 'x-test-actor': JSON.stringify(pm()), 'x-actor-pm-id': 'PM001', 'x-workspace-id': workspaceId };
+      const read = await request(app.getHttpServer()).get(`/pm/xp-rules?pmId=PM001&workspaceId=${workspaceId}`).set(forged);
+      expect([read.status, errorCode(read)]).toEqual([401, 'UNAUTHENTICATED']);
+      const write = await request(app.getHttpServer())
+        .post('/pm/xp-adjustments')
+        .set(forged)
+        .send({ userId: U1, amount: 5, reason: 'x', pmId: 'PM001', workspaceId, actor: pm() });
+      expect([write.status, errorCode(write)]).toEqual([401, 'UNAUTHENTICATED']);
+      expect(await prisma.xpEvent.count({ where: { workspaceId } })).toBe(0);
+    });
+
+    it('treats an incomplete or ambiguous req.user as nobody: 401', async () => {
+      for (const incomplete of [{ role: 'PM', workspaceId }, { role: 'USER', pmId: 'PM001', workspaceId }, { pmId: 'PM001', userId: U1, workspaceId }, { role: 'PM', pmId: 'PM001' }, { role: 'ADMIN', pmId: 'PM001', workspaceId }]) {
+        const res = await as(incomplete).get('/pm/xp-rules');
+        expect([res.status, errorCode(res)]).toEqual([401, 'UNAUTHENTICATED']);
+      }
     });
 
     it('answers 403 FORBIDDEN when the role is wrong: a user on a PM route, a PM on a user route', async () => {

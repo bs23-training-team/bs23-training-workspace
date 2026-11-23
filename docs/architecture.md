@@ -160,6 +160,20 @@ web view ──HTTP──▶ controller ──▶ service ──▶ repository /
    the test auth helper once E01 provides it. Until login exists, web pages use mock data and send
    no identity headers.
 
+   **Shape of `req.user`** (set by E01's `JwtAuthGuard`, read-only):
+
+   | Field | Meaning |
+   |---|---|
+   | `sub` | The login ID: `Pm.pmId` for a PM, `User.userId` for a user (for example `PM001`, `BS23001`). Not a UUID. |
+   | `sid` | `Session.id` of the current session. |
+   | `workspaceId` | The account's workspace, read from the database (not from the token). |
+   | `role` | `'PM'` or `'TRAINEE'` (see §4.2). |
+
+   Protect a route with `@UseGuards(JwtAuthGuard, RolesGuard)` and `@Roles('PM')` or
+   `@Roles('TRAINEE')`; import `IdentityModule`. Do not define your own copy of this type or read
+   `pmId` / `userId` from `req.user`: use `sub` and `role`. Every query must still filter on
+   `req.user.workspaceId`.
+
 ### 3.4 Layout of one module
 
 ```
@@ -226,7 +240,7 @@ stop ID reuse (rule 2); only code review can.
 - No `CourseVersion` table. A topic (`CourseModule`) belongs directly to a `Course`.
 - No `TECHNICAL` badge kind. `BadgeAward.attemptId`, `projectUrl` and `projectReviewed` stay in the
   table, unused, for a later version.
-- `TRAINEE` is a resource type of `User`, not a login role.
+- Two different things are both called `TRAINEE`: `User.resource = TRAINEE` is one of the 4 resource types, while the login role `TRAINEE` (in `req.user.role`) means any `User` account, whatever its resource type. A PM has the login role `PM`. There is no role column: the role is the table the account was found in.
 - Every relation uses `onDelete: Restrict`. History is kept with `archivedAt` / status columns
   instead of deleting rows.
 - Rules Prisma cannot express are hand-written SQL at the end of the migration that introduces them
@@ -459,3 +473,4 @@ Recommended extras (not in the SRS): secret scanning, dependency audit, SonarQub
 | 2026-11-19 | Final v1 schema (one `schema.prisma`) and `init` migration (PR #12). Login IDs as primary keys. No `CourseVersion`, no `TECHNICAL` badge. Local seed data (PR #14). |
 | 2026-11-20 | Module layering accepted; empty skeletons for all 13 feature modules registered (PR #15). `pnpm setup:local`, `Migration guard`, seed in CI (PR #16). `PR title` check and auto labels (PR #17). Required checks: CI, `Migration guard`, `PR title`; `ci-required` ruleset deleted; head branches auto-deleted after merge. |
 | 2026-11-23 | ADR 0001, 0002 and 0003 combined into this file. PRD, SRS, week 1 brief and the data-model template removed from the repository. Rule 3.3 #7 (identity only from `req.user`). e2e tests run in CI. |
+| 2026-11-23 | Shape of `req.user` documented (`sub`, `sid`, `workspaceId`, `role`); login role `TRAINEE` vs resource type `TRAINEE` clarified. |

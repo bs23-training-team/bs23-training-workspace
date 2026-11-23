@@ -6,6 +6,7 @@ import { CurrentActor, GamificationHttp, Roles } from './http/actor.guard.js';
 import { pmIdOf, userIdOf, type Actor } from './http/actor.js';
 import { bodyOf, oneOf, optNum, optStr, query, str } from './http/parse.js';
 import { StreakService } from './streak/streak.service.js';
+import { GrowthTriggersService } from './triggers/growth-triggers.service.js';
 
 const KINDS = ['BEHAVIORAL', 'SPECIAL'] as const;
 const RULES = ['ON_TIME_SPRINT_STREAK', 'SPRINT_STREAK', 'KUDOS_DISTINCT_SENDERS', 'MANUAL'] as const;
@@ -18,21 +19,28 @@ export class StreakBadgesController {
   constructor(
     private readonly streaks: StreakService,
     private readonly badges: BadgesService,
+    private readonly triggers: GrowthTriggersService,
   ) {}
 
-  /** A PM freezes one day for a user (leave or a holiday). The reason stays private to PMs. */
+  /**
+   * A PM freezes one day for a user (leave or a holiday). The reason stays private to PMs. A freeze
+   * can extend a streak, so the user's automatic badges are re-checked once it is saved.
+   */
   @Post('pm/streak-freezes')
   @Roles('PM')
-  freeze(@CurrentActor() actor: Actor, @Body() raw: unknown) {
+  async freeze(@CurrentActor() actor: Actor, @Body() raw: unknown) {
     const body = bodyOf(raw);
-    return this.streaks.grantFreeze({
+    const userId = str(body, 'userId');
+    const result = await this.streaks.grantFreeze({
       workspaceId: actor.workspaceId,
       pmId: pmIdOf(actor),
-      userId: str(body, 'userId'),
+      userId,
       date: str(body, 'date'),
       source: oneOf(str(body, 'source'), SOURCES, 'source') as FreezeSource,
       reason: str(body, 'reason'),
     });
+    await this.triggers.afterStreakChange(actor.workspaceId, userId);
+    return result;
   }
 
   /** The freezes of one of the PM's users, with their private reasons. */

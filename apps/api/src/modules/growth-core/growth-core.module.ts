@@ -13,6 +13,7 @@ import { NOTIFICATIONS } from './ports/notification.port.js';
 import { SPRINT_SOURCE } from './ports/sprint-source.port.js';
 import { EmptyCalendarSource, EmptySprintSource } from './streak/empty-sources.js';
 import { StreakService } from './streak/streak.service.js';
+import { GrowthTriggersService } from './triggers/growth-triggers.service.js';
 import { USER_DIRECTORY } from './ports/user-directory.port.js';
 import { CLOCK, systemClock } from './time/clock.port.js';
 import { NoopNotificationPort } from './xp/noop-notification-port.js';
@@ -39,6 +40,8 @@ import { XpRulesService } from './xp/xp-rules.service.js';
     LevelsService,
     { provide: LEVELS, useExisting: LevelsService },
     StreakService,
+    // Re-checks streaks and automatic badges after sprints, kudos decisions, freezes and nightly.
+    GrowthTriggersService,
     // Stand-ins until E06 (sprints) and E07 (attendance) provide the real sources.
     { provide: SPRINT_SOURCE, useClass: EmptySprintSource },
     { provide: CALENDAR_SOURCE, useClass: EmptyCalendarSource },
@@ -51,6 +54,6 @@ import { XpRulesService } from './xp/xp-rules.service.js';
     { provide: NOTIFICATIONS, useClass: NoopNotificationPort },
   ],
   // The ledger and reward core are what other modules (engagement, sprint, assessment) call.
-  exports: [XpLedgerService, XpRulesService, RewardService, XpReviewService, XpAdjustmentService, XpQueryService, LevelsService, LEVELS, StreakService, BadgesService],
+  exports: [XpLedgerService, XpRulesService, RewardService, XpReviewService, XpAdjustmentService, XpQueryService, LevelsService, LEVELS, StreakService, BadgesService, GrowthTriggersService],
 })
 export class GrowthCoreModule {}

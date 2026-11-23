@@ -3,6 +3,7 @@ import type { XpStatus } from '../../generated/prisma/enums.js';
 import { CurrentActor, GamificationHttp, Roles } from './http/actor.guard.js';
 import { pmIdOf, userIdOf, type Actor } from './http/actor.js';
 import { bodyOf, num, oneOf, query, str } from './http/parse.js';
+import { GrowthTriggersService } from './triggers/growth-triggers.service.js';
 import { XpAdjustmentService } from './xp/xp-adjustment.service.js';
 import { XpQueryService } from './xp/xp-query.service.js';
 import { XpReviewService } from './xp/xp-review.service.js';
@@ -18,20 +19,26 @@ export class XpController {
     private readonly review: XpReviewService,
     private readonly adjustments: XpAdjustmentService,
     private readonly xp: XpQueryService,
+    private readonly triggers: GrowthTriggersService,
   ) {}
 
-  /** A PM awards, holds, rejects or reverses an XP event, with a reason. */
+  /**
+   * A PM awards, holds, rejects or reverses an XP event, with a reason. After the decision is saved,
+   * a kudos event re-checks the receiver's automatic badges (approved senders changed).
+   */
   @Post('pm/xp-events/:id/decision')
   @Roles('PM')
-  decide(@CurrentActor() actor: Actor, @Param('id') id: string, @Body() raw: unknown) {
+  async decide(@CurrentActor() actor: Actor, @Param('id') id: string, @Body() raw: unknown) {
     const body = bodyOf(raw);
-    return this.review.decide({
+    const result = await this.review.decide({
       workspaceId: actor.workspaceId,
       eventId: id,
       pmId: pmIdOf(actor),
       toStatus: oneOf(str(body, 'status'), DECISIONS, 'status') as XpStatus,
       reason: str(body, 'reason'),
     });
+    await this.triggers.afterXpDecision(actor.workspaceId, result.eventId);
+    return result;
   }
 
   /** A PM adds or removes XP by hand for one of their users. */

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type {
   MailDeliveryDto,
   PmReportRecord,
@@ -13,13 +13,18 @@ import type {
   TraineePublishedReportDetail,
   TraineePublishedReportItem,
 } from '@bs23/contracts';
+import { Roles } from '../identity/decorators/access.decorators.js';
+import { JwtAuthGuard } from '../identity/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../identity/guards/roles.guard.js';
 import { requirePmActor, requireUserActor, type RequestWithActor } from './reports.actor.js';
 import { ReportsService } from './reports.service.js';
 
 /**
- * Thin PM HTTP controller for reports (ADR 0002: no Prisma, no business rules).
+ * Thin PM HTTP controller for reports (docs/architecture.md §3: no Prisma, no business rules).
  */
 @Controller('pm/reports')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('PM')
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
@@ -124,6 +129,8 @@ export class ReportsController {
  * Drafts are never exposed here (PRD FR-RPT-07, US-85).
  */
 @Controller('me/reports')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('TRAINEE')
 export class MyReportsController {
   constructor(private readonly reports: ReportsService) {}
 

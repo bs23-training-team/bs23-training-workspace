@@ -285,7 +285,9 @@ Locally both point to the same Docker database on port 5433.
 
 - `apps/api/prisma/seed/seed.ts` (`pnpm db:seed`) creates the demo workspace `bs23`, PMs `PM001` and
   `PM002`, users `BS23001`–`BS23004` (one per resource type), a team, skills, an `XpRule` and two levels.
-  All demo passwords are `Password123!`.
+  All demo passwords are `Password123!` on a local database. On any database that is not on this
+  machine the seed refuses to run unless `SEED_PASSWORD` is set to a strong value (the default is
+  public because this repository is public).
 - Seeds run in **local, test and staging only**. The script refuses to run when
   `NODE_ENV=production`. Production gets no seeds and no resets.
 - Running the seed twice is safe; it does not create duplicates.
@@ -322,6 +324,24 @@ Secrets:
    start, naming the missing variable.
 6. Logs never contain credentials, private answers or leave reasons.
 7. Planned: a secret scanner (e.g. gitleaks) in CI.
+
+### 6.1 Before the first staging deploy
+
+Checklist (every item must be done or consciously decided; some items need E01's auth on `develop`):
+
+1. **Seed:** a strong `SEED_PASSWORD` (the seed enforces this on non-local databases).
+2. **Dev tokens:** `IDENTITY_EXPOSE_DEV_TOKENS` is unset or `false`. It returns reset and verification
+   tokens in API responses, and it is ignored only when `NODE_ENV=production`.
+3. **JWT secrets:** `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` are two different random values of at
+   least 32 characters, kept in the host's secret store, never in the repository.
+4. **Mail:** `MAIL_PROVIDER=console` is refused in production; a real provider (and sender address)
+   must be chosen before any email can be delivered.
+5. **Tokens in the browser:** the web app keeps tokens in `httpOnly`, `Secure`, `SameSite` cookies,
+   never in `localStorage` (the decision and the Next.js proxy are still open).
+6. **Rate limits:** set `trust proxy` for the chosen host and use a shared store (for example Redis)
+   when more than one API instance runs; the counters are in memory today.
+7. **Mock data:** the reports web feature uses mock data only when an explicit flag is set, never by
+   default.
 
 ---
 

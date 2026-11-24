@@ -26,9 +26,21 @@ export class XpLedgerService implements XpLedger {
    * Records an event, or does nothing if the key was already used (idempotent).
    * Uses INSERT ... ON CONFLICT DO NOTHING, so a duplicate does not raise an error and does
    * not abort a surrounding transaction.
+   *
+   * The user must belong to the workspace of the event, whoever the caller is: the database only checks that the
+   * user and the workspace each exist, not that they belong together, so a caller that skipped its own check could
+   * otherwise write XP for a user of another workspace (NOT_FOUND, nothing saved). Only membership is checked: an
+   * archived user is still a member (their history is kept).
    */
   async createEvent(input: NewXpEvent, db: Db = this.prisma): Promise<CreateEventResult> {
     this.validate(input);
+    const member = await db.user.findFirst({
+      where: { userId: input.userId, workspaceId: input.workspaceId },
+      select: { userId: true },
+    });
+    if (!member) {
+      throw new GrowthError('NOT_FOUND', 'User not found in this workspace');
+    }
 
     const { count } = await db.xpEvent.createMany({
       data: [

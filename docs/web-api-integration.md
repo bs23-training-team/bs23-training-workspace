@@ -127,10 +127,10 @@ module is done.
 
 ## 7. Known problems to fix before connecting (found in the code, please verify)
 
-- **CORS.** A search of `apps/api/src` found no CORS setup, and `main.ts` calls `NestFactory.create`
-  without `enableCors`. A browser on `localhost:3000` calling `localhost:4000` would be blocked.
-  Owner: E11 with E01. Allowed origin must come from an environment variable, never `*` with
-  credentials.
+- **CORS (fixed by E11).** `main.ts` now calls `enableCors` with the origins from `WEB_ORIGIN`
+  (default `http://localhost:3000`; staging and production must set it). `*` is refused and cookies are
+  not enabled: the token goes in the `Authorization` header. Run `git pull` and, if your `apps/api/.env`
+  is older than `.env.example`, add the `WEB_ORIGIN` line (not required for local work).
 - **E08's client uses cookies.** `features/reports/api.ts` sends `credentials: 'include'` and no
   `Authorization` header, but the API guard accepts only `Authorization: Bearer ...`. Its calls would
   return `401`. Align it with the shared client once E01 provides it.
@@ -162,7 +162,7 @@ pnpm --filter web build
 
 | Problem | Likely cause |
 |---|---|
-| Browser console: CORS error | Section 7: CORS is not set up yet |
+| Browser console: CORS error | The web origin is not in `WEB_ORIGIN` of the API (check scheme, host and port, no trailing slash), or the API was not restarted after changing `.env` |
 | `401` on every call | No `Authorization` header, or the access token expired and was not refreshed |
 | `403` | The role is not allowed on that route: this is correct behaviour, fix the test user |
 | Screen shows old fake data | The screen still imports `mock-api.ts` |
@@ -174,6 +174,6 @@ pnpm --filter web build
 | # | Decision | Owner |
 |---|---|---|
 | 1 | Where the web stores access and refresh tokens | E01 |
-| 2 | CORS allowed origins per environment | E11 + E01 |
+| 2 | `WEB_ORIGIN` values for staging and production (local default is done) | E11 |
 | 3 | Data-fetching helper (a small hook, or a library) and the loading/error pattern | E11 |
 | 4 | Whether to add a web test runner (Vitest) before the first screen is connected | E11 |

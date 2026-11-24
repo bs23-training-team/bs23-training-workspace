@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import type { KudosCategory } from '../../generated/prisma/enums.js';
 import { CurrentActor, GamificationHttp, Roles, bodyOf, oneOf, query, str, userIdOf, type Actor } from '../growth-core/index.js';
+import { KudosLimitsService } from './kudos/kudos-limits.service.js';
 import { KudosQueryService } from './kudos/kudos-query.service.js';
 import { KudosService } from './kudos/kudos.service.js';
 
@@ -13,6 +14,7 @@ export class KudosController {
   constructor(
     private readonly kudos: KudosService,
     private readonly reader: KudosQueryService,
+    private readonly limitsReader: KudosLimitsService,
   ) {}
 
   /**
@@ -31,6 +33,13 @@ export class KudosController {
       message: str(body, 'message'),
     });
     return { kudosId: sent.kudosId };
+  }
+
+  /** How many kudos the user has sent this week, the weekly limit and the cooldown: what the "Send kudos" card shows. */
+  @Get('me/kudos-limits')
+  @Roles('USER')
+  limits(@CurrentActor() actor: Actor) {
+    return this.limitsReader.forUser(actor.workspaceId, userIdOf(actor));
   }
 
   /** A user's own kudos, or a PM's own users' kudos. */

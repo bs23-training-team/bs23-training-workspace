@@ -24,11 +24,23 @@ export interface SendKudosResponse {
   kudosId: string;
 }
 
+/** Answer of GET /me/kudos-limits: what the "Send kudos" card shows. The rules themselves are a PM's to read. */
+export interface KudosLimits {
+  /** Kudos the user has sent in the current Monday week (Dhaka). */
+  sentThisWeek: number;
+  /** The most kudos one user may send in a week. */
+  sendLimitPerWeek: number;
+  /** Days before the user may send kudos to the same person again. */
+  cooldownDays: number;
+}
+
 /** A kudos as a USER sees it in GET /kudos (what they sent or received). A PM's rows are PmKudosView. */
 export interface KudosView {
   id: string;
   fromUserId: string;
+  fromName: string;
   toUserId: string;
+  toName: string;
   category: KudosCategory;
   message: string;
   sentOn: string;

@@ -2,12 +2,15 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service.js';
 import type { XpSource, XpStatus } from '../../../generated/prisma/enums.js';
 import { GrowthError } from '../errors.js';
+import { levelFor } from '../levels/level-set.js';
 import { MAX_PAGE, parseCursor } from '../paging.js';
 import { LEVELS, type LevelsPort } from '../ports/levels.port.js';
 
+/** An XP event as a PM sees it (review queue and history): with the user's name and the flag. */
 export interface XpEventView {
   id: string;
   userId: string;
+  userName: string;
   source: XpSource;
   amount: number;
   status: XpStatus;
@@ -20,9 +23,10 @@ export interface XpEventView {
 
 /**
  * An XP event as its OWNER sees it. The flag ("Suspicious exchange", "Weekly received cap reached") is a PM's
- * information and is never here; the user sees the status, and the reason once a PM has decided.
+ * information and is never here; the user sees the status, and the reason once a PM has decided. The owner's own
+ * name is not repeated.
  */
-export type MyXpEventView = Omit<XpEventView, 'flag'>;
+export type MyXpEventView = Omit<XpEventView, 'flag' | 'userName'>;
 
 export interface MyGrowth {
   /** XP that counts: AWARDED only. */
@@ -30,13 +34,18 @@ export interface MyGrowth {
   /** XP waiting for a PM: PENDING and HELD. Shown separately, never added to the total. */
   pendingXp: number;
   level: string | null;
+  /** The next level above the current one; null at the top level (or when the workspace has no levels). */
+  nextLevel: { name: string; minXp: number } | null;
+  /** XP still needed to reach `nextLevel`; null when there is no next level. */
+  xpToNext: number | null;
   streak: { current: number; longest: number };
   badges: { badgeId: string; name: string; icon: string; awardedAt: string }[];
 }
 
-const toView = (e: {
+type XpRow = {
   id: string;
   userId: string;
+  user: { name: string };
   source: XpSource;
   amount: number;
   status: XpStatus;
@@ -45,9 +54,12 @@ const toView = (e: {
   evidence: string;
   occurredOn: Date;
   createdAt: Date;
-}): XpEventView => ({
+};
+
+const toView = (e: XpRow): XpEventView => ({
   id: e.id,
   userId: e.userId,
+  userName: e.user.name,
   source: e.source,
   amount: e.amount,
   status: e.status,
@@ -59,7 +71,7 @@ const toView = (e: {
 });
 
 // Field by field, so the flag cannot reach a user through a spread.
-const toMyView = (e: Parameters<typeof toView>[0]): MyXpEventView => ({
+const toMyView = (e: XpRow): MyXpEventView => ({
   id: e.id,
   userId: e.userId,
   source: e.source,
@@ -82,11 +94,11 @@ export class XpQueryService {
     @Inject(LEVELS) private readonly levels: LevelsPort,
   ) {}
 
-  /** The review queue and history for a PM's own users, newest first. */
+  /** The review queue and history for a PM's own users, newest first. `statuses` is any of the five (none = all). */
   async queue(input: {
     workspaceId: string;
     pmId: string;
-    status?: XpStatus;
+    statuses?: XpStatus[];
     userId?: string;
     cursor?: string | null;
     limit?: number;
@@ -100,7 +112,12 @@ export class XpQueryService {
       if (user.pmId !== input.pmId) throw new GrowthError('FORBIDDEN_SCOPE', 'This user is not managed by you');
     }
     return this.page(
-      { workspaceId: input.workspaceId, user: { pmId: input.pmId }, ...(input.status ? { status: input.status } : {}), ...(input.userId ? { userId: input.userId } : {}) },
+      {
+        workspaceId: input.workspaceId,
+        user: { pmId: input.pmId },
+        ...(input.statuses?.length ? { status: { in: input.statuses } } : {}),
+        ...(input.userId ? { userId: input.userId } : {}),
+      },
       input.cursor,
       input.limit,
       toView,
@@ -116,9 +133,9 @@ export class XpQueryService {
     return this.page({ workspaceId, userId }, options.cursor, options.limit, toMyView);
   }
 
-  /** A user's own summary: level, XP (awarded and waiting), streak and the badges they hold. */
+  /** A user's own summary: level and the way to the next one, XP (awarded and waiting), streak and the badges they hold. */
   async myGrowth(workspaceId: string, userId: string): Promise<MyGrowth> {
-    const [awarded, waiting, streak, awards] = await Promise.all([
+    const [awarded, waiting, streak, awards, levels] = await Promise.all([
       this.prisma.xpEvent.aggregate({ where: { workspaceId, userId, status: 'AWARDED' }, _sum: { amount: true } }),
       this.prisma.xpEvent.aggregate({ where: { workspaceId, userId, status: { in: ['PENDING', 'HELD'] } }, _sum: { amount: true } }),
       this.prisma.streak.findUnique({ where: { userId }, select: { current: true, longest: true } }),
@@ -127,13 +144,18 @@ export class XpQueryService {
         orderBy: { awardedAt: 'asc' },
         select: { badgeId: true, awardedAt: true, badge: { select: { name: true, icon: true } } },
       }),
+      this.levels.active(workspaceId),
     ]);
     const awardedXp = awarded._sum.amount ?? 0;
-    const level = await this.levels.levelFor(workspaceId, awardedXp);
+    const level = levelFor(levels, awardedXp);
+    // The next level is the one with the smallest threshold above the current XP.
+    const next = levels.filter((l) => l.minXp > awardedXp).sort((a, b) => a.minXp - b.minXp)[0] ?? null;
     return {
       awardedXp,
       pendingXp: waiting._sum.amount ?? 0,
       level: level?.name ?? null,
+      nextLevel: next ? { name: next.name, minXp: next.minXp } : null,
+      xpToNext: next ? next.minXp - awardedXp : null,
       streak: { current: streak?.current ?? 0, longest: streak?.longest ?? 0 },
       badges: awards.map((a) => ({ badgeId: a.badgeId, name: a.badge.name, icon: a.badge.icon, awardedAt: a.awardedAt.toISOString() })),
     };
@@ -143,12 +165,13 @@ export class XpQueryService {
     where: object,
     cursor: string | null | undefined,
     limit: number | undefined,
-    view: (row: Parameters<typeof toView>[0]) => V,
+    view: (row: XpRow) => V,
   ): Promise<{ events: V[]; nextCursor: string | null }> {
     const skip = parseCursor(cursor);
     const take = Math.min(limit ?? MAX_PAGE, MAX_PAGE);
     const rows = await this.prisma.xpEvent.findMany({
       where,
+      include: { user: { select: { name: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip,
       take: take + 1,

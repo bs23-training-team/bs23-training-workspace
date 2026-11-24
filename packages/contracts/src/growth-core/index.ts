@@ -17,10 +17,11 @@ export type XpDecision = (typeof XP_DECISIONS)[number];
 export const XP_SOURCES = ['ON_TIME_SPRINT', 'VERIFIED_MODULE', 'FINAL_ASSESSMENT', 'KUDOS', 'QUEST', 'MANUAL_ADJUSTMENT'] as const;
 export type XpSource = (typeof XP_SOURCES)[number];
 
-/** One XP event. Only AWARDED XP counts toward the total. */
+/** One XP event as a PM sees it (review queue and history). Only AWARDED XP counts toward the total. */
 export interface XpEventView {
   id: string;
   userId: string;
+  userName: string;
   source: XpSource;
   amount: number;
   status: XpStatus;
@@ -40,9 +41,9 @@ export interface XpEventPage {
 
 /**
  * An XP event as its OWNER sees it in GET /me/xp-events. The flag is a PM's information and is never here: the user
- * sees the status, and the reason once a PM has decided.
+ * sees the status, and the reason once a PM has decided. The owner's own name is not repeated.
  */
-export type MyXpEventView = Omit<XpEventView, 'flag'>;
+export type MyXpEventView = Omit<XpEventView, 'flag' | 'userName'>;
 
 /** Answer of GET /me/xp-events. */
 export interface MyXpEventPage {
@@ -52,7 +53,8 @@ export interface MyXpEventPage {
 
 /** Query of GET /pm/xp-events. */
 export interface XpQueueQuery {
-  status?: XpStatus;
+  /** One status or several joined by commas, for example "PENDING,HELD" (the waiting queue). No status means all. */
+  status?: string;
   userId?: string;
   cursor?: string;
 }
@@ -64,6 +66,10 @@ export interface MyGrowth {
   /** XP waiting for a PM (PENDING and HELD). Never added to the total. */
   pendingXp: number;
   level: string | null;
+  /** The next level above the current one; null at the top level (or when the workspace has no levels). */
+  nextLevel: { name: string; minXp: number } | null;
+  /** XP still needed to reach `nextLevel`; null when there is no next level. */
+  xpToNext: number | null;
   streak: { current: number; longest: number };
   /** Badges the user holds. */
   badges: { badgeId: string; name: string; icon: string; awardedAt: string }[];

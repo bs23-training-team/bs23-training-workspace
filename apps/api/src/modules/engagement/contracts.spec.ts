@@ -1,5 +1,6 @@
 import type * as C from '@bs23/contracts';
 import type { KudosController } from './kudos.controller.js';
+import type { KudosLimits } from './kudos/kudos-limits.service.js';
 import type { KudosQueryService, KudosView, PmKudosView } from './kudos/kudos-query.service.js';
 import type { PeerRow, PmRow } from './leaderboard/leaderboard-rank.js';
 import type { ProgressView, QuestView, VerifyResult } from './quests/quests.service.js';
@@ -26,7 +27,8 @@ const checks: [
   Same<PmKudosView, C.PmKudosView>,
   Same<Awaited<ReturnType<KudosQueryService['page']>>['kudos'], C.KudosView[] | C.PmKudosView[]>,
   Same<Awaited<ReturnType<KudosController['send']>>, C.SendKudosResponse>,
-] = [true, true, true, true, true, true, true, true, true, true, true];
+  Same<KudosLimits, C.KudosLimits>,
+] = [true, true, true, true, true, true, true, true, true, true, true, true];
 
 describe('engagement contract types match the services', () => {
   it('every response type in packages/contracts equals or fits the service result (compile-time)', () => {

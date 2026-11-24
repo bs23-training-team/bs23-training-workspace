@@ -57,7 +57,10 @@ export class XpController {
     });
   }
 
-  /** The PM's review queue and history for their own users. */
+  /**
+   * The PM's review queue and history for their own users. `status` is one status or several joined by commas
+   * ("PENDING,HELD" is the waiting queue); no status means all of them.
+   */
   @Get('pm/xp-events')
   @Roles('PM')
   queue(
@@ -67,10 +70,11 @@ export class XpController {
     @Query('cursor') cursor?: unknown,
   ) {
     const rawStatus = query(status);
+    const statuses = rawStatus ? rawStatus.split(',').map((s) => oneOf(s.trim(), STATUSES, 'status') as XpStatus) : [];
     return this.xp.queue({
       workspaceId: actor.workspaceId,
       pmId: pmIdOf(actor),
-      ...(rawStatus ? { status: oneOf(rawStatus, STATUSES, 'status') as XpStatus } : {}),
+      ...(statuses.length ? { statuses } : {}),
       ...(query(userId) ? { userId: query(userId) as string } : {}),
       cursor: query(cursor) ?? null,
     });

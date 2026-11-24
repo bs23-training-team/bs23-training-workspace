@@ -152,6 +152,64 @@ describe('read routes: badge catalogue and PM growth summary (database)', () => 
     });
   });
 
+  describe('GET /me/growth: the way to the next level', () => {
+    const levels = () =>
+      prisma.level.createMany({
+        data: [
+          { workspaceId, name: 'Rookie', minXp: 0 },
+          { workspaceId, name: 'Builder', minXp: 100 },
+          { workspaceId, name: 'Expert', minXp: 300 },
+        ],
+      });
+
+    it('gives the next level and the XP still needed', async () => {
+      await levels();
+      await xp(A, 120, 'AWARDED');
+      await xp(A, 500, 'PENDING'); // waiting XP does not move the level
+      const res = await as(trainee(A)).get('/me/growth');
+      expect(res.body).toMatchObject({ awardedXp: 120, level: 'Builder', nextLevel: { name: 'Expert', minXp: 300 }, xpToNext: 180 });
+    });
+
+    it('exactly on a threshold counts as reached', async () => {
+      await levels();
+      await xp(A, 100, 'AWARDED');
+      expect((await as(trainee(A)).get('/me/growth')).body).toMatchObject({ level: 'Builder', nextLevel: { name: 'Expert' }, xpToNext: 200 });
+    });
+
+    it('has no next level at the top level, and none when the workspace has no levels', async () => {
+      await levels();
+      await xp(A, 350, 'AWARDED');
+      expect((await as(trainee(A)).get('/me/growth')).body).toMatchObject({ level: 'Expert', nextLevel: null, xpToNext: null });
+      await prisma.level.deleteMany({ where: { workspaceId } });
+      expect((await as(trainee(A)).get('/me/growth')).body).toMatchObject({ level: null, nextLevel: null, xpToNext: null });
+    });
+  });
+
+  describe('GET /pm/xp-events: names and several statuses', () => {
+    it('answers the waiting queue (PENDING,HELD) in one call, with the user name, and leaves out other statuses', async () => {
+      await xp(A, 10, 'PENDING');
+      await xp(B, 20, 'HELD');
+      await xp(A, 30, 'AWARDED');
+      const res = await as(pm()).get('/pm/xp-events?status=PENDING,HELD');
+      expect(res.status).toBe(200);
+      const events = (res.body as { events: { status: string; userId: string; userName: string }[] }).events;
+      expect(events.map((e) => e.status).sort()).toEqual(['HELD', 'PENDING']);
+      expect(events.find((e) => e.userId === A)?.userName).toBe(`Name ${A}`);
+      // one status still works, and no status means all of them
+      expect(((await as(pm()).get('/pm/xp-events?status=AWARDED')).body as { events: unknown[] }).events).toHaveLength(1);
+      expect(((await as(pm()).get('/pm/xp-events')).body as { events: unknown[] }).events).toHaveLength(3);
+    });
+
+    it('refuses an unknown status in the list, and the owner sees no name field on their own events', async () => {
+      const bad = await as(pm()).get('/pm/xp-events?status=PENDING,DONE');
+      expect([bad.status, errorCode(bad)]).toEqual([400, 'VALIDATION']);
+      await xp(A, 10, 'PENDING');
+      const own = (await as(trainee(A)).get('/me/xp-events')).body as { events: Record<string, unknown>[] };
+      expect(own.events).toHaveLength(1);
+      expect(own.events[0]).not.toHaveProperty('userName');
+    });
+  });
+
   describe('GET /pm/growth-summary', () => {
     it('lists every active user by name with awarded XP, pending XP, level and the stored streak', async () => {
       await prisma.level.createMany({

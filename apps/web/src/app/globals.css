@@ -37,7 +37,7 @@ body {
   }
 }
 
-/* Sector Growth Analytics chart (src/components/domain/sector-growth.tsx) */
+/* Sector Growth Analytics chart (src/features/dashboard/components/sector-growth.tsx) */
 .sg-chart text {
   fill: var(--color-muted);
   font-size: 11px;

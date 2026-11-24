@@ -3,7 +3,7 @@
 import { forwardRef, useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { cn, initials } from "@/lib/utils";
 import { Loader2, Inbox, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
-import type { IntegrationStatusValue, SourceStatus } from "@/lib/types";
+import type { IntegrationStatusValue, SourceStatus } from "@/lib/mock/types";
 
 /* ------------------------------- Button ------------------------------- */
 

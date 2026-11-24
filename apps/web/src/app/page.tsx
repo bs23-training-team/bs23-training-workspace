@@ -2,8 +2,9 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useDB } from "@/lib/store";
-import { currentUser, homeFor } from "@/lib/api";
+import { useDB } from "@/lib/mock/store";
+import { currentUser } from "@/lib/mock/selectors";
+import { homeFor } from "@/features/auth";
 import { Loading } from "@/components/ui/ui";
 
 export default function Home() {

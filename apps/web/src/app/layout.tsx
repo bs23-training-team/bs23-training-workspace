@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Providers } from "@/components/layout/providers";
+import { Providers } from "@/features/shell";
 
 export const metadata: Metadata = {
   title: "BS23 Training Workspace",

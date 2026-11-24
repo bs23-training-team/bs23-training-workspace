@@ -1,4 +1,5 @@
-import type { Position, AttendanceMode, Resource } from "./types";
+
+import type { Position, AttendanceMode, Resource } from "@/lib/mock/types";
 
 export function cn(...classes: (string | false | null | undefined)[]) {
   return classes.filter(Boolean).join(" ");

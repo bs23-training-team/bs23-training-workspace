@@ -6,7 +6,9 @@ import { SettingsController } from './settings.controller.js';
 import { StreakBadgesController } from './streak-badges.controller.js';
 import { XpController } from './xp.controller.js';
 import { XpQueryService } from './xp/xp-query.service.js';
+import { BadgesQueryService } from './badges/badges-query.service.js';
 import { BadgesService } from './badges/badges.service.js';
+import { PmGrowthSummaryService } from './xp/pm-growth-summary.service.js';
 import { KudosQueryModule } from '../engagement/kudos/kudos-query.module.js';
 import { KudosQueryService } from '../engagement/kudos/kudos-query.service.js';
 import { CALENDAR_SOURCE } from './ports/calendar-source.port.js';
@@ -52,6 +54,9 @@ import { XpRulesService } from './xp/xp-rules.service.js';
     { provide: SPRINT_SOURCE, useClass: EmptySprintSource },
     { provide: CALENDAR_SOURCE, useClass: EmptyCalendarSource },
     BadgesService,
+    // Read side for the screens: the badge catalogue with awards and progress, and the PM's per-user summary.
+    BadgesQueryService,
+    PmGrowthSummaryService,
     // IF-04: the badge rule KUDOS_DISTINCT_SENDERS reads kudos only through engagement's reader.
     { provide: KUDOS, useExisting: KudosQueryService },
     { provide: CLOCK, useValue: systemClock },

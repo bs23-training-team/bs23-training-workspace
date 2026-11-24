@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import type { BadgeKind, BadgeRuleType, FreezeSource } from '../../generated/prisma/enums.js';
+import { BadgesQueryService } from './badges/badges-query.service.js';
 import { BadgesService } from './badges/badges.service.js';
 import { GrowthError } from './errors.js';
 import { CurrentActor, GamificationHttp, Roles } from './http/actor.guard.js';
@@ -19,8 +20,21 @@ export class StreakBadgesController {
   constructor(
     private readonly streaks: StreakService,
     private readonly badges: BadgesService,
+    private readonly badgeReader: BadgesQueryService,
     private readonly triggers: GrowthTriggersService,
   ) {}
+
+  /**
+   * The badge catalogue. A user sees the active badges (and a retired one they hold) with their own award and their
+   * progress; a PM sees every badge with who holds it. Newest last, paged.
+   */
+  @Get('badges')
+  badgeCatalogue(@CurrentActor() actor: Actor, @Query('cursor') cursor?: unknown) {
+    const page = { cursor: query(cursor) ?? null };
+    return actor.role === 'PM'
+      ? this.badgeReader.forPm(actor.workspaceId, page)
+      : this.badgeReader.forUser(actor.workspaceId, userIdOf(actor), page);
+  }
 
   /**
    * A PM freezes one day for a user (leave or a holiday). The reason stays private to PMs. A freeze
@@ -67,12 +81,20 @@ export class StreakBadgesController {
     const body = bodyOf(raw);
     const ruleType = optStr(body, 'ruleType');
     const threshold = optNum(body, 'threshold');
+    // `kind` is optional (FR-GAM-06: a badge with a rule is Behavioral, one without is Special). When it is sent it
+    // is still checked against the rule by the service.
+    const sentKind = optStr(body, 'kind');
+    const kind = sentKind
+      ? (oneOf(sentKind, KINDS, 'kind') as BadgeKind)
+      : ruleType && ruleType !== 'MANUAL'
+        ? ('BEHAVIORAL' as const)
+        : ('SPECIAL' as const);
     return this.badges.create({
       workspaceId: actor.workspaceId,
       pmId: pmIdOf(actor),
       name: str(body, 'name'),
       icon: str(body, 'icon'),
-      kind: oneOf(str(body, 'kind'), KINDS, 'kind') as BadgeKind,
+      kind,
       criteria: str(body, 'criteria'),
       ...(ruleType ? { ruleType: oneOf(ruleType, RULES, 'ruleType') as BadgeRuleType } : {}),
       ...(threshold !== undefined ? { threshold } : {}),

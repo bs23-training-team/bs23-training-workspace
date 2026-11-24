@@ -1,5 +1,7 @@
 import type * as C from '@bs23/contracts';
+import type { BadgesQueryService } from './badges/badges-query.service.js';
 import type { ActiveLevel } from './levels/level-set.js';
+import type { PmGrowthSummaryService } from './xp/pm-growth-summary.service.js';
 import type { FreezeForPm, FreezeForUser } from './streak/streak.service.js';
 import type { AdjustResult } from './xp/xp-adjustment.service.js';
 import type { MyGrowth, XpEventView } from './xp/xp-query.service.js';
@@ -26,7 +28,11 @@ const checks: [
   Fits<FreezeForUser, C.MyStreakFreeze>,
   Fits<C.PmStreakFreeze, FreezeForPm>,
   Fits<C.MyStreakFreeze, FreezeForUser>,
-] = [true, true, true, true, true, true, true, true, true, true];
+  // The read side for the screens: GET /badges (user and PM) and GET /pm/growth-summary.
+  Same<Awaited<ReturnType<BadgesQueryService['forUser']>>, Extract<C.BadgePage, { viewer: 'USER' }>>,
+  Same<Awaited<ReturnType<BadgesQueryService['forPm']>>, Extract<C.BadgePage, { viewer: 'PM' }>>,
+  Same<Awaited<ReturnType<PmGrowthSummaryService['page']>>, C.PmGrowthSummaryPage>,
+] = [true, true, true, true, true, true, true, true, true, true, true, true, true];
 
 describe('growth-core contract types match the services', () => {
   it('every response type in packages/contracts equals or fits the service result (compile-time)', () => {

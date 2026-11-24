@@ -16,6 +16,8 @@ export interface TeamListItem {
   pmName: string;
   memberCount: number;
   members: TeamMember[];
+  /** true when the calling PM owns this team: only then may the UI offer changes to it. */
+  managedByYou: boolean;
 }
 
 export interface TeamListResponse {

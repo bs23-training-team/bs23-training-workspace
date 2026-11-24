@@ -40,11 +40,16 @@ export class TeamsService {
       pmName: t.pm.name,
       memberCount: t.memberships.length,
       members: t.memberships.map((m) => m.user),
+      managedByYou: t.pmId === actor.pmId,
     }));
     return { items };
   }
 
-  /** Creates a team. The PM who creates it is its PM. */
+  /**
+   * Creates a team. The PM who creates it is its PM: pmId always comes from the caller (req.user),
+   * never from the request body. Every later write route on a team must check `team.pmId === actor.pmId`
+   * and answer FORBIDDEN_SCOPE otherwise (every PM sees every team, only the owner changes it).
+   */
   async createTeam(actor: PmActor, rawName: string): Promise<TeamListItem> {
     const { workspaceId } = actor;
 
@@ -65,7 +70,14 @@ export class TeamsService {
       data: { workspaceId, name, pmId: actor.pmId },
       select: { id: true, name: true, pmId: true, pm: { select: { name: true } } },
     });
-    return { id: team.id, name: team.name, pmId: team.pmId, pmName: team.pm.name, memberCount: 0, members: [] };
+    return {
+      id: team.id,
+      name: team.name,
+      pmId: team.pmId,
+      pmName: team.pm.name,
+      memberCount: 0,
+      members: [],
+      managedByYou: true,
+    };
   }
-
 }

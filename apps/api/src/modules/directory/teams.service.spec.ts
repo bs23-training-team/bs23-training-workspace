@@ -60,7 +60,20 @@ describe('TeamsService', () => {
             { userId: 'BS23001', name: 'Brishty', position: 'FULLSTACK' },
             { userId: 'BS23002', name: 'Tanvir', position: 'FRONTEND' },
           ],
+          managedByYou: true,
         },
+      ]);
+    });
+
+    it('says managedByYou: false for a team owned by another PM', async () => {
+      prisma.team.findMany.mockResolvedValue([
+        { id: 't1', name: 'Alpha', pmId: 'PM001', pm: { name: 'Sarah' }, memberships: [] },
+        { id: 't2', name: 'Beta', pmId: 'PM002', pm: { name: 'Rafi' }, memberships: [] },
+      ]);
+      const { items } = await service.listTeams(PM);
+      expect(items.map((t) => [t.id, t.managedByYou])).toEqual([
+        ['t1', true],
+        ['t2', false],
       ]);
     });
   });
@@ -93,7 +106,15 @@ describe('TeamsService', () => {
       prisma.team.create.mockResolvedValue({ id: 't9', name: 'Delta', pmId: 'PM001', pm: { name: 'Sarah Ahmed' } });
       const result = await service.createTeam(PM, '  Delta ');
       expect(prisma.team.create.mock.calls[0][0].data).toEqual({ workspaceId: 'ws1', name: 'Delta', pmId: 'PM001' });
-      expect(result).toEqual({ id: 't9', name: 'Delta', pmId: 'PM001', pmName: 'Sarah Ahmed', memberCount: 0, members: [] });
+      expect(result).toEqual({
+        id: 't9',
+        name: 'Delta',
+        pmId: 'PM001',
+        pmName: 'Sarah Ahmed',
+        memberCount: 0,
+        members: [],
+        managedByYou: true,
+      });
     });
   });
 });

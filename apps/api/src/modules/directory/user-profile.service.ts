@@ -11,12 +11,15 @@ export class UserProfileService {
   /**
    * One user of the PM's workspace. An archived user can be opened too
    * (the Archive page uses the same profile). Another workspace's user is "not found".
+   * Every PM can open any user, but the feedback history is only for the managing PM: for another
+   * PM's user it is never read from the database and `feedback` is empty.
    */
   async getProfile(actor: PmActor, userId: string): Promise<UserProfileResponse> {
     const user = await this.prisma.user.findFirst({
       where: { userId, workspaceId: actor.workspaceId },
       select: {
         userId: true,
+        pmId: true,
         name: true,
         email: true,
         photoPath: true,
@@ -36,6 +39,7 @@ export class UserProfileService {
           select: { team: { select: { id: true, name: true } } },
         },
         feedbackVersions: {
+          where: { user: { pmId: actor.pmId } },
           orderBy: { version: 'desc' },
           select: {
             version: true,
@@ -66,6 +70,7 @@ export class UserProfileService {
       teams: user.memberships.map((m) => m.team).sort((a, b) => a.name.localeCompare(b.name)),
       mustChangePassword: user.mustChangePassword,
       archivedAt: user.archivedAt ? user.archivedAt.toISOString() : null,
+      managedByYou: user.pmId === actor.pmId,
       feedback: user.feedbackVersions.map((f) => ({
         version: f.version,
         text: f.text,

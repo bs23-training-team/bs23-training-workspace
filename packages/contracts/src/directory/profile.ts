@@ -46,5 +46,8 @@ export interface UserProfileResponse {
   mustChangePassword: boolean;
   /** ISO date-time when the user was archived, or null for an active user. */
   archivedAt: string | null;
+  /** true when the calling PM manages this user: only then may the UI offer feedback and edit. */
+  managedByYou: boolean;
+  /** Feedback history, newest first. Always empty for a user managed by another PM. */
   feedback: FeedbackVersionItem[];
 }

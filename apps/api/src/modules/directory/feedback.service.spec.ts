@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { FeedbackService, MAX_FEEDBACK_LENGTH } from './feedback.service.js';
@@ -13,7 +13,7 @@ describe('FeedbackService.saveFeedback', () => {
   let service: FeedbackService;
 
   beforeEach(async () => {
-    prisma.user.findFirst.mockReset().mockResolvedValue({ userId: 'BS23001' });
+    prisma.user.findFirst.mockReset().mockResolvedValue({ userId: 'BS23001', pmId: 'PM001' });
     prisma.feedbackVersion.findFirst.mockReset().mockResolvedValue({ version: 2 });
     prisma.feedbackVersion.create.mockReset().mockResolvedValue({
       version: 3,
@@ -43,6 +43,15 @@ describe('FeedbackService.saveFeedback', () => {
     prisma.user.findFirst.mockResolvedValue(null);
     await expect(service.saveFeedback(PM, 'BS99999', 'ok')).rejects.toThrow('User not found.');
     expect(prisma.user.findFirst.mock.calls[0][0].where).toEqual({ userId: 'BS99999', workspaceId: 'ws1' });
+  });
+
+  it('answers FORBIDDEN_SCOPE for a user managed by another PM and writes nothing', async () => {
+    prisma.user.findFirst.mockResolvedValue({ userId: 'BS23002', pmId: 'PM002' });
+    const error = await service.saveFeedback(PM, 'BS23002', 'Hello').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as ForbiddenException).getResponse()).toMatchObject({ code: 'FORBIDDEN_SCOPE' });
+    expect(prisma.feedbackVersion.findFirst).not.toHaveBeenCalled();
+    expect(prisma.feedbackVersion.create).not.toHaveBeenCalled();
   });
 
   it('adds a NEW version (latest + 1) with the trimmed text and the PM as author', async () => {

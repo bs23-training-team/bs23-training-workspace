@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { FeedbackVersionItem } from '@bs23/contracts';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import type { PmActor } from './directory.actor.js';
+import { forbiddenScope, type PmActor } from './directory.actor.js';
 
 export const MAX_FEEDBACK_LENGTH = 5000;
 
@@ -19,9 +19,11 @@ export class FeedbackService {
 
     const user = await this.prisma.user.findFirst({
       where: { userId, workspaceId: actor.workspaceId },
-      select: { userId: true },
+      select: { userId: true, pmId: true },
     });
     if (!user) throw new NotFoundException('User not found.');
+    // Every PM can open any profile, but feedback is written only by the managing PM.
+    if (user.pmId !== actor.pmId) throw forbiddenScope('user');
 
     const latest = await this.prisma.feedbackVersion.findFirst({
       where: { userId },

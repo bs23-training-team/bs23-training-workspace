@@ -1,5 +1,5 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
-import { requirePm, requireTrainee } from './directory.actor.js';
+import { forbiddenScope, requirePm, requireTrainee } from './directory.actor.js';
 
 const pmReq = { user: { sub: 'PM001', sid: 's1', workspaceId: 'ws1', role: 'PM' } };
 const traineeReq = { user: { sub: 'BS23001', sid: 's2', workspaceId: 'ws1', role: 'TRAINEE' } };
@@ -20,6 +20,14 @@ describe('requirePm', () => {
 
   it('answers 403 for a trainee', () => {
     expect(() => requirePm(traineeReq)).toThrow(ForbiddenException);
+  });
+});
+
+describe('forbiddenScope', () => {
+  it('is a 403 with the FORBIDDEN_SCOPE code', () => {
+    const error = forbiddenScope('user');
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(error.getResponse()).toEqual({ code: 'FORBIDDEN_SCOPE', message: 'This user is not managed by you.' });
   });
 });
 

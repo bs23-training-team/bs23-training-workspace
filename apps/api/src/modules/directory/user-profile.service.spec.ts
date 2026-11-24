@@ -10,6 +10,7 @@ describe('UserProfileService.getProfile', () => {
 
   const row = (over: Record<string, unknown> = {}) => ({
     userId: 'BS23001',
+    pmId: 'PM001',
     name: 'Brishty Das',
     email: 'brishty@bs23.test',
     photoPath: null,
@@ -72,6 +73,20 @@ describe('UserProfileService.getProfile', () => {
       { version: 2, text: 'Better.', authorId: 'PM001', authorName: 'Sarah', createdAt: '2026-10-02T10:00:00.000Z' },
       { version: 1, text: 'Start.', authorId: 'PM001', authorName: 'Sarah', createdAt: '2026-10-01T10:00:00.000Z' },
     ]);
+  });
+
+  it('reads feedback only for the PM own users and says managedByYou', async () => {
+    const own = await service.getProfile(PM, 'BS23001');
+    expect(own.managedByYou).toBe(true);
+    expect(prisma.user.findFirst.mock.calls[0][0].select.feedbackVersions.where).toEqual({
+      user: { pmId: 'PM001' },
+    });
+
+    // Another PM's user: the database returns no feedback rows because of that filter.
+    prisma.user.findFirst.mockResolvedValue(row({ pmId: 'PM002', feedbackVersions: [] }));
+    const other = await service.getProfile(PM, 'BS23002');
+    expect(other.managedByYou).toBe(false);
+    expect(other.feedback).toEqual([]);
   });
 
   it('opens an archived user and reactivated user (no departure date)', async () => {

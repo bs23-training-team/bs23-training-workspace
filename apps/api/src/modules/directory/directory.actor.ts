@@ -25,6 +25,14 @@ export function requirePm(req: RequestWithUser): PmActor {
   return { pmId: user.sub, workspaceId: user.workspaceId };
 }
 
+/**
+ * 403 for a write on something another PM manages. Every PM sees every user and team, but only the
+ * managing PM changes it (decision in the PR #31 review). Same error code as the growth modules.
+ */
+export function forbiddenScope(what: string): ForbiddenException {
+  return new ForbiddenException({ code: 'FORBIDDEN_SCOPE', message: `This ${what} is not managed by you.` });
+}
+
 /** The trainee making the request. No `req.user` means 401, a PM means 403. */
 export function requireTrainee(req: RequestWithUser): TraineeActor {
   const user = req.user;

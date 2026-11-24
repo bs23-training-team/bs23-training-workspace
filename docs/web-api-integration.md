@@ -65,6 +65,14 @@ every pull. If something fails, see `docs/setup.md`.
 
 `apps/web/.env.local` needs `NEXT_PUBLIC_API_URL="http://localhost:4000"`.
 
+`pnpm setup:local` does not build `@bs23/contracts`, and the API reads it from `packages/contracts/dist`. After
+every pull that touches `packages/contracts`, and before `pnpm --filter api typecheck` or
+`pnpm --filter api test`, run:
+
+```
+pnpm --filter @bs23/contracts build
+```
+
 ## 4. How the web talks to the API
 
 Facts from the code on `develop` (verified by reading it, not by running it):
@@ -168,6 +176,7 @@ pnpm --filter web build
 | Screen shows old fake data | The screen still imports `mock-api.ts` |
 | Works for `u1`, not after connecting | The mock accounts do not exist in Postgres; use the API seed |
 | `NEXT_PUBLIC_API_URL` has no effect | Restart `pnpm dev` after editing `.env.local` |
+| Many type errors in `apps/api`, or tests fail with `... is undefined` right after a pull | `packages/contracts/dist` is old: run `pnpm --filter @bs23/contracts build` |
 
 ## 10. Open decisions
 

@@ -1,6 +1,6 @@
 import type * as C from '@bs23/contracts';
-import type { KudosView } from './kudos/kudos-query.service.js';
-import type { SendKudosResult } from './kudos/kudos.service.js';
+import type { KudosController } from './kudos.controller.js';
+import type { KudosQueryService, KudosView, PmKudosView } from './kudos/kudos-query.service.js';
 import type { PeerRow, PmRow } from './leaderboard/leaderboard-rank.js';
 import type { ProgressView, QuestView, VerifyResult } from './quests/quests.service.js';
 
@@ -21,12 +21,12 @@ const checks: [
   Fits<ProgressView, C.QuestProgressView>,
   Fits<C.QuestProgressView, ProgressView>,
   Same<VerifyResult, C.VerifyQuestResponse>,
-  // The contract keeps `category` to the three allowed values; the service types it as plain text.
-  Fits<Omit<KudosView, 'suspicious' | 'category'>, Omit<C.KudosView, 'category'>>,
-  Fits<Omit<SendKudosResult, 'suspicious'>, C.SendKudosResponse>,
-  // A PM's kudos has the suspicious flag; a user's must not (see PmKudosView).
-  Fits<Pick<KudosView, 'suspicious'>, Pick<C.PmKudosView, 'suspicious'>>,
-] = [true, true, true, true, true, true, true, true, true, true];
+  // Privacy: a user's kudos has no `suspicious` flag, a PM's has it; the sender of a kudos only gets its id.
+  Same<KudosView, C.KudosView>,
+  Same<PmKudosView, C.PmKudosView>,
+  Same<Awaited<ReturnType<KudosQueryService['page']>>['kudos'], C.KudosView[] | C.PmKudosView[]>,
+  Same<Awaited<ReturnType<KudosController['send']>>, C.SendKudosResponse>,
+] = [true, true, true, true, true, true, true, true, true, true, true];
 
 describe('engagement contract types match the services', () => {
   it('every response type in packages/contracts equals or fits the service result (compile-time)', () => {

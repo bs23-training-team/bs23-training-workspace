@@ -15,17 +15,22 @@ export class KudosController {
     private readonly reader: KudosQueryService,
   ) {}
 
+  /**
+   * The sender only learns that the kudos was sent. Whether the exchange is suspicious, whether the weekly cap
+   * cut the XP and the receiver's XP event are not the sender's to know (FR-ENG-09, FR-ENG-13): never in the answer.
+   */
   @Post('kudos')
   @Roles('USER')
-  send(@CurrentActor() actor: Actor, @Body() raw: unknown) {
+  async send(@CurrentActor() actor: Actor, @Body() raw: unknown): Promise<{ kudosId: string }> {
     const body = bodyOf(raw);
-    return this.kudos.send({
+    const sent = await this.kudos.send({
       workspaceId: actor.workspaceId,
       fromUserId: userIdOf(actor),
       toUserId: str(body, 'toUserId'),
       category: oneOf(str(body, 'category'), CATEGORIES, 'category') as KudosCategory,
       message: str(body, 'message'),
     });
+    return { kudosId: sent.kudosId };
   }
 
   /** A user's own kudos, or a PM's own users' kudos. */

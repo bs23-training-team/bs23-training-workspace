@@ -35,8 +35,8 @@ engagement/
 
 | Route | Who | What |
 | --- | --- | --- |
-| `POST /kudos` | user | `{ toUserId, category, message }`. The sender is the signed-in user; the day is the server's. |
-| `GET /kudos?cursor=` | user, PM | Own kudos (user) or own users' kudos (PM) |
+| `POST /kudos` | user | `{ toUserId, category, message }`. The sender is the signed-in user; the day is the server's. Answers `{ kudosId }` only: the sender never learns whether the exchange is suspicious or whether the weekly cap cut the XP. |
+| `GET /kudos?cursor=` | user, PM | Own kudos (user) or own users' kudos (PM). Only a PM's rows carry `suspicious`. |
 | `POST /pm/quests` | PM | Create a quest |
 | `POST /pm/quests/:id/progress` | PM | `{ userId, count }` |
 | `POST /pm/quests/:id/verify` | PM | `{ userId }`. Pays once if the target is met. |

@@ -46,7 +46,7 @@ growth-core/
 | `POST /pm/badges` (`kind` optional: a rule means Behavioral, no rule means Special), `POST /pm/badges/:id/retire`, `POST /pm/badges/:id/awards`, `POST /pm/badge-awards/:id/revoke` | PM |
 | `GET /badges?cursor=` (a user: own award and progress; a PM: every badge with who holds it, an automatic award shows no awarding PM) | any |
 | `GET /pm/growth-summary?cursor=` (one line per user: XP, level, streak; the users come from `visibility/pm-visible-users.ts`, the directory's rule) | PM |
-| `GET /me/growth`, `GET /me/xp-events`, `GET /me/streak-freezes` | user |
+| `GET /me/growth`, `GET /me/xp-events` (no `flag`: "Suspicious exchange" is a PM's information), `GET /me/streak-freezes` | user |
 
 ## Ports and stand-ins
 

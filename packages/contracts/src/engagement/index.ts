@@ -16,16 +16,15 @@ export interface SendKudosRequest {
   message: string;
 }
 
+/**
+ * The sender only learns that the kudos was sent. Whether the exchange is suspicious, whether the weekly cap cut the
+ * XP and the receiver's XP event are not the sender's to know, so they are never in the answer.
+ */
 export interface SendKudosResponse {
   kudosId: string;
-  /** XP the receiver gets (0 when the weekly cap was reached). */
-  amount: number;
-  /** For example "Weekly received cap reached". */
-  flag: string | null;
-  xpEventId: string;
 }
 
-/** A kudos in GET /kudos. A user sees what they sent or received; a PM sees what involves their users. */
+/** A kudos as a USER sees it in GET /kudos (what they sent or received). A PM's rows are PmKudosView. */
 export interface KudosView {
   id: string;
   fromUserId: string;

@@ -4,7 +4,7 @@ import type { ActiveLevel } from './levels/level-set.js';
 import type { PmGrowthSummaryService } from './xp/pm-growth-summary.service.js';
 import type { FreezeForPm, FreezeForUser } from './streak/streak.service.js';
 import type { AdjustResult } from './xp/xp-adjustment.service.js';
-import type { MyGrowth, XpEventView } from './xp/xp-query.service.js';
+import type { MyGrowth, MyXpEventView, XpEventView, XpQueryService } from './xp/xp-query.service.js';
 import type { DecideResult } from './xp/xp-review.service.js';
 import type { XpRulesAll } from './xp/xp-rules.types.js';
 
@@ -32,7 +32,10 @@ const checks: [
   Same<Awaited<ReturnType<BadgesQueryService['forUser']>>, Extract<C.BadgePage, { viewer: 'USER' }>>,
   Same<Awaited<ReturnType<BadgesQueryService['forPm']>>, Extract<C.BadgePage, { viewer: 'PM' }>>,
   Same<Awaited<ReturnType<PmGrowthSummaryService['page']>>, C.PmGrowthSummaryPage>,
-] = [true, true, true, true, true, true, true, true, true, true, true, true, true];
+  // Privacy: a user's own XP events carry no flag ("Suspicious exchange" is a PM's information).
+  Same<MyXpEventView, C.MyXpEventView>,
+  Same<Awaited<ReturnType<XpQueryService['ownEvents']>>, C.MyXpEventPage>,
+] = [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true];
 
 describe('growth-core contract types match the services', () => {
   it('every response type in packages/contracts equals or fits the service result (compile-time)', () => {

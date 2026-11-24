@@ -140,7 +140,7 @@ describe('engagement HTTP routes (database, req.user set by the test)', () => {
     it('a user sends kudos: 201, the sender comes from the sign-in and the day from the server, whatever the body says', async () => {
       const res = await sendKudos(U1, U2, { fromUserId: U3, sentOn: '1999-01-01' });
       expect(res.status).toBe(201);
-      expect(res.body).toMatchObject({ suspicious: false, amount: 5, flag: null });
+      expect(res.body).toEqual({ kudosId: expect.any(String) as string }); // the sender learns nothing more (see "privacy")
       const row = await prisma.kudos.findFirstOrThrow({ where: { workspaceId } });
       expect(row.fromUserId).toBe(U1); // not U3
       expect(row.sentOn.toISOString().slice(0, 10)).not.toBe('1999-01-01');
@@ -183,6 +183,53 @@ describe('engagement HTTP routes (database, req.user set by the test)', () => {
       const pm2 = (await as(pm('PM002')).get('/kudos')).body as { kudos: { fromUserId: string }[] };
       expect(pm2.kudos.map((k) => k.fromUserId)).toEqual([X1]);
       expect((await as(user(U1)).get('/kudos?cursor=abc')).status).toBe(400);
+    });
+  });
+
+  // The suspicious flag is a PM's information (SRS: private fields are removed on the server). U1 and U2 send each
+  // other kudos in the same week: a mutual exchange, so both kudos are suspicious and their XP is held and flagged.
+  describe('privacy: the suspicious flag never reaches a user', () => {
+    const exchange = async () => {
+      const first = await sendKudos(U1, U2);
+      const second = await sendKudos(U2, U1);
+      return { first, second };
+    };
+
+    it('the sender of a kudos only gets its id, even in a mutual exchange', async () => {
+      const { first, second } = await exchange();
+      expect(first.body).toEqual({ kudosId: expect.any(String) as string });
+      expect(second.body).toEqual({ kudosId: expect.any(String) as string });
+      // ...while the exchange really is suspicious in the database
+      expect(await prisma.kudos.count({ where: { workspaceId, suspicious: true } })).toBe(2);
+    });
+
+    it('GET /kudos: a user sees no `suspicious` field, a PM sees it', async () => {
+      await exchange();
+      const mine = await as(user(U1)).get('/kudos');
+      const rows = (mine.body as { kudos: Record<string, unknown>[] }).kudos;
+      expect(rows).toHaveLength(2);
+      for (const row of rows) expect(Object.keys(row).sort()).toEqual(['category', 'fromUserId', 'id', 'message', 'sentOn', 'toUserId']);
+      expect(JSON.stringify(mine.body)).not.toContain('suspicious');
+
+      const theirs = await as(pm()).get('/kudos');
+      expect((theirs.body as { kudos: { suspicious: boolean }[] }).kudos.map((k) => k.suspicious)).toEqual([true, true]);
+    });
+
+    it('GET /me/xp-events: the receiver sees the status but no flag; the PM queue keeps the flag', async () => {
+      await exchange();
+      const flagged = await prisma.xpEvent.findMany({ where: { workspaceId, flag: 'Suspicious exchange' } });
+      expect(flagged.length).toBeGreaterThan(0); // the flag exists in the database
+
+      const mine = await as(user(U1)).get('/me/xp-events');
+      const events = (mine.body as { events: Record<string, unknown>[] }).events;
+      expect(events.length).toBeGreaterThan(0);
+      for (const event of events) expect(event).not.toHaveProperty('flag');
+      expect(JSON.stringify(mine.body)).not.toContain('Suspicious');
+      expect(events.some((e) => e.status === 'HELD')).toBe(true); // the user can still see that it is waiting
+
+      const queue = await as(pm()).get('/pm/xp-events?status=HELD');
+      const held = (queue.body as { events: { flag: string | null }[] }).events;
+      expect(held.some((e) => e.flag === 'Suspicious exchange')).toBe(true);
     });
   });
 

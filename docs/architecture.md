@@ -239,7 +239,8 @@ stop ID reuse (rule 2); only code review can.
 
 - No `CourseVersion` table. A topic (`CourseModule`) belongs directly to a `Course`.
 - No `TECHNICAL` badge kind. `BadgeAward.attemptId`, `projectUrl` and `projectReviewed` stay in the
-  table, unused, for a later version.
+  table, unused, for a later version. There is no CHECK for them: the old `// DB:` marker for it was removed
+  from `schema.prisma` because no migration ever created it.
 - Two different things are both called `TRAINEE`: `User.resource = TRAINEE` is one of the 4 resource types, while the login role `TRAINEE` (in `req.user.role`) means any `User` account, whatever its resource type. A PM has the login role `PM`. There is no role column: the role is the table the account was found in.
 - Every relation uses `onDelete: Restrict`. History is kept with `archivedAt` / status columns
   instead of deleting rows.
@@ -489,3 +490,4 @@ Recommended extras (not in the SRS): secret scanning, dependency audit, SonarQub
 | 2026-11-23 | ADR 0001, 0002 and 0003 combined into this file. PRD, SRS, week 1 brief and the data-model template removed from the repository. Rule 3.3 #7 (identity only from `req.user`). e2e tests run in CI. |
 | 2026-11-23 | Shape of `req.user` documented (`sub`, `sid`, `workspaceId`, `role`); login role `TRAINEE` vs resource type `TRAINEE` clarified. |
 | 2026-11-24 | `schema.prisma` keeps only section titles and `// DB:` markers; its header rules moved to 4.2. |
+| 2026-11-24 | Web connection started: step 0 renamed each web module's `api.ts` to `mock-api.ts` (PR #41); API now allows the web origin with CORS (`WEB_ORIGIN`, PR #49); guide `docs/web-api-integration.md` added. The unused `// DB:` marker for TECHNICAL badges removed from `schema.prisma`. |

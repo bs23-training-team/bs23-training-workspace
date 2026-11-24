@@ -1981,7 +1981,6 @@ model BadgeAward {
   awardedBy Pm        @relation("BadgeAwarder", fields: [awardedById], references: [pmId], onDelete: Restrict)
   revokedBy Pm?       @relation("BadgeRevoker", fields: [revokedById], references: [pmId], onDelete: Restrict)
   attempt   Attempt?  @relation(fields: [attemptId], references: [id], onDelete: Restrict)
-  // DB: CHECK for TECHNICAL badges: attemptId, projectUrl (https) and projectReviewed = true
 
   @@unique([badgeId, userId]) // a badge is earned once
   @@index([userId, revokedAt])

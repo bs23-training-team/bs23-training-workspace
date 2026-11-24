@@ -131,15 +131,16 @@ suite('directory All Users list against real PostgreSQL', () => {
     expect(byId[id(6)]).toMatchObject({ latestFeedback: null, managedByYou: false });
   });
 
-  it('searches name, user ID and email case-insensitively', async () => {
+  it('searches name and user ID case-insensitively, and never by email', async () => {
     const byName = await service.listUsers(actor, { q: 'bris' });
     expect(byName.items.map((u) => u.userId)).toEqual([id(1), id(2)]);
 
     const byId = await service.listUsers(actor, { q: id(3).toLowerCase() });
     expect(byId.items.map((u) => u.userId)).toEqual([id(3)]);
 
-    const byEmail = await service.listUsers(actor, { q: id(2).toUpperCase() });
-    expect(byEmail.items.map((u) => u.userId)).toEqual([id(2)]);
+    // The email of user 3 contains "-<run>@example.test": no user matches it by email alone.
+    const byEmail = await service.listUsers(actor, { q: `-${run}@example.test` });
+    expect(byEmail.items).toEqual([]);
   });
 
   it('filters by skill and by position', async () => {

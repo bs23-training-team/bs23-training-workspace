@@ -9,7 +9,7 @@ export type UserResource = (typeof USER_RESOURCES)[number];
 
 /** Query of GET /directory/users (the All Users list). Every field is optional. */
 export interface UserListQuery {
-  /** Matches the name, the User ID or the email, ignoring upper/lower case. */
+  /** Matches the name or the User ID, ignoring upper/lower case. Not the email (PRD FR-DIR-02). */
   q?: string;
   position?: Position;
   resource?: UserResource;

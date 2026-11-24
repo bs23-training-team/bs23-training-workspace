@@ -116,7 +116,13 @@ describe('DirectoryService.listUsers', () => {
     expect(where.OR).toEqual([
       { name: { contains: 'bris', mode: 'insensitive' } },
       { userId: { contains: 'bris', mode: 'insensitive' } },
-      { email: { contains: 'bris', mode: 'insensitive' } },
     ]);
+  });
+
+  it('never searches by email and reads feedback only for the PM own users', async () => {
+    await service.listUsers(PM, { q: 'bris' });
+    const args = prisma.user.findMany.mock.calls[0][0];
+    expect(JSON.stringify(args.where.OR)).not.toContain('email');
+    expect(args.select.feedbackVersions.where).toEqual({ user: { pmId: 'PM001' } });
   });
 });

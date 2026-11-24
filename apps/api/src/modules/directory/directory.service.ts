@@ -28,11 +28,12 @@ export class DirectoryService {
       ...(query.resource && { resource: query.resource }),
       // TODO(E03): reads E03's Skill table through the UserSkill relation; move to an E03 service when it exports one.
       ...(query.skill && { userSkills: { some: { skill: { name: query.skill } } } }),
+      // PRD FR-DIR-02: search by name or User ID only. Not by email: every PM sees every user, so
+      // an email search would let a PM look up another PM's users by address.
       ...(q && {
         OR: [
           { name: { contains: q, mode: 'insensitive' } },
           { userId: { contains: q, mode: 'insensitive' } },
-          { email: { contains: q, mode: 'insensitive' } },
         ],
       }),
     };
@@ -59,7 +60,13 @@ export class DirectoryService {
         onboardDate: true,
         departureDate: true,
         userSkills: { select: { skill: { select: { name: true } } } },
-        feedbackVersions: { orderBy: { version: 'desc' }, take: 1, select: { text: true } },
+        // Only the PM's own users: another PM's feedback text is never read from the database.
+        feedbackVersions: {
+          where: { user: { pmId: actor.pmId } },
+          orderBy: { version: 'desc' },
+          take: 1,
+          select: { text: true },
+        },
       },
     });
 

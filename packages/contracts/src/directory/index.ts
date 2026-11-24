@@ -9,6 +9,7 @@ export * from './export.js';
 export * from './me.js';
 export * from './search.js';
 export * from './skills.js';
+export * from './peers.js';
 
 export const POSITIONS = ['FRONTEND', 'BACKEND', 'FULLSTACK', 'QA'] as const;
 export type Position = (typeof POSITIONS)[number];

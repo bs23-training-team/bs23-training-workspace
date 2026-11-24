@@ -1,6 +1,6 @@
 "use client";
 
-import { type DB, type XpEvent, type XpRules, type Level } from "@/lib/mock/types";
+import { type Badge, type BadgeRuleType, type DB, type XpEvent, type XpRules, type Level } from "@/lib/mock/types";
 import { todayISO, addDays, isWeekend, uid } from "@/lib/utils";
 import { Result, fail, notify, ok } from "@/lib/mock/core";
 import { getDB, mutate } from "@/lib/mock/store";
@@ -24,8 +24,9 @@ export function levelFor(db: DB, xp: number) {
 }
 
 /** Consecutive working days with a sprint submission; leave/holiday freezes keep the streak (FR-GAM-05). */
-export function streakOf(db: DB, traineeUserId: string) {
-  const subs = new Set(db.sprintSubmissions.filter((s) => s.traineeUserId === traineeUserId).map((s) => s.date));
+/** Working-day streak of sprint submissions. `onTimeOnly` counts only submissions made before the cutoff. */
+function sprintStreak(db: DB, traineeUserId: string, onTimeOnly: boolean) {
+  const subs = new Set(db.sprintSubmissions.filter((s) => s.traineeUserId === traineeUserId && (!onTimeOnly || s.onTime)).map((s) => s.date));
   const frozen = new Set(db.streakFreezes.filter((s) => s.traineeUserId === traineeUserId).map((s) => s.date));
   let d = todayISO();
   if (!subs.has(d)) d = addDays(d, -1);
@@ -41,6 +42,8 @@ export function streakOf(db: DB, traineeUserId: string) {
   }
   return n;
 }
+
+export const streakOf = (db: DB, traineeUserId: string) => sprintStreak(db, traineeUserId, false);
 
 export function addXp(d: DB, e: Omit<XpEvent, "id">) {
   if (d.xpEvents.some((x) => x.key === e.key)) return; // idempotent by unique key (FR-GAM-04)
@@ -110,17 +113,110 @@ export function grantStreakFreeze(pmId: string, traineeUserId: string, date: str
   return ok();
 }
 
-/** Awards a badge once. */
+export const BADGE_RULE_LABEL: Record<BadgeRuleType, string> = {
+  ON_TIME_SPRINT_STREAK: "On-time sprint streak (days)",
+  SPRINT_STREAK: "Sprint streak (days)",
+  KUDOS_DISTINCT_SENDERS: "Kudos from different people",
+};
+
+/** Where a user stands on a badge's rule, in the rule's own unit. Manual badges have none. */
+export function badgeRuleValue(db: DB, badge: Badge, traineeUserId: string): number | null {
+  switch (badge.rule?.type) {
+    case "ON_TIME_SPRINT_STREAK":
+      return sprintStreak(db, traineeUserId, true);
+    case "SPRINT_STREAK":
+      return sprintStreak(db, traineeUserId, false);
+    case "KUDOS_DISTINCT_SENDERS":
+      return new Set(db.kudos.filter((k) => k.toId === traineeUserId && !k.suspicious).map((k) => k.fromId)).size;
+    default:
+      return null;
+  }
+}
+
+/** The award a user holds for a badge, revoked or not. A user earns a badge once. */
+export const awardOf = (db: DB, badgeId: string, traineeUserId: string) => db.badgeAwards.find((a) => a.badgeId === badgeId && a.traineeUserId === traineeUserId);
+
+/**
+ * Awards every automatic badge whose rule the user now meets. Runs inside the same mutation as the event
+ * that may have changed the count (a sprint submission, kudos). A revoked award is never given again, and
+ * an automatic award has no awarding PM.
+ */
+export function runBadgeRules(d: DB, traineeUserId: string) {
+  for (const b of d.badges) {
+    if (!b.rule || b.retiredAt || awardOf(d, b.id, traineeUserId)) continue;
+    const value = badgeRuleValue(d, b, traineeUserId);
+    if (value == null || value < b.rule.threshold) continue;
+    d.badgeAwards.push({ badgeId: b.id, traineeUserId, evidence: `${BADGE_RULE_LABEL[b.rule.type]}: ${value} (needs ${b.rule.threshold})`, source: "AUTOMATIC", awardedAt: todayISO() });
+    notify(d, traineeUserId, "Badge", "New badge", `You earned ${b.name}.`, "/trainee/gamification");
+  }
+}
+
+/** A PM awards a MANUAL badge once. Automatic and retired badges cannot be awarded by hand. */
 export function awardBadge(pmId: string, badgeId: string, traineeUserId: string, evidence: string): Result {
   const db = getDB();
   if (!inScope(db, pmId, traineeUserId)) return fail("This user is not in your scope.");
-  if (db.badgeAwards.some((b) => b.badgeId === badgeId && b.traineeUserId === traineeUserId)) return fail("This badge is already earned.");
   const badge = db.badges.find((b) => b.id === badgeId);
   if (!badge) return fail("Badge not found.");
+  if (badge.rule) return fail("This badge is awarded automatically when the rule is met.");
+  if (badge.retiredAt) return fail("This badge is retired and cannot be awarded.");
+  const held = awardOf(db, badgeId, traineeUserId);
+  if (held) return fail(held.revokedAt ? "This badge was revoked for this user and is not awarded again." : "This badge is already earned.");
   if (!evidence.trim()) return fail("Add the evidence for this badge.");
   mutate((d) => {
-    d.badgeAwards.push({ badgeId, traineeUserId, evidence: evidence.trim(), awardedBy: pmId, awardedAt: todayISO() });
+    d.badgeAwards.push({ badgeId, traineeUserId, evidence: evidence.trim(), source: "MANUAL", awardedBy: pmId, awardedAt: todayISO() });
     notify(d, traineeUserId, "Badge", "New badge", `You earned ${badge.name}.`, "/trainee/gamification");
+  });
+  return ok();
+}
+
+/** A PM revokes an award with a reason. The award stays on record and the badge is not given again. */
+export function revokeBadge(pmId: string, badgeId: string, traineeUserId: string, reason: string): Result {
+  const db = getDB();
+  if (!inScope(db, pmId, traineeUserId)) return fail("This user is not in your scope.");
+  const award = awardOf(db, badgeId, traineeUserId);
+  if (!award) return fail("This user has not earned this badge.");
+  if (award.revokedAt) return fail("This award is already revoked.");
+  if (!reason.trim()) return fail("Give a reason for revoking this badge.");
+  const badge = db.badges.find((b) => b.id === badgeId);
+  mutate((d) => {
+    const a = awardOf(d, badgeId, traineeUserId)!;
+    a.revokedAt = todayISO();
+    a.revokedBy = pmId;
+    a.revokeReason = reason.trim();
+    notify(d, traineeUserId, "Badge", "Badge revoked", `${badge?.name ?? "A badge"} was revoked: ${reason.trim()}`, "/trainee/gamification");
+  });
+  return ok();
+}
+
+export interface BadgeInput {
+  name: string;
+  icon: string;
+  criteria: string;
+  rule?: { type: BadgeRuleType; threshold: number };
+}
+
+/** Create a badge. With a rule it is awarded automatically; without one a PM awards it. */
+export function createBadge(pmId: string, input: BadgeInput): Result {
+  const db = getDB();
+  if (!db.users.some((u) => u.id === pmId && u.role === "PM")) return fail("Only a PM can create a badge.");
+  if (!input.name.trim() || !input.criteria.trim()) return fail("Enter a name and the criteria.");
+  if (db.badges.some((b) => b.name.toLowerCase() === input.name.trim().toLowerCase())) return fail("A badge with this name already exists.");
+  if (input.rule && (!Number.isInteger(input.rule.threshold) || input.rule.threshold < 1 || input.rule.threshold > 365)) return fail("The threshold must be a whole number from 1 to 365.");
+  mutate((d) => {
+    d.badges.push({ id: uid("b"), name: input.name.trim(), icon: input.icon.trim() || "🏅", criteria: input.criteria.trim(), ...(input.rule ? { rule: { type: input.rule.type, threshold: input.rule.threshold } } : {}) });
+  });
+  return ok();
+}
+
+/** Retire a badge: it is no longer awarded. Awards already given stay. */
+export function retireBadge(pmId: string, badgeId: string): Result {
+  const db = getDB();
+  if (!db.users.some((u) => u.id === pmId && u.role === "PM")) return fail("Only a PM can retire a badge.");
+  const badge = db.badges.find((b) => b.id === badgeId);
+  if (!badge) return fail("Badge not found.");
+  if (badge.retiredAt) return fail("This badge is already retired.");
+  mutate((d) => {
+    d.badges.find((b) => b.id === badgeId)!.retiredAt = todayISO();
   });
   return ok();
 }

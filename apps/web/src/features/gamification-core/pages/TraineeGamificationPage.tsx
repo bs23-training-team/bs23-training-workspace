@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Flame, Gift, Heart, Trophy } from "lucide-react";
 import { useMe } from "@/features/shell";
-import { levelFor, streakOf, xpTotal } from "../api";
+import { awardOf, badgeRuleValue, levelFor, streakOf, xpTotal } from "../api";
 import { nameOf, pmTrainees, traineeOf } from "@/lib/mock/selectors";
 import { sendKudos, setLeaderboardHidden, Leaderboard } from "@/features/engagement";
 import type { Kudos } from "@/lib/mock/types";
@@ -82,15 +82,19 @@ export default function TraineeGamificationPage() {
         </Card>
         <Card title="Badges">
           <ul className="grid grid-cols-2 gap-3">
-            {db.badges.map((b) => {
-              const earned = db.badgeAwards.find((a) => a.badgeId === b.id && a.traineeUserId === user.id);
+            {db.badges.filter((b) => !b.retiredAt || awardOf(db, b.id, user.id)).map((b) => {
+              const award = awardOf(db, b.id, user.id);
+              const earned = award && !award.revokedAt ? award : undefined;
+              const value = badgeRuleValue(db, b, user.id);
               return (
                 <li key={b.id} className={earned ? "rounded-xl border border-emerald-200 bg-emerald-50 p-3" : "rounded-xl border border-line p-3 opacity-70"}>
                   <p className="text-sm font-medium">
                     <span aria-hidden>{b.icon}</span> {b.name}
                   </p>
                   <p className="text-xs text-muted">{b.criteria}</p>
+                  {!earned && !award && b.rule && value != null && !b.retiredAt && <p className="mt-1 text-xs text-muted">Progress: {Math.min(value, b.rule.threshold)} of {b.rule.threshold}</p>}
                   {earned && <Badge tone="green" className="mt-1">Earned {formatDate(earned.awardedAt)}</Badge>}
+                  {award?.revokedAt && <Badge tone="red" className="mt-1">Revoked {formatDate(award.revokedAt)}: {award.revokeReason}</Badge>}
                 </li>
               );
             })}

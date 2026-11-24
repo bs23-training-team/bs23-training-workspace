@@ -46,7 +46,7 @@ export default function TraineeProfilePM() {
   const attempts = db.attempts.filter((a) => a.traineeUserId === id).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
   const tasks = db.sprintTasks.filter((x) => x.traineeUserId === id && x.date >= addDays(today, -14)).sort((a, b) => b.date.localeCompare(a.date));
   const feedback = db.feedback.filter((f) => f.traineeUserId === id).sort((a, b) => b.version - a.version);
-  const badges = db.badgeAwards.filter((b) => b.traineeUserId === id);
+  const badges = db.badgeAwards.filter((b) => b.traineeUserId === id && !b.revokedAt);
   const xp = xpTotal(db, id);
   const fbValue = fbText ?? feedback[0]?.text ?? "";
   const twoFrom = addDays(today, -13);

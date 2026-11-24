@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useMe } from "@/features/shell";
-import { adjustXp, awardBadge, grantStreakFreeze, reviewXp, streakOf, xpTotal } from "../api";
+import { adjustXp, awardBadge, BADGE_RULE_LABEL, createBadge, grantStreakFreeze, retireBadge, revokeBadge, reviewXp, streakOf, xpTotal } from "../api";
+import type { BadgeRuleType } from "@/lib/mock/types";
 import { createQuest, verifyQuestProgress, Leaderboard } from "@/features/engagement";
 import { nameOf, pmPeople } from "@/lib/mock/selectors";
 import type { XpEvent } from "@/lib/mock/types";
@@ -28,6 +29,9 @@ export default function PMGamificationPage() {
   const [freeze, setFreeze] = useState<{ tid: string; date: string; source: "LEAVE" | "HOLIDAY"; reason: string } | null>(null);
   const [badge, setBadge] = useState<{ tid: string; badgeId: string; evidence: string } | null>(null);
   const [miscError, setMiscError] = useState("");
+  const [newBadge, setNewBadge] = useState<{ name: string; icon: string; criteria: string; auto: boolean; type: BadgeRuleType; threshold: number } | null>(null);
+  const [revoke, setRevoke] = useState<{ badgeId: string; tid: string; reason: string } | null>(null);
+  const manualBadges = db.badges.filter((b) => !b.rule && !b.retiredAt);
 
   const queue = db.xpEvents.filter((e) => ids.has(e.traineeUserId) && (e.status === "PENDING" || e.status === "HELD")).sort((a, b) => (a.flag ? -1 : 1) - (b.flag ? -1 : 1));
   const awarded = db.xpEvents.filter((e) => ids.has(e.traineeUserId) && e.status === "AWARDED").sort((a, b) => b.date.localeCompare(a.date));
@@ -133,9 +137,11 @@ export default function PMGamificationPage() {
                       <Button size="sm" variant="ghost" onClick={() => { setMiscError(""); setFreeze({ tid: t.userId, date: todayISO(), source: "LEAVE", reason: "" }); }}>
                         Streak freeze
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => { setMiscError(""); setBadge({ tid: t.userId, badgeId: db.badges[0].id, evidence: "" }); }}>
-                        Badge
-                      </Button>
+                      {manualBadges.length > 0 && (
+                        <Button size="sm" variant="ghost" onClick={() => { setMiscError(""); setBadge({ tid: t.userId, badgeId: manualBadges[0].id, evidence: "" }); }}>
+                          Badge
+                        </Button>
+                      )}
                     </div>
                   </Td>
                 </tr>
@@ -208,18 +214,49 @@ export default function PMGamificationPage() {
               </div>
             ))}
           </Card>
-          <Card className="lg:col-span-3" title="Badges">
-            <Table head={["Badge", "Kind", "Criteria", "Earned by"]}>
+          <Card
+            className="lg:col-span-3"
+            title="Badges"
+            action={
+              <Button size="sm" onClick={() => { setMiscError(""); setNewBadge({ name: "", icon: "", criteria: "", auto: true, type: "ON_TIME_SPRINT_STREAK", threshold: 5 }); }}>
+                New badge
+              </Button>
+            }
+          >
+            <Table head={["Badge", "Awarded", "Criteria", "Earned by", ""]}>
               {db.badges.map((b) => (
-                <tr key={b.id}>
+                <tr key={b.id} className={b.retiredAt ? "opacity-60" : ""}>
                   <Td className="font-medium">
                     <span aria-hidden>{b.icon}</span> {b.name}
+                    {b.retiredAt && <Badge tone="gray" className="ml-2">Retired</Badge>}
                   </Td>
                   <Td>
-                    <Badge tone={b.kind === "SPECIAL" ? "amber" : "blue"}>{b.kind.toLowerCase()}</Badge>
+                    {b.rule ? <Badge tone="blue">Automatic · {b.rule.threshold}</Badge> : <Badge tone="amber">Manual</Badge>}
+                    {b.rule && <p className="mt-1 text-xs text-muted">{BADGE_RULE_LABEL[b.rule.type]}</p>}
                   </Td>
                   <Td className="max-w-md whitespace-normal text-sm">{b.criteria}</Td>
-                  <Td>{db.badgeAwards.filter((a) => a.badgeId === b.id && ids.has(a.traineeUserId)).map((a) => nameOf(db, a.traineeUserId)).join(", ") || "—"}</Td>
+                  <Td className="whitespace-normal text-sm">
+                    {db.badgeAwards.filter((a) => a.badgeId === b.id && ids.has(a.traineeUserId)).map((a) => (
+                      <span key={a.traineeUserId} className="mr-3 inline-flex items-center gap-1">
+                        <span className={a.revokedAt ? "line-through" : ""}>{nameOf(db, a.traineeUserId)}</span>
+                        {a.revokedAt ? (
+                          <span className="text-xs text-red-700" title={a.revokeReason}>revoked</span>
+                        ) : (
+                          <button className="text-xs font-medium text-red-700 hover:underline" onClick={() => { setMiscError(""); setRevoke({ badgeId: b.id, tid: a.traineeUserId, reason: "" }); }}>
+                            Revoke
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                    {!db.badgeAwards.some((a) => a.badgeId === b.id && ids.has(a.traineeUserId)) && "—"}
+                  </Td>
+                  <Td>
+                    {!b.retiredAt && (
+                      <Button size="sm" variant="ghost" onClick={() => { const r = retireBadge(user.id, b.id); if (!r.ok) toast(r.error); else toast(`${b.name} retired.`); }}>
+                        Retire
+                      </Button>
+                    )}
+                  </Td>
                 </tr>
               ))}
             </Table>
@@ -369,15 +406,109 @@ export default function PMGamificationPage() {
             {miscError && <Alert tone="red">{miscError}</Alert>}
             <Field label="Badge" htmlFor="bb">
               <Select id="bb" value={badge.badgeId} onChange={(e) => setBadge({ ...badge, badgeId: e.target.value })}>
-                {db.badges.map((b) => (
+                {manualBadges.map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.name} ({b.kind.toLowerCase()})
+                    {b.name}
                   </option>
                 ))}
               </Select>
             </Field>
             <Field label="Evidence" htmlFor="be" required>
               <Textarea id="be" value={badge.evidence} onChange={(e) => setBadge({ ...badge, evidence: e.target.value })} />
+            </Field>
+          </>
+        )}
+      </Dialog>
+
+      <Dialog
+        open={!!newBadge}
+        onClose={() => setNewBadge(null)}
+        title="New badge"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setNewBadge(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                const n = newBadge!;
+                const r = createBadge(user.id, { name: n.name, icon: n.icon, criteria: n.criteria, rule: n.auto ? { type: n.type, threshold: n.threshold } : undefined });
+                if (!r.ok) return setMiscError(r.error);
+                setNewBadge(null);
+                toast("Badge created.");
+              }}
+            >
+              Create
+            </Button>
+          </>
+        }
+      >
+        {newBadge && (
+          <>
+            {miscError && <Alert tone="red">{miscError}</Alert>}
+            <Field label="Name" htmlFor="nbn" required>
+              <Input id="nbn" value={newBadge.name} onChange={(e) => setNewBadge({ ...newBadge, name: e.target.value })} />
+            </Field>
+            <Field label="Icon" htmlFor="nbi" hint="One emoji. Optional.">
+              <Input id="nbi" value={newBadge.icon} onChange={(e) => setNewBadge({ ...newBadge, icon: e.target.value })} />
+            </Field>
+            <Field label="Criteria" htmlFor="nbc" required>
+              <Textarea id="nbc" value={newBadge.criteria} onChange={(e) => setNewBadge({ ...newBadge, criteria: e.target.value })} />
+            </Field>
+            <Field label="How it is awarded" htmlFor="nba">
+              <Select id="nba" value={newBadge.auto ? "AUTO" : "MANUAL"} onChange={(e) => setNewBadge({ ...newBadge, auto: e.target.value === "AUTO" })}>
+                <option value="AUTO">Automatic, when a rule is met</option>
+                <option value="MANUAL">Manual, a PM awards it</option>
+              </Select>
+            </Field>
+            {newBadge.auto && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Rule" htmlFor="nbr">
+                  <Select id="nbr" value={newBadge.type} onChange={(e) => setNewBadge({ ...newBadge, type: e.target.value as BadgeRuleType })}>
+                    {(Object.keys(BADGE_RULE_LABEL) as BadgeRuleType[]).map((t) => (
+                      <option key={t} value={t}>
+                        {BADGE_RULE_LABEL[t]}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Threshold" htmlFor="nbt" required>
+                  <Input id="nbt" type="number" min={1} max={365} value={newBadge.threshold} onChange={(e) => setNewBadge({ ...newBadge, threshold: Number(e.target.value) })} />
+                </Field>
+              </div>
+            )}
+          </>
+        )}
+      </Dialog>
+
+      <Dialog
+        open={!!revoke}
+        onClose={() => setRevoke(null)}
+        title={`Revoke badge — ${revoke ? nameOf(db, revoke.tid) : ""}`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setRevoke(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                const r = revokeBadge(user.id, revoke!.badgeId, revoke!.tid, revoke!.reason);
+                if (!r.ok) return setMiscError(r.error);
+                setRevoke(null);
+                toast("Badge revoked. It will not be awarded to this user again.");
+              }}
+            >
+              Revoke
+            </Button>
+          </>
+        }
+      >
+        {revoke && (
+          <>
+            {miscError && <Alert tone="red">{miscError}</Alert>}
+            <p className="text-sm">The award stays on record and this badge is not given to this user again.</p>
+            <Field label="Reason" htmlFor="rvr" required>
+              <Textarea id="rvr" value={revoke.reason} onChange={(e) => setRevoke({ ...revoke, reason: e.target.value })} />
             </Field>
           </>
         )}

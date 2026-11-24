@@ -5,7 +5,7 @@ import { type Kudos } from "@/lib/mock/types";
 import { Result, fail, notify, ok } from "@/lib/mock/core";
 import { weekStartOf, todayISO, addDays, uid } from "@/lib/utils";
 import { traineeOf, nameOf } from "@/lib/mock/selectors";
-import { addXp } from "@/features/gamification-core/api";
+import { addXp, runBadgeRules } from "@/features/gamification-core/api";
 
 
 export function setLeaderboardHidden(userId: string, hidden: boolean) {
@@ -45,6 +45,7 @@ export function sendKudos(fromId: string, toId: string, category: Kudos["categor
       d.kudos.filter((k) => k.fromId === toId && k.toId === fromId && k.date >= ws).forEach((k) => (k.suspicious = true));
       if (t) notify(d, t.pmId, "Suspicious kudos", "Suspicious kudos exchange", `${nameOf(d, fromId)} and ${nameOf(d, toId)} sent each other kudos this week.`, "/pm/gamification");
     }
+    runBadgeRules(d, toId);
     notify(d, toId, "Kudos received", "You received kudos", `${nameOf(d, fromId)}: ${message.trim()}`, "/trainee/gamification");
   });
   return ok();

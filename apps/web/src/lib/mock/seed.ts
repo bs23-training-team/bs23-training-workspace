@@ -3,7 +3,7 @@ import type { AttendanceRecord, Course, DB, DSCell, ExpertiseEvaluation, Meeting
 import { QUESTION_BANK, NOTIFICATION_CATEGORIES } from "@/lib/mock/content";
 import { addDays, addMonths, isWeekend, todayISO, weekStartOf } from "@/lib/utils";
 
-export const SEED_VERSION = 16;
+export const SEED_VERSION = 17;
 
 /* ------------------------------ course content ------------------------------ */
 
@@ -563,13 +563,13 @@ export function buildSeed(): DB {
       { questId: "q2", traineeUserId: "u1", count: 1 },
     ],
     badges: [
-      { id: "b1", name: "Early Bird", icon: "🌅", kind: "BEHAVIORAL", criteria: "Submit the daily sprint on time 10 days in a row." },
-      { id: "b2", name: "Streak Master", icon: "🔥", kind: "BEHAVIORAL", criteria: "Reach a 20-day sprint streak." },
-      { id: "b3", name: "Bug Hunter", icon: "🐞", kind: "SPECIAL", criteria: "Chosen by the PM for finding and fixing a real bug." },
-      { id: "b4", name: "Helpful Peer", icon: "🤝", kind: "BEHAVIORAL", criteria: "Receive 5 kudos from different peers." },
-      { id: "b5", name: "Mentor's Pick", icon: "⭐", kind: "SPECIAL", criteria: "Chosen by the PM for outstanding work." },
+      { id: "b1", name: "Early Bird", icon: "🌅", criteria: "Submit the daily sprint on time 10 days in a row.", rule: { type: "ON_TIME_SPRINT_STREAK", threshold: 10 } },
+      { id: "b2", name: "Streak Master", icon: "🔥", criteria: "Reach a 20-day sprint streak.", rule: { type: "SPRINT_STREAK", threshold: 20 } },
+      { id: "b3", name: "Bug Hunter", icon: "🐞", criteria: "Chosen by the PM for finding and fixing a real bug." },
+      { id: "b4", name: "Helpful Peer", icon: "🤝", criteria: "Receive kudos from 5 different peers.", rule: { type: "KUDOS_DISTINCT_SENDERS", threshold: 5 } },
+      { id: "b5", name: "Mentor's Pick", icon: "⭐", criteria: "Chosen by the PM for outstanding work." },
     ],
-    badgeAwards: [{ badgeId: "b1", traineeUserId: "u1", evidence: "10 on-time sprints", awardedBy: "pm1", awardedAt: addDays(today, -3) }],
+    badgeAwards: [{ badgeId: "b1", traineeUserId: "u1", evidence: "10 on-time sprints in a row", source: "AUTOMATIC", awardedAt: addDays(today, -3) }],
     kudos: [
       { id: "k1", fromId: "u1", toId: "u3", category: "Helpful", message: "Thanks for helping me with SQL joins!", date: addDays(today, -2), suspicious: true },
       { id: "k2", fromId: "u3", toId: "u1", category: "Teamwork", message: "Great pairing session.", date: addDays(today, -2), suspicious: true },

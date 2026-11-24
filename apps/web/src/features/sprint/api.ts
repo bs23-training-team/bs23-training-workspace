@@ -5,7 +5,7 @@ import { uid, todayISO, nowHHMM, weekStartOf, addDays } from "@/lib/utils";
 import { nameOf, inScope, traineeOf } from "@/lib/mock/selectors";
 import { nowIso, Result, fail, ok, notify } from "@/lib/mock/core";
 import { mutate, getDB } from "@/lib/mock/store";
-import { addXp } from "@/features/gamification-core/api";
+import { addXp, runBadgeRules } from "@/features/gamification-core/api";
 
 
 export function weekIdFor(teamId: string, weekStart: string) {
@@ -139,6 +139,7 @@ export function submitSprint(traineeUserId: string): Result<{ onTime: boolean }>
   const t = traineeOf(db, traineeUserId);
   mutate((d) => {
     d.sprintSubmissions.push({ traineeUserId, date: today, time: nowIso(), onTime });
+    runBadgeRules(d, traineeUserId);
     // Sprint XP stays pending until PM verification; late submissions earn no on-time XP.
     if (onTime) addXp(d, { traineeUserId, source: "On-time sprint", amount: d.xpRules.onTimeSprint, status: "PENDING", key: `sprint:${traineeUserId}:${today}`, evidence: `Sprint submitted ${nowHHMM()}`, date: today });
     // Write into the team DS sheet for the current week.

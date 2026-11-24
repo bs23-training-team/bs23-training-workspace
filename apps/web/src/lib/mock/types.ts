@@ -499,20 +499,31 @@ export interface QuestProgress {
   verifiedBy?: string;
 }
 
+/** Automatic badge rules (FR-GAM-06). A badge without a rule is MANUAL: a PM awards it. */
+export type BadgeRuleType = "ON_TIME_SPRINT_STREAK" | "SPRINT_STREAK" | "KUDOS_DISTINCT_SENDERS";
+
 export interface Badge {
   id: string;
   name: string;
   icon: string;
-  kind: "BEHAVIORAL" | "SPECIAL";
   criteria: string;
+  rule?: { type: BadgeRuleType; threshold: number };
+  /** A retired badge is no longer awarded. Awards already given stay. */
+  retiredAt?: string;
 }
 
+/** A user earns a badge once. A revoked award is kept and the badge is never awarded to that user again. */
 export interface BadgeAward {
   badgeId: string;
   traineeUserId: string;
   evidence: string;
-  awardedBy: string;
+  source: "AUTOMATIC" | "MANUAL";
+  /** Empty for an automatic award: no PM awarded it. */
+  awardedBy?: string;
   awardedAt: string;
+  revokedAt?: string;
+  revokedBy?: string;
+  revokeReason?: string;
 }
 
 export interface Kudos {

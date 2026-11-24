@@ -108,6 +108,67 @@ describe('XpLedgerService (database)', () => {
     expect(row).toMatchObject({ status: 'HELD', flag: 'Suspicious exchange' });
   });
 
+  describe('the user must belong to the workspace of the event', () => {
+    const slug = `t-ledger-ws-${randomUUID().slice(0, 6)}`;
+    let otherWorkspaceId: string;
+    let otherUser: string;
+    let archivedUser: string;
+
+    beforeAll(async () => {
+      otherWorkspaceId = (await prisma.workspace.create({ data: { name: 'Ledger membership test', slug } })).id;
+      const make = (userId: string, archived: boolean) =>
+        prisma.user.create({
+          data: {
+            userId,
+            workspaceId: otherWorkspaceId,
+            email: `${userId.toLowerCase()}@ledger-test.invalid`,
+            name: `Name ${userId}`,
+            resource: 'TRAINEE',
+            pmId: 'PM001',
+            position: 'BACKEND',
+            attendanceMode: 'ONLINE',
+            onboardDate: parseDay('2026-01-01'),
+            ...(archived ? { archivedAt: new Date('2026-06-01T00:00:00Z') } : {}),
+          },
+        });
+      otherUser = `TLW${slug.slice(-6).toUpperCase()}`;
+      archivedUser = `TLA${slug.slice(-6).toUpperCase()}`;
+      await make(otherUser, false);
+      await make(archivedUser, true);
+    });
+
+    afterAll(async () => {
+      await prisma.xpEvent.deleteMany({ where: { workspaceId: otherWorkspaceId } });
+      await prisma.user.deleteMany({ where: { workspaceId: otherWorkspaceId } });
+      await prisma.workspace.deleteMany({ where: { id: otherWorkspaceId } });
+    });
+
+    it('refuses a user of another workspace, in both directions, and saves nothing', async () => {
+      // userA belongs to the seeded workspace, not to the other one
+      const wrongWorkspace = event({ workspaceId: otherWorkspaceId });
+      await expect(ledger.createEvent(wrongWorkspace)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      // otherUser belongs to the other workspace, not to the seeded one
+      const wrongUser = event({ userId: otherUser });
+      await expect(ledger.createEvent(wrongUser)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(await prisma.xpEvent.count({ where: { key: { in: [wrongWorkspace.key, wrongUser.key] } } })).toBe(0);
+    });
+
+    it('refuses a user that does not exist, also inside a transaction (the caller rolls back)', async () => {
+      const input = event({ userId: 'NO_SUCH_USER' });
+      await expect(prisma.$transaction((tx) => ledger.createEvent(input, tx))).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(await prisma.xpEvent.count({ where: { key: input.key } })).toBe(0);
+    });
+
+    it('still accepts a member of the workspace, a retry of the same key, and an archived member', async () => {
+      const own = event();
+      expect((await ledger.createEvent(own)).created).toBe(true);
+      expect((await ledger.createEvent(own)).created).toBe(false); // a retry is still a no-op, not an error
+      const archived = event({ workspaceId: otherWorkspaceId, userId: archivedUser });
+      expect((await ledger.createEvent(archived)).created).toBe(true); // membership only: history of an archived user is kept
+      await prisma.xpEvent.deleteMany({ where: { workspaceId: otherWorkspaceId } });
+    });
+  });
+
   it('rejects a non-integer amount and a blank evidence', async () => {
     await expect(ledger.createEvent(event({ amount: 1.5 }))).rejects.toMatchObject({ code: 'VALIDATION' });
     await expect(ledger.createEvent(event({ evidence: '   ' }))).rejects.toMatchObject({ code: 'VALIDATION' });

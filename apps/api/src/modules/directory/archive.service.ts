@@ -11,6 +11,7 @@ export class ArchiveService {
   /**
    * Every archived user of the PM's workspace (decision: every PM sees every user).
    * Newest archived first, then by User ID so the order never jumps around.
+   * Moving a user back is Edit user, which only the managing PM may do: `managedByYou` tells the UI.
    */
   async listArchived(actor: PmActor): Promise<ArchivedUserListResponse> {
     const rows = await this.prisma.user.findMany({
@@ -18,6 +19,7 @@ export class ArchiveService {
       orderBy: [{ archivedAt: 'desc' }, { userId: 'asc' }],
       select: {
         userId: true,
+        pmId: true,
         name: true,
         email: true,
         photoPath: true,
@@ -39,6 +41,7 @@ export class ArchiveService {
       onboardDate: toDateOnly(row.onboardDate),
       departureDate: row.departureDate ? toDateOnly(row.departureDate) : null,
       archivedAt: (row.archivedAt as Date).toISOString(), // never null: the query above only returns archived users
+      managedByYou: row.pmId === actor.pmId,
     }));
     return { items };
   }

@@ -31,6 +31,7 @@ describe('ArchiveService.listArchived', () => {
     prisma.user.findMany.mockResolvedValue([
       {
         userId: 'BS23005',
+        pmId: 'PM001',
         name: 'Demo Archived',
         email: 'bs23005@bs23.test',
         photoPath: null,
@@ -53,7 +54,30 @@ describe('ArchiveService.listArchived', () => {
         onboardDate: '2026-05-01',
         departureDate: '2026-08-01',
         archivedAt: '2026-08-02T00:00:00.000Z',
+        managedByYou: true,
       },
+    ]);
+  });
+
+  it('says managedByYou: false for an archived user of another PM', async () => {
+    const base = {
+      name: 'X',
+      email: 'x@bs23.test',
+      photoPath: null,
+      position: 'QA',
+      resource: 'SBU',
+      onboardDate: new Date('2026-05-01T00:00:00Z'),
+      departureDate: null,
+      archivedAt: new Date('2026-08-02T00:00:00Z'),
+    };
+    prisma.user.findMany.mockResolvedValue([
+      { ...base, userId: 'BS23006', pmId: 'PM001' },
+      { ...base, userId: 'BS23007', pmId: 'PM002' },
+    ]);
+    const { items } = await service.listArchived(PM);
+    expect(items.map((i) => [i.userId, i.managedByYou])).toEqual([
+      ['BS23006', true],
+      ['BS23007', false],
     ]);
   });
 
@@ -61,6 +85,7 @@ describe('ArchiveService.listArchived', () => {
     prisma.user.findMany.mockResolvedValue([
       {
         userId: 'BS23006',
+        pmId: 'PM001',
         name: 'X',
         email: 'x@bs23.test',
         photoPath: null,

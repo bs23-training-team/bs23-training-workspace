@@ -13,6 +13,8 @@ export interface ArchivedUserItem {
   onboardDate: string;
   departureDate: string | null;
   archivedAt: string;
+  /** true when the calling PM manages this user: only then may the UI offer to move them back (Edit user). */
+  managedByYou: boolean;
 }
 
 export interface ArchivedUserListResponse {

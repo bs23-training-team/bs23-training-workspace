@@ -18,6 +18,12 @@ export interface XpEventView {
   createdAt: string;
 }
 
+/**
+ * An XP event as its OWNER sees it. The flag ("Suspicious exchange", "Weekly received cap reached") is a PM's
+ * information and is never here; the user sees the status, and the reason once a PM has decided.
+ */
+export type MyXpEventView = Omit<XpEventView, 'flag'>;
+
 export interface MyGrowth {
   /** XP that counts: AWARDED only. */
   awardedXp: number;
@@ -47,6 +53,19 @@ const toView = (e: {
   status: e.status,
   reason: e.reason,
   flag: e.flag,
+  evidence: e.evidence,
+  occurredOn: e.occurredOn.toISOString().slice(0, 10),
+  createdAt: e.createdAt.toISOString(),
+});
+
+// Field by field, so the flag cannot reach a user through a spread.
+const toMyView = (e: Parameters<typeof toView>[0]): MyXpEventView => ({
+  id: e.id,
+  userId: e.userId,
+  source: e.source,
+  amount: e.amount,
+  status: e.status,
+  reason: e.reason,
   evidence: e.evidence,
   occurredOn: e.occurredOn.toISOString().slice(0, 10),
   createdAt: e.createdAt.toISOString(),
@@ -84,12 +103,17 @@ export class XpQueryService {
       { workspaceId: input.workspaceId, user: { pmId: input.pmId }, ...(input.status ? { status: input.status } : {}), ...(input.userId ? { userId: input.userId } : {}) },
       input.cursor,
       input.limit,
+      toView,
     );
   }
 
   /** A user's own XP events, newest first. */
-  async ownEvents(workspaceId: string, userId: string, options: { cursor?: string | null; limit?: number } = {}) {
-    return this.page({ workspaceId, userId }, options.cursor, options.limit);
+  async ownEvents(
+    workspaceId: string,
+    userId: string,
+    options: { cursor?: string | null; limit?: number } = {},
+  ): Promise<{ events: MyXpEventView[]; nextCursor: string | null }> {
+    return this.page({ workspaceId, userId }, options.cursor, options.limit, toMyView);
   }
 
   /** A user's own summary: level, XP (awarded and waiting), streak and the badges they hold. */
@@ -115,7 +139,12 @@ export class XpQueryService {
     };
   }
 
-  private async page(where: object, cursor?: string | null, limit?: number) {
+  private async page<V>(
+    where: object,
+    cursor: string | null | undefined,
+    limit: number | undefined,
+    view: (row: Parameters<typeof toView>[0]) => V,
+  ): Promise<{ events: V[]; nextCursor: string | null }> {
     const skip = parseCursor(cursor);
     const take = Math.min(limit ?? MAX_PAGE, MAX_PAGE);
     const rows = await this.prisma.xpEvent.findMany({
@@ -124,6 +153,6 @@ export class XpQueryService {
       skip,
       take: take + 1,
     });
-    return { events: rows.slice(0, take).map(toView), nextCursor: rows.length > take ? String(skip + take) : null };
+    return { events: rows.slice(0, take).map(view), nextCursor: rows.length > take ? String(skip + take) : null };
   }
 }

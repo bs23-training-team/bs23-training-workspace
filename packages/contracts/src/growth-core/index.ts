@@ -32,9 +32,21 @@ export interface XpEventView {
   createdAt: string;
 }
 
-/** Answer of GET /pm/xp-events and GET /me/xp-events. */
+/** Answer of GET /pm/xp-events (a PM sees the flag). */
 export interface XpEventPage {
   events: XpEventView[];
+  nextCursor: string | null;
+}
+
+/**
+ * An XP event as its OWNER sees it in GET /me/xp-events. The flag is a PM's information and is never here: the user
+ * sees the status, and the reason once a PM has decided.
+ */
+export type MyXpEventView = Omit<XpEventView, 'flag'>;
+
+/** Answer of GET /me/xp-events. */
+export interface MyXpEventPage {
+  events: MyXpEventView[];
   nextCursor: string | null;
 }
 

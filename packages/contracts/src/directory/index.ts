@@ -2,6 +2,7 @@
 // Already re-exported from src/index.ts: do not edit that file.
 
 export * from './teams.js';
+export * from './profile.js';
 
 export const POSITIONS = ['FRONTEND', 'BACKEND', 'FULLSTACK', 'QA'] as const;
 export type Position = (typeof POSITIONS)[number];

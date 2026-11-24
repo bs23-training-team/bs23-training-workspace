@@ -439,6 +439,7 @@ export interface EmailDelivery {
   id: string;
   reportId?: string; // report emails
   taskId?: string; // task-owner verification emails
+  userId?: string; // account-created emails (FR-AUTH-08); the temporary password is never stored here
   recipient: string;
   subject: string;
   status: "QUEUED" | "ACCEPTED" | "FAILED";

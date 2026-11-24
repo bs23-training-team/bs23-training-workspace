@@ -1,7 +1,8 @@
 "use client";
 
-import { type Position, type AttendanceMode, type Resource } from "@/lib/mock/types";
+import { type DB, type Position, type AttendanceMode, type Resource } from "@/lib/mock/types";
 import { Result, fail, nowIso, ok } from "@/lib/mock/core";
+import { integration } from "@/lib/mock/selectors";
 import { getDB, mutate } from "@/lib/mock/store";
 import { isEmail, uid, todayISO } from "@/lib/utils";
 
@@ -29,7 +30,25 @@ export function assessmentSettingsError(input: Pick<TraineeInput, "skillAssessme
   return null;
 }
 
-export function createTrainee(pmId: string, input: TraineeInput): Result {
+/** Shown once after an account is created (FR-AUTH-08). The email status says whether the credentials mail went out. */
+export interface AccountCredentials {
+  name: string;
+  accountId: string;
+  email: string;
+  tempPassword: string;
+  deliveryId: string;
+  mailStatus: "QUEUED" | "ACCEPTED" | "FAILED";
+}
+
+function queueAccountEmail(d: DB, userId: string, recipient: string): { id: string; status: "ACCEPTED" | "FAILED" } {
+  const id = uid("em");
+  // Provider is not connected in this build: delivery is recorded as failed with retry.
+  const status = integration(d, "EMAIL").status === "Connected" ? "ACCEPTED" : "FAILED";
+  d.emailDeliveries.unshift({ id, userId, recipient, subject: "Your BS23 Training Workspace account", status, attempts: 1, createdAt: nowIso() });
+  return { id, status };
+}
+
+export function createTrainee(pmId: string, input: TraineeInput): Result<AccountCredentials> {
   const db = getDB();
   if (!input.traineeId.trim() || !input.name.trim() || !input.email.trim() || !input.onboardDate) return fail("Fill in every required field.");
   if (!isEmail(input.email)) return fail("Enter a valid email address.");
@@ -41,12 +60,14 @@ export function createTrainee(pmId: string, input: TraineeInput): Result {
   if (input.periodEnd <= input.onboardDate) return fail("The departure date must be after the onboarding date.");
   if (db.trainees.some((t) => t.traineeId.toLowerCase() === input.traineeId.trim().toLowerCase())) return fail("A user with this ID already exists.");
   if (db.users.some((u) => u.email.toLowerCase() === input.email.trim().toLowerCase())) return fail("An account with this email already exists.");
+  let mail = { id: "", status: "FAILED" as "ACCEPTED" | "FAILED" };
   mutate((d) => {
     const id = uid("u");
+    mail = queueAccountEmail(d, id, input.email.trim());
     d.users.push({ id, name: input.name.trim(), email: input.email.trim(), role: "TRAINEE", password: input.tempPassword!, mustChangePassword: true, emailVerified: true, createdAt: nowIso() });
     d.trainees.push({ userId: id, traineeId: input.traineeId.trim().toUpperCase(), position: input.position, attendanceMode: input.attendanceMode, resource: input.resource, onboardDate: input.onboardDate, periodEnd: input.periodEnd, skillAssessmentMinutes: input.skillAssessmentMinutes, skillAssessmentMarks: input.skillAssessmentMarks, skills: [], teamIds: input.teamIds, pmId, hideFromLeaderboard: false });
   });
-  return ok();
+  return ok({ name: input.name.trim(), accountId: input.traineeId.trim().toUpperCase(), email: input.email.trim(), tempPassword: input.tempPassword!, deliveryId: mail.id, mailStatus: mail.status });
 }
 
 export function updateTrainee(pmId: string, userId: string, input: TraineeInput): Result {
@@ -102,7 +123,7 @@ export function archiveExpiredTrainees(): number {
   return n;
 }
 
-export function createPM(creatorId: string, input: { name: string; email: string; pmCode: string; password: string }): Result {
+export function createPM(creatorId: string, input: { name: string; email: string; pmCode: string; password: string }): Result<AccountCredentials> {
   const db = getDB();
   if (!input.name.trim() || !input.pmCode.trim()) return fail("Fill in every required field.");
   if (!isEmail(input.email)) return fail("Enter a valid email address.");
@@ -110,12 +131,14 @@ export function createPM(creatorId: string, input: { name: string; email: string
   const code = input.pmCode.trim().toUpperCase();
   if (db.users.some((u) => u.email.toLowerCase() === input.email.trim().toLowerCase())) return fail("An account with this email already exists.");
   if (db.users.some((u) => u.pmCode?.toLowerCase() === code.toLowerCase()) || db.trainees.some((t) => t.traineeId.toLowerCase() === code.toLowerCase())) return fail("This ID is already in use.");
+  let mail = { id: "", status: "FAILED" as "ACCEPTED" | "FAILED" };
   mutate((d) => {
     const id = uid("pm");
+    mail = queueAccountEmail(d, id, input.email.trim());
     d.users.push({ id, name: input.name.trim(), email: input.email.trim(), role: "PM", pmCode: code, password: input.password, mustChangePassword: true, emailVerified: true, createdAt: nowIso() });
     d.notificationPrefs.push(...d.notificationPrefs.filter((p) => p.userId === "pm1").map((p) => ({ ...p, userId: id, showInBell: true })));
   });
-  return ok();
+  return ok({ name: input.name.trim(), accountId: code, email: input.email.trim(), tempPassword: input.password, deliveryId: mail.id, mailStatus: mail.status });
 }
 
 export function createTeam(pmId: string, name: string): Result {

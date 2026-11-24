@@ -80,7 +80,7 @@ export default function TraineeGamificationPage() {
             })}
           </ul>
         </Card>
-        <Card title="Badges" description="Technical badges need a passed assessment and a PM-reviewed project.">
+        <Card title="Badges">
           <ul className="grid grid-cols-2 gap-3">
             {db.badges.map((b) => {
               const earned = db.badgeAwards.find((a) => a.badgeId === b.id && a.traineeUserId === user.id);

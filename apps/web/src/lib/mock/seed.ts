@@ -3,7 +3,7 @@ import type { AttendanceRecord, Course, DB, DSCell, ExpertiseEvaluation, Meeting
 import { QUESTION_BANK, NOTIFICATION_CATEGORIES } from "@/lib/mock/content";
 import { addDays, addMonths, isWeekend, todayISO, weekStartOf } from "@/lib/utils";
 
-export const SEED_VERSION = 14;
+export const SEED_VERSION = 15;
 
 /* ------------------------------ course content ------------------------------ */
 
@@ -565,7 +565,7 @@ export function buildSeed(): DB {
     badges: [
       { id: "b1", name: "Early Bird", icon: "🌅", kind: "BEHAVIORAL", criteria: "Submit the daily sprint on time 10 days in a row." },
       { id: "b2", name: "Streak Master", icon: "🔥", kind: "BEHAVIORAL", criteria: "Reach a 20-day sprint streak." },
-      { id: "b3", name: "Bug Hunter", icon: "🐞", kind: "TECHNICAL", criteria: "Pass the testing assessment and a PM-reviewed bug-fix project." },
+      { id: "b3", name: "Bug Hunter", icon: "🐞", kind: "SPECIAL", criteria: "Chosen by the PM for finding and fixing a real bug." },
       { id: "b4", name: "Helpful Peer", icon: "🤝", kind: "BEHAVIORAL", criteria: "Receive 5 kudos from different peers." },
       { id: "b5", name: "Mentor's Pick", icon: "⭐", kind: "SPECIAL", criteria: "Chosen by the PM for outstanding work." },
     ],

@@ -502,7 +502,7 @@ export interface Badge {
   id: string;
   name: string;
   icon: string;
-  kind: "BEHAVIORAL" | "TECHNICAL" | "SPECIAL";
+  kind: "BEHAVIORAL" | "SPECIAL";
   criteria: string;
 }
 

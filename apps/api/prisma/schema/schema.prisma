@@ -1,35 +1,4 @@
-// ============================================================================
-// BS23 Training Workspace · Schema v1 FINAL (combined, E01–E10)
-//
-// Built from: the current UI (src/lib/types.ts, api.ts, navigation.md) + the team
-// guide rules + the E04 catalog draft (Course / CourseModule / LessonContent).
-// Checked against: PRD v1 (final), 17 Nov 2026. Changes from that check are
-// marked "PRD v1:" next to the line they changed.
-//
-// Rules followed
-//  - every model has id, workspaceId (relation to Workspace), createdAt, updatedAt.
-//    Exception: Pm and User use their login ID as the primary key (pmId, userId)
-//  - every relation uses onDelete: Restrict. No Cascade; history and proof are never deleted
-//  - "removed" things keep their row and get a status / archivedAt (history is kept)
-//  - PM (admin) and the 4 resource types are separate tables:
-//      Pm   · pmId   e.g. "PM002"
-//      User · userId e.g. "BS23001" (Trainee, Central L&D, Industrial Attachment, SBU)
-//  - "userId" always points to User.userId, "pmId" and "...ById" always point to Pm.pmId
-//  - tables used by both (Credential, AuthToken, Session, Notification,
-//    NotificationPreference, DsSheetCell, DsSheetCellVersion) have a pmId and a userId
-//    column, both optional; DB: CHECK that exactly one is set
-//  - generator and datasource are NOT here, they live in base.prisma
-//  - Model names PascalCase, columns camelCase
-//  - rules Prisma cannot express are written as "DB:" comments for the migration
-//
-// UI notes
-//  - UI "Topic"    = CourseModule
-//  - UI "Subtopic" = LessonContent
-//  - UI "User ID" (BS23001) = User.userId
-//  - PM login ID (PM002)    = Pm.pmId
-//  - Removed on purpose in the UI (so NOT modelled): Hackathon, Audit log,
-//    planned start/end on sprint tasks, Question Sets settings page.
-// ============================================================================
+
 
 // ============================================================================
 // ===== E01 · identity · Identity, notification, outbox =====================
@@ -117,39 +86,34 @@ model Workspace {
   kudos                      Kudos[]
 }
 
-// A resource: one of the 4 types (Trainee, Central L&D, Industrial Attachment, SBU).
-// A separate table from Pm. Replaces the old User + userProfile pair.
-// PM = admin. A separate table from the 4 resource types (User).
+
 model Pm {
-  pmId               String   @id // login ID of the PM, e.g. "PM002"
+  pmId               String   @id 
   workspaceId        String
-  email              String // DB: an email must not exist in both Pm and User (login looks up both)
+  email              String 
   name               String
-  mustChangePassword Boolean  @default(false) // true while the temporary password is in use
+  mustChangePassword Boolean  @default(false) 
   emailVerified      Boolean  @default(false)
-  photoPath          String? // storage path only; storage provider not decided yet
-  bio                String?
+  photoPath          String?   bio                String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
 
-  // login, notification (shared with User: each row has pmId or userId)
+  
   credential              Credential?
   authTokens              AuthToken[]
   sessions                Session[]
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
 
-  // users this PM manages
-  managedUsers User[]
+    managedUsers User[]
 
-  // DS sheet edits made by a PM
-  dssheetCellsAuthored      DsSheetCell[]        @relation("dsSheetCellAuthorPm")
+    dssheetCellsAuthored      DsSheetCell[]        @relation("dsSheetCellAuthorPm")
   dssheetCellsUpdated       DsSheetCell[]        @relation("dsSheetCellUpdaterPm")
   dssheetCellVersionsEdited DsSheetCellVersion[] @relation("dsSheetCellVersionEditorPm")
 
-  // PM actions ("...ById" columns)
+ 
   coursesApproved                    Course[]                @relation("CourseApprover")
   coursesCreated                     Course[]                @relation("CourseCreator")
   teamsAsPm                          Team[]                  @relation("TeamPm")
@@ -184,30 +148,30 @@ model Pm {
 }
 
 model User {
-  userId                 String         @id // login ID, e.g. "BS23001", shown as "User ID" in the UI
+  userId                 String         @id 
   workspaceId            String
-  email                  String // DB: an email must not exist in both Pm and User (login looks up both)
+  email                  String 
   name                   String
-  mustChangePassword     Boolean        @default(false) // true while the temporary password is in use
+  mustChangePassword     Boolean        @default(false) 
   emailVerified          Boolean        @default(false)
-  photoPath              String? // storage path only; storage provider not decided yet
+  photoPath              String? 
   bio                    String?        @db.Text
-  resource               UserResource // TRAINEE / CENTRAL_LND / INDUSTRIAL_ATTACHMENT / SBU
-  pmId                   String // the PM who manages this user
+  resource               UserResource 
+  pmId                   String 
   position               Position
   attendanceMode         AttendanceMode
   onboardDate            DateTime       @db.Date
-  departureDate          DateTime?      @db.Date // empty only for a reactivated user; DB: must be after onboardDate
-  skillAssessmentMinutes Int? // set by the PM, 1-180 (DB: CHECK)
-  skillAssessmentMarks   Int? // set by the PM, 1-1000 (DB: CHECK)
-  archivedAt             DateTime? // set when departureDate passes; cleared when the PM reactivates
+  departureDate          DateTime?      @db.Date 
+  skillAssessmentMinutes Int? 
+  skillAssessmentMarks   Int? 
+  archivedAt             DateTime? 
   createdAt              DateTime       @default(now())
   updatedAt              DateTime       @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   pm        Pm        @relation(fields: [pmId], references: [pmId], onDelete: Restrict)
 
-  // login, notification (shared with Pm: each row has pmId or userId)
+  
   credential              Credential?
   authTokens              AuthToken[]
   sessions                Session[]
@@ -217,14 +181,13 @@ model User {
   kudosSent     Kudos[] @relation("KudosSent")
   kudosReceived Kudos[] @relation("KudosReceived")
 
-  // DS sheet: the user's own rows, and edits made by the user
+  
   dssheetCells              DsSheetCell[]        @relation("dsSheetCellRow")
   dssheetCellsAuthored      DsSheetCell[]        @relation("dsSheetCellAuthorUser")
   dssheetCellsUpdated       DsSheetCell[]        @relation("dsSheetCellUpdaterUser")
   dssheetCellVersionsEdited DsSheetCellVersion[] @relation("dsSheetCellVersionEditorUser")
 
-  // back-relations (generated)
-  userSkills             UserSkill[]
+   userSkills             UserSkill[]
   memberships            Membership[]
   feedbackVersions       FeedbackVersion[]
   expertiseVersions      ExpertiseVersion[]
@@ -263,7 +226,7 @@ model Credential {
   workspaceId       String
   pmId              String?   @unique // set for a PM
   userId            String?   @unique // set for a user
-  passwordHash      String // salted slow hash (never the plain password)
+  passwordHash      String 
   passwordChangedAt DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -271,12 +234,12 @@ model Credential {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   pm        Pm?       @relation(fields: [pmId], references: [pmId], onDelete: Restrict)
   user      User?     @relation(fields: [userId], references: [userId], onDelete: Restrict)
-  // DB: CHECK exactly one of pmId / userId is set
+  
 }
 
 enum AuthTokenType {
   EMAIL_VERIFICATION
-  PASSWORD_RESET // expires in 30 minutes in the UI
+  PASSWORD_RESET 
 }
 
 model AuthToken {
@@ -294,8 +257,7 @@ model AuthToken {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   pm        Pm?       @relation(fields: [pmId], references: [pmId], onDelete: Restrict)
   user      User?     @relation(fields: [userId], references: [userId], onDelete: Restrict)
-  // DB: CHECK exactly one of pmId / userId is set
-
+ 
   @@index([pmId, type])
   @@index([userId, type])
 }
@@ -305,19 +267,19 @@ model Session {
   workspaceId String
   pmId        String?
   userId      String?
-  tokenHash   String    @unique // PRD v1: hash of the session / refresh token; the raw token is never stored
+  tokenHash   String    @unique 
   device      String
   remembered  Boolean   @default(false)
-  expiresAt   DateTime // PRD v1: longer when "remember me" is ticked
+  expiresAt   DateTime 
   lastSeenAt  DateTime  @default(now())
-  endedAt     DateTime? // sign out or auto-archive ends the session; the row stays
+  endedAt     DateTime? 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   pm        Pm?       @relation(fields: [pmId], references: [pmId], onDelete: Restrict)
   user      User?     @relation(fields: [userId], references: [userId], onDelete: Restrict)
-  // DB: CHECK exactly one of pmId / userId is set
+ 
 
   @@index([pmId, endedAt])
   @@index([userId, endedAt])
@@ -326,13 +288,13 @@ model Session {
 model Notification {
   id              String    @id @default(uuid())
   workspaceId     String
-  pmId            String? // recipient, when the recipient is a PM
-  userId          String? // recipient, when the recipient is a user
-  category        String // e.g. "Course assigned", "Leave decided", "Retake request"
+  pmId            String? 
+  userId          String? 
+  category        String
   title           String
   message         String    @db.Text
-  link            String? // page to open when clicked
-  retakeRequestId String? // retake notifications open the approval pop-up
+  link            String?
+  retakeRequestId String? 
   readAt          DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -341,8 +303,7 @@ model Notification {
   pm            Pm?            @relation(fields: [pmId], references: [pmId], onDelete: Restrict)
   user          User?          @relation(fields: [userId], references: [userId], onDelete: Restrict)
   retakeRequest RetakeRequest? @relation(fields: [retakeRequestId], references: [id], onDelete: Restrict)
-  // DB: CHECK exactly one of pmId / userId is set
-
+  
   @@index([pmId, readAt])
   @@index([userId, readAt])
   @@index([workspaceId, createdAt])
@@ -361,8 +322,7 @@ model NotificationPreference {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   pm        Pm?       @relation(fields: [pmId], references: [pmId], onDelete: Restrict)
   user      User?     @relation(fields: [userId], references: [userId], onDelete: Restrict)
-  // DB: CHECK exactly one of pmId / userId is set
-
+ 
   @@unique([pmId, category])
   @@unique([userId, category])
 }
@@ -377,7 +337,7 @@ enum OutboxStatus {
 model OutboxEvent {
   id          String       @id @default(uuid())
   workspaceId String
-  type        String // e.g. "mail.report", "notification.email"
+  type        String 
   payload     Json
   status      OutboxStatus @default(PENDING)
   attempts    Int          @default(0)
@@ -451,7 +411,7 @@ model UserSkill {
   id          String   @id @default(uuid())
   workspaceId String
   userId      String
-  skillId     String // → Skill (E03)
+  skillId     String 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -475,7 +435,7 @@ model Team {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   pm        Pm        @relation("TeamPm", fields: [pmId], references: [pmId], onDelete: Restrict)
 
-  // back-relations (generated)
+  
   memberships Membership[]
   sprintWeeks SprintWeek[]
   dsMeetings  DsMeeting[]
@@ -488,7 +448,7 @@ model Membership {
   workspaceId String
   teamId      String
   userId      String
-  leftAt      DateTime? // leaving a team keeps the row (history)
+  leftAt      DateTime? 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -500,7 +460,6 @@ model Membership {
   @@index([userId])
 }
 
-// L&D feedback written by a PM. Every edit is a new version, nothing is overwritten.
 model FeedbackVersion {
   id          String   @id @default(uuid())
   workspaceId String
@@ -588,7 +547,7 @@ enum ProctorRule {
 enum QuizEndReason {
   SUBMITTED
   TIME_UP
-  VIOLATIONS // three rule breaches auto-submit
+  VIOLATIONS 
 }
 
 enum AppealStatus {
@@ -598,14 +557,14 @@ enum AppealStatus {
 
 enum RecommendationStatus {
   SUGGESTED
-  APPROVED // PM approved the suggestion (it still does not assign the course)
+  APPROVED 
 }
 
 enum RetakeStatus {
   PENDING
   APPROVED
   REJECTED
-  USED // one approval allows one retake
+  USED 
 }
 
 enum Sector {
@@ -615,8 +574,7 @@ enum Sector {
   SQA
 }
 
-// A technology / skill (HTML & CSS, React, SQL ...). Used by the skill quiz bank,
-// trainee skills and the skill filter on All Users.
+
 model Skill {
   id          String   @id @default(uuid())
   workspaceId String
@@ -627,7 +585,7 @@ model Skill {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
 
-  // back-relations (generated)
+  
   userSkills                 UserSkill[]
   questions                  Question[]
   expertiseTechnologyResults ExpertiseTechnologyResult[]
@@ -636,16 +594,15 @@ model Skill {
   @@unique([workspaceId, name])
 }
 
-// Course quizzes (per subtopic / full topic / course final).
 model QuestionSet {
   id             String            @id @default(uuid())
   workspaceId    String
-  courseId       String // → Course (E04)
-  moduleId       String? // → CourseModule (E04). Empty for COURSE_FINAL
+  courseId       String 
+  moduleId       String? 
   type           QuestionSetType
   title          String
   durationMin    Int
-  attemptLimit   Int // DB: CHECK >= 1
+  attemptLimit   Int 
   source         QuestionSetSource @default(AI_DRAFT)
   contentVersion String
   approvedById   String?
@@ -658,8 +615,7 @@ model QuestionSet {
   module     CourseModule? @relation(fields: [moduleId], references: [id], onDelete: Restrict)
   approvedBy Pm?           @relation("QuestionSetApprover", fields: [approvedById], references: [pmId], onDelete: Restrict)
 
-  // back-relations (generated)
-  rubrics   Rubric[]
+   rubrics   Rubric[]
   questions Question[]
   attempts  Attempt[]
 
@@ -667,7 +623,6 @@ model QuestionSet {
   @@index([moduleId])
 }
 
-// Marking guide of a question set. A new rubric text is a new version.
 model Rubric {
   id            String   @id @default(uuid())
   workspaceId   String
@@ -683,13 +638,12 @@ model Rubric {
   @@unique([questionSetId, version])
 }
 
-// A question lives either in a QuestionSet (course quiz) or in the skill quiz bank (skillId + level).
 model Question {
   id            String         @id @default(uuid())
   workspaceId   String
   questionSetId String?
   skillId       String?
-  level         QuestionLevel? // skill bank questions only
+  level         QuestionLevel? 
   type          QuestionType
   text          String         @db.Text
   order         Int?
@@ -701,7 +655,7 @@ model Question {
   questionSet QuestionSet? @relation(fields: [questionSetId], references: [id], onDelete: Restrict)
   skill       Skill?       @relation(fields: [skillId], references: [id], onDelete: Restrict)
 
-  // back-relations (generated)
+  
   questionOptions  QuestionOption[]
   expertiseAnswers ExpertiseAnswer[]
   responses        Response[]
@@ -716,7 +670,7 @@ model QuestionOption {
   questionId  String
   order       Int
   text        String
-  isCorrect   Boolean  @default(false) // UI "answerKey"
+  isCorrect   Boolean  @default(false) 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -731,11 +685,11 @@ model QuestionOption {
 }
 
 enum ExpertiseStatus {
-  IN_PROGRESS // PRD v1: a reload resumes with the remaining time (FR-RTK-06, US-53)
+  IN_PROGRESS 
   SUBMITTED
 }
 
-// First-login / retake skill assessment. Every submission is a new version (v1, v2 ...).
+
 model ExpertiseVersion {
   id               String          @id @default(uuid())
   workspaceId      String
@@ -743,24 +697,24 @@ model ExpertiseVersion {
   version          Int
   retakeRequestId  String?         @unique // set when this was a retake
   joiningRole      String
-  experience       String // Beginner / Intermediate / Advanced
-  confidence       String // Not confident ... Very confident
+  experience       String 
+  confidence       String 
   improvements     String[]
   goals            String          @db.Text
-  practicalAnswer  String?         @db.Text // PRD v1: empty until submitted
-  intake           Json? // the 10-question intake answers (Q1-Q10, Q5-Q7 repeat per skill)
-  status           ExpertiseStatus @default(IN_PROGRESS) // PRD v1
-  startedAt        DateTime        @default(now()) // PRD v1: remaining time = durationMin - (now - startedAt)
-  submittedAt      DateTime? // PRD v1
-  level            String? // Beginner / Intermediate / Advanced. PRD v1: empty until submitted
-  score            Int? // PRD v1: empty until submitted
-  total            Int? // PRD v1: empty until submitted
-  analysis         Json? // PRD v1: strengths, gaps, required skills per role from the skill-analysis service (US-54)
-  analysedAt       DateTime? // PRD v1: when the service returned the analysis
+  practicalAnswer  String?         @db.Text 
+  intake           Json? 
+  status           ExpertiseStatus @default(IN_PROGRESS) 
+  startedAt        DateTime        @default(now()) 
+  submittedAt      DateTime? 
+  level            String? 
+  score            Int? 
+  total            Int? 
+  analysis         Json? 
+  analysedAt       DateTime? 
   // proctored quiz
   durationMin      Int?
   timeTakenSec     Int?
-  totalMarks       Int? // set by the PM, shared equally over the questions
+  totalMarks       Int? 
   marksPerQuestion Decimal?        @db.Decimal(8, 2)
   marksObtained    Decimal?        @db.Decimal(8, 2)
   endReason        QuizEndReason?
@@ -795,7 +749,7 @@ model ProctoringViolation {
   @@index([expertiseVersionId])
 }
 
-// Result per technology inside one assessment.
+
 model ExpertiseTechnologyResult {
   id                 String      @id @default(uuid())
   workspaceId        String
@@ -823,7 +777,7 @@ model ExpertiseAnswer {
   expertiseVersionId String
   skillId            String
   questionId         String
-  selectedOptionId   String? // empty when skipped
+  selectedOptionId   String? 
   correct            Boolean
   skipped            Boolean
   createdAt          DateTime @default(now())
@@ -839,20 +793,18 @@ model ExpertiseAnswer {
   @@index([questionId])
 }
 
-// A trainee's try at a course quiz. The original objective score is never changed;
-// the PM's reviewed score goes into finalScore.
 model Attempt {
   id             String        @id @default(uuid())
   workspaceId    String
   userId         String
   questionSetId  String
-  attemptNo      Int // DB: must not pass QuestionSet.attemptLimit
+  attemptNo      Int 
   objectiveScore Int
   objectiveTotal Int
-  finalScore     Int? // percentage 0-100 after PM review (DB: CHECK)
+  finalScore     Int? 
   status         AttemptStatus
   submitReason   SubmitReason
-  mastered       Boolean       @default(false) // PM marked the topic / course as mastered
+  mastered       Boolean       @default(false) 
   finalisedById  String?
   finalisedAt    DateTime?
   startedAt      DateTime
@@ -897,12 +849,12 @@ model Response {
   workspaceId      String
   attemptId        String
   questionId       String
-  selectedOptionId String? // MCQ
+  selectedOptionId String? 
   answerText       String?  @db.Text // SHORT
   isCorrect        Boolean?
-  aiScore          Decimal? @db.Decimal(6, 2) // PRD v1 (FR-ASM-02): AI-suggested score for a short answer
-  aiRationale      String?  @db.Text // PRD v1: why the AI suggested that score (against the rubric)
-  pmScore          Decimal? @db.Decimal(6, 2) // PRD v1: the score the PM gave or confirmed
+  aiScore          Decimal? @db.Decimal(6, 2) 
+  aiRationale      String?  @db.Text 
+  pmScore          Decimal? @db.Decimal(6, 2) 
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -915,7 +867,7 @@ model Response {
   @@index([questionId])
 }
 
-// "Request review" of an attempt by the trainee.
+
 model Appeal {
   id           String       @id @default(uuid())
   workspaceId  String
@@ -937,14 +889,14 @@ model Appeal {
   @@index([userId])
 }
 
-// Suggested course for a trainee, from the skill gaps of an assessment. Suggestions never assign.
+
 model Recommendation {
   id                 String               @id @default(uuid())
   workspaceId        String
   userId             String
-  courseId           String // → Course (E04)
+  courseId           String 
   expertiseVersionId String?
-  reason             String // e.g. "React: Needs revision (High priority)"
+  reason             String 
   priority           Priority
   status             RecommendationStatus @default(SUGGESTED)
   approvedById       String?
@@ -969,8 +921,8 @@ model RetakeRequest {
   status      RetakeStatus @default(PENDING)
   decidedById String?
   decidedAt   DateTime?
-  minutes     Int? // set on approval, 1-180
-  totalMarks  Int? // set on approval, 1-1000
+  minutes     Int? 
+  totalMarks  Int? 
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -981,12 +933,12 @@ model RetakeRequest {
   // back-relations (generated)
   notifications    Notification[]
   expertiseVersion ExpertiseVersion?
-  // DB: partial unique index, only one PENDING or APPROVED request per trainee
+  
 
   @@index([userId, status])
 }
 
-// One row per sector per month, written by the monthly job (Sector Growth Analytics).
+
 model SectorSnapshot {
   id          String   @id @default(uuid())
   workspaceId String
@@ -1017,17 +969,17 @@ enum CourseRequestStatus {
   DECLINED
 }
 
-// 1. Main course template (global and reusable)
+
 model Course {
   id           String    @id @default(uuid())
   workspaceId  String
   title        String
   slug         String
-  track        String? // Frontend, Backend, Full Stack, QA, DevOps, Foundations
+  track        String? 
   description  String    @db.Text
-  targetSkills String[] // technologies this course covers, e.g. ["React", "TypeScript"]. Matches skill gaps
-  isApproved   Boolean   @default(false) // true after a PM approves
-  approvedById String? // PM user
+  targetSkills String[] 
+  isApproved   Boolean   @default(false) 
+  approvedById String? 
   approvedAt   DateTime?
   createdById  String?
   createdAt    DateTime  @default(now())
@@ -1044,7 +996,7 @@ model Course {
   courseAssignments CourseAssignment[]
   courseRequests    CourseRequest[]
 
-  @@unique([workspaceId, title]) // unique, no duplicate courses
+  @@unique([workspaceId, title]) 
   @@unique([workspaceId, slug])
   @@index([workspaceId])
 }
@@ -1052,8 +1004,8 @@ model Course {
 model CourseModule {
   id          String   @id @default(uuid())
   workspaceId String
-  courseId    String // FIX: was courseId with no FK; a topic belongs to a course version
-  title       String // e.g. "Module 1: Advanced Hooks"
+  courseId    String 
+  title       String 
   description String?  @db.Text
   order       Int // 1, 2, 3 ...
   createdAt   DateTime @default(now())
@@ -1092,17 +1044,17 @@ model ModulePrerequisite {
   @@index([prerequisiteId])
 }
 
-// 3. Lesson content (theory, example, pseudocode, resources). UI calls this a "Subtopic".
+
 model LessonContent {
   id           String   @id @default(uuid())
   workspaceId  String
   moduleId     String
-  title        String // Lesson / subtopic title
+  title        String 
   order        Int
-  videoUrl     String? // PRD v1: YouTube video of the subtopic (YouTube Data API), https only
-  filePath     String // path of the lesson file (e.g. "lessons/react-hooks.md"). Storage not decided yet
-  codeExamples Json? // [{ "lang": "typescript", "code": "..." }]
-  references   Json // [{ "source": "React Docs", "url": "https://..." }]. URLs must be https
+  videoUrl     String? 
+  filePath     String 
+  codeExamples Json? 
+  references   Json 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -1125,8 +1077,8 @@ model CourseAssignment {
   userId       String
   assignedById String
 
-  source     AssignmentSource @default(DIRECT) // FIX: DIRECT, TEAM, REQUEST (FR-LRN-04)
-  dueDate    DateTime?        @db.Date // DB: not in the past when created
+  source     AssignmentSource @default(DIRECT) 
+  dueDate    DateTime?        @db.Date 
   assignedAt DateTime         @default(now())
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
@@ -1137,7 +1089,7 @@ model CourseAssignment {
   user       User @relation(fields: [userId], references: [userId], onDelete: Restrict)
   assignedBy Pm   @relation("AssignmentAssigner", fields: [assignedById], references: [pmId], onDelete: Restrict)
 
-  @@unique([userId, courseId]) // a trainee gets a course once
+  @@unique([userId, courseId]) 
   @@index([courseId])
 }
 
@@ -1157,7 +1109,7 @@ model CourseRequest {
   user       User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
   course     Course    @relation(fields: [courseId], references: [id], onDelete: Restrict)
   reviewedBy Pm?       @relation("CourseRequestReviewer", fields: [reviewedById], references: [pmId], onDelete: Restrict)
-  // DB: partial unique index, one PENDING or APPROVED request per trainee and course
+  
 
   @@index([userId, courseId, status])
   @@index([courseId])
@@ -1204,7 +1156,7 @@ model LessonProgress {
   userId           String
   lessonId         String
   completedAt      DateTime
-  videoCompletedAt DateTime? // PRD v1: video completion, user-only (FR-LRN-01)
+  videoCompletedAt DateTime? 
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -1216,7 +1168,7 @@ model LessonProgress {
   @@index([lessonId])
 }
 
-// Append-only log of learning milestones.
+
 model CompletionEvent {
   id          String              @id @default(uuid())
   workspaceId String
@@ -1224,7 +1176,7 @@ model CompletionEvent {
   type        CompletionEventType
   moduleId    String?
   lessonId    String?
-  attemptId   String? // the finalised attempt behind TOPIC_MASTERED
+  attemptId   String? 
   occurredAt  DateTime            @default(now())
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
@@ -1262,7 +1214,7 @@ enum SheetColumn {
   PLAN
 }
 
-// A specific L&D team or SBU that a trainee can do tasks for. They are emailed to verify the task.
+
 model TaskOwner {
   id          String       @id @default(uuid())
   workspaceId String
@@ -1289,18 +1241,18 @@ model SprintTask {
   title              String
   description        String            @db.Text
   category           TaskCategory
-  plannedHours       Decimal           @db.Decimal(4, 1) // DB: CHECK >= 0
+  plannedHours       Decimal           @db.Decimal(4, 1) 
   actualHours        Decimal           @default(0) @db.Decimal(4, 1) // DB: CHECK >= 0
   blocker            String            @default("")
   done               Boolean           @default(false)
-  carriedFromId      String? // task carried forward from the last working day
-  ownerId            String? // L&D team or SBU asked to verify the task
+  carriedFromId      String? 
+  ownerId            String? 
   verification       TaskVerification?
-  ownerRequestedAt   DateTime? // when the approval email was queued
-  ownerRepliedAt     DateTime? // PRD v1: when the owner's answer was recorded (decided once)
-  ownerReplyById     String? // PRD v1: in v1 the PM records (simulates) the owner's reply
-  pendingAlertSentAt DateTime? // PM told that the owner has not replied for a day
-  deletedAt          DateTime? // delete keeps the row
+  ownerRequestedAt   DateTime? 
+  ownerRepliedAt     DateTime? 
+  ownerReplyById     String? 
+  pendingAlertSentAt DateTime? 
+  deletedAt          DateTime? 
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
@@ -1325,14 +1277,14 @@ model SprintSubmission {
   userId      String
   date        DateTime @db.Date
   submittedAt DateTime
-  onTime      Boolean // compared with XpRule.sprintCutoff
+  onTime      Boolean 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
 
-  @@unique([userId, date]) // one sprint per day
+  @@unique([userId, date]) 
 }
 
 model SprintWeek {
@@ -1352,20 +1304,20 @@ model SprintWeek {
   @@unique([teamId, weekStart])
 }
 
-// One cell of the team DS sheet. `version` is for optimistic locking (conflict dialog).
+
 model DsSheetCell {
   id              String      @id @default(uuid())
   workspaceId     String
   weekId          String
-  userId          String // whose row this cell is in
+  userId          String 
   date            DateTime    @db.Date
   column          SheetColumn
   value           String      @db.Text
   version         Int         @default(1)
-  authorPmId      String? // who wrote the cell first: a PM ...
-  authorUserId    String? // ... or a user
-  updatedByPmId   String? // who changed it last: a PM ...
-  updatedByUserId String? // ... or a user
+  authorPmId      String? 
+  authorUserId    String? 
+  updatedByPmId   String? 
+  updatedByUserId String? 
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -1379,21 +1331,21 @@ model DsSheetCell {
 
   // back-relations (generated)
   dssheetCellVersions DsSheetCellVersion[]
-  // DB: CHECK exactly one of authorPmId / authorUserId, and exactly one of updatedByPmId / updatedByUserId
+  
 
   @@unique([weekId, userId, date, column])
   @@index([userId])
 }
 
-// Old values of a cell. Written when a cell is edited.
+
 model DsSheetCellVersion {
   id             String   @id @default(uuid())
   workspaceId    String
   cellId         String
   version        Int
   value          String   @db.Text
-  editedByPmId   String? // edited by a PM ...
-  editedByUserId String? // ... or by a user
+  editedByPmId   String? 
+  editedByUserId String? 
   editedAt       DateTime
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -1402,19 +1354,18 @@ model DsSheetCellVersion {
   cell         DsSheetCell @relation(fields: [cellId], references: [id], onDelete: Restrict)
   editedByPm   Pm?         @relation("dsSheetCellVersionEditorPm", fields: [editedByPmId], references: [pmId], onDelete: Restrict)
   editedByUser User?       @relation("dsSheetCellVersionEditorUser", fields: [editedByUserId], references: [userId], onDelete: Restrict)
-  // DB: CHECK exactly one of editedByPmId / editedByUserId
-
+  
   @@unique([cellId, version])
 }
 
-// Daily sprint meeting shown in the user's meeting banner. teamId empty = all teams.
+
 model DsMeeting {
   id          String   @id @default(uuid())
   workspaceId String
   title       String
   teamId      String?
   scheduledAt DateTime
-  teamsLink   String? // https only
+  teamsLink   String? 
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -1443,7 +1394,7 @@ enum IdentityKind {
 enum MeetingAttendanceStatus {
   ATTENDED
   REPORT_PENDING
-  UNMAPPED // Teams name not mapped to a user yet
+  UNMAPPED 
 }
 
 enum LeaveType {
@@ -1469,13 +1420,13 @@ enum SyncStatus {
   FAILED
 }
 
-// Maps a Teams / ERP identity to a trainee.
+
 model IdentityMapping {
   id          String       @id @default(uuid())
   workspaceId String
   userId      String
   kind        IdentityKind
-  externalId  String // Teams display name / email, or ERP employee id
+  externalId  String 
   mappedById  String
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -1494,38 +1445,36 @@ model Attendance {
   userId      String
   date        DateTime  @db.Date
   entryTime   DateTime? @db.Time(0)
-  exitTime    DateTime? @db.Time(0) // DB: after entryTime
+  exitTime    DateTime? @db.Time(0) 
 
   hours        Decimal?         @db.Decimal(4, 1)
-  lateMinutes  Int              @default(0) // FIX: "Late" (FR-ATT-03)
-  isOfficeTrip Boolean          @default(false) // FIX: "office trip" tile (FR-ATT-02)
-  source       AttendanceSource @default(ERP) // FIX: row marked "Manual (PM-entered)" (US-74)
-  enteredById  String? // FIX: the PM who entered it (FR-ATT-04)
+  lateMinutes  Int              @default(0) 
+  isOfficeTrip Boolean          @default(false) 
+  source       AttendanceSource @default(ERP) 
+  enteredById  String? 
 
-  syncedAt  DateTime? // PRD v1: empty for PM_ENTERED rows
+  syncedAt  DateTime? 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
-  enteredBy Pm?       @relation("AttendanceEnteredBy", fields: [enteredById], references: [pmId], onDelete: Restrict) // FIX: was Pm[] (accidental many-to-many)
-
-  @@unique([userId, date]) // a manual record is refused if one exists, use a reconciliation request
+  enteredBy Pm?       @relation("AttendanceEnteredBy", fields: [enteredById], references: [pmId], onDelete: Restrict) 
+  @@unique([userId, date]) 
   @@index([workspaceId, date])
 }
 
 model MeetingAttendance {
   id            String  @id @default(uuid())
   workspaceId   String
-  userId        String? // empty while UNMAPPED
+  userId        String? 
   teamsIdentity String
-  meeting       String // FIX: which meeting
-
+  meeting       String 
   scheduledStart  DateTime
   firstJoinAt     DateTime?
   durationMinutes Int?
   lateMinutes     Int?
-  status          MeetingAttendanceStatus @default(REPORT_PENDING) // FIX: pending is not an absence; UNMAPPED until mapped (FR-ATT-05)
+  status          MeetingAttendanceStatus @default(REPORT_PENDING) 
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1533,7 +1482,7 @@ model MeetingAttendance {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   user      User?     @relation(fields: [userId], references: [userId], onDelete: Restrict)
 
-  // back-relations (generated)
+ 
   meetingIntervals MeetingInterval[]
 
   @@index([userId, scheduledStart])
@@ -1554,7 +1503,6 @@ model MeetingInterval {
   @@index([meetingAttendanceId])
 }
 
-// One run of an ERP / Teams sync.
 model SyncRun {
   id             String         @id @default(uuid())
   workspaceId    String
@@ -1572,7 +1520,6 @@ model SyncRun {
   @@index([integrationKey, startedAt])
 }
 
-// PRD v1: public holidays come from ERP (FR-ATT-03, Q6 decided). Written by the nightly ERP sync.
 model PublicHoliday {
   id          String   @id @default(uuid())
   workspaceId String
@@ -1602,8 +1549,7 @@ model LeaveRequest {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
 
-  // back-relations (generated)
-  leaveDecision LeaveDecision? // PRD v1: one decision per request
+    leaveDecision LeaveDecision? 
 
   @@index([userId, status])
 }
@@ -1613,8 +1559,8 @@ model LeaveDecision {
   workspaceId    String
   leaveRequestId String
   decidedById    String
-  outcome        LeaveStatus // APPROVED or DECLINED
-  note           String      @db.Text // required by the UI
+  outcome        LeaveStatus 
+  note           String      @db.Text 
   decidedAt      DateTime    @default(now()) // FIX
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
@@ -1623,10 +1569,9 @@ model LeaveDecision {
   leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Restrict)
   decidedBy    Pm           @relation("LeaveDecider", fields: [decidedById], references: [pmId], onDelete: Restrict)
 
-  @@unique([leaveRequestId]) // PRD v1: a leave request is decided once
+  @@unique([leaveRequestId]) 
 }
 
-// Trainee asks to correct attendance for one or more dates.
 model ReconciliationRequest {
   id           String               @id @default(uuid())
   workspaceId  String
@@ -1634,7 +1579,7 @@ model ReconciliationRequest {
   reason       String               @db.Text
   status       ReconciliationStatus @default(OPEN)
   resolvedById String?
-  resolvedAt   DateTime? // FIX
+  resolvedAt   DateTime?
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
 
@@ -1684,9 +1629,7 @@ enum MailPurpose {
   TASK_OWNER_APPROVAL
 }
 
-// One report per trainee and period. `sections` is the current editable draft with the
-// 7 fixed sections: Skill analysis result, Courses result, Proctoring result,
-// L&D feedback, Attendance, Gamification, Sprint.
+
 model Report {
   id          String           @id @default(uuid())
   workspaceId String
@@ -1708,20 +1651,18 @@ model Report {
   @@unique([userId, periodType, periodStart, periodEnd])
 }
 
-// PRD v1 (FR-RPT-04, FR-RPT-06): every save adds a version (v1.0, v2.0 ...). Publish marks a
-// version published; the user sees only versions with publishedAt. Replaces the earlier
-// ReportDraftVersion + ReportSnapshot pair, so drafts also get a version number in the picker.
+
 model ReportVersion {
   id            String    @id @default(uuid())
   workspaceId   String
   reportId      String
   version       String // "1.0", "2.0"
-  sections      Json // the 7 sections with PM notes and source labels
+  sections      Json 
   note          String?   @db.Text
   savedById     String
   savedAt       DateTime  @default(now())
   publishedById String?
-  publishedAt   DateTime? // set = visible to the user
+  publishedAt   DateTime? 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -1738,11 +1679,11 @@ model ReportVersion {
   @@index([reportId, publishedAt])
 }
 
-// "Make PDF". Only the path is stored, storage provider not decided yet.
+
 model ReportFile {
   id            String   @id @default(uuid())
   workspaceId   String
-  versionId     String // PRD v1: was snapshotId
+  versionId     String 
   filePath      String
   generatedById String
   generatedAt   DateTime @default(now())
@@ -1756,14 +1697,13 @@ model ReportFile {
   @@index([versionId])
 }
 
-// Email history. Used for report emails and for task-owner approval emails.
 model MailDelivery {
   id              String      @id @default(uuid())
   workspaceId     String
   purpose         MailPurpose
-  reportId        String? // purpose = REPORT
-  reportVersionId String? // PRD v1: which version was emailed
-  sprintTaskId    String? // purpose = TASK_OWNER_APPROVAL
+  reportId        String? 
+  reportVersionId String? 
+  sprintTaskId    String? 
   recipient       String
   subject         String
   status          MailStatus  @default(QUEUED)
@@ -1812,7 +1752,7 @@ enum XpSource {
   KUDOS
   QUEST
   MANUAL_ADJUSTMENT
-  // PRD v1: STREAK_MILESTONE removed, never awarded in v1 (the XpRule value stays, Q12)
+  
 }
 
 enum XpStatus {
@@ -1834,10 +1774,10 @@ enum BadgeKind {
 }
 
 enum BadgeRuleType {
-  ON_TIME_SPRINT_STREAK // threshold = consecutive on-time sprints
-  SPRINT_STREAK // threshold = streak length in working days
-  KUDOS_DISTINCT_SENDERS // threshold = approved kudos from different people
-  MANUAL // Special: the PM awards it
+  ON_TIME_SPRINT_STREAK 
+  SPRINT_STREAK 
+  KUDOS_DISTINCT_SENDERS 
+  MANUAL 
 }
 
 enum BadgeAwardSource {
@@ -1845,7 +1785,7 @@ enum BadgeAwardSource {
   MANUAL
 }
 
-// XP rules for the workspace (one row). Settings > XP rules & levels. Hackathon XP removed in the UI.
+
 model XpRule {
   id                      String   @id @default(uuid())
   workspaceId             String   @unique
@@ -1861,23 +1801,23 @@ model XpRule {
   streakMilestoneDays     Int      @default(5)
   pmReviewMultiplier      Decimal  @default(1) @db.Decimal(4, 2)
   engagementDropAlertPct  Int      @default(30)
-  sprintCutoff            String   @default("10:00") // HH:MM, sprints after this are late
+  sprintCutoff            String   @default("10:00") 
   updatedById             String?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   updatedBy Pm?       @relation("XpRuleUpdater", fields: [updatedById], references: [pmId], onDelete: Restrict)
-  // DB: CHECK all numbers >= 0
+  
 }
 
-// Levels (Rookie 0, Builder 250 ...). First level must start at 0, thresholds increase.
+
 model Level {
   id          String    @id @default(uuid())
   workspaceId String
   name        String
   minXp       Int
-  retiredAt   DateTime? // an edited level set keeps the old rows
+  retiredAt   DateTime? 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -1886,7 +1826,7 @@ model Level {
   @@index([workspaceId, retiredAt])
 }
 
-// XP is an append-only ledger. `key` makes awarding idempotent (e.g. "sprint:<trainee>:<date>").
+
 model XpEvent {
   id          String   @id @default(uuid())
   workspaceId String
@@ -1896,8 +1836,8 @@ model XpEvent {
   status      XpStatus @default(PENDING)
   key         String
   evidence    String
-  reason      String? // PM reason on review / adjustment
-  flag        String? // e.g. "Suspicious exchange", "Weekly received cap reached"
+  reason      String? 
+  flag        String? 
   occurredOn  DateTime @db.Date
   kudosId     String?
   questId     String?
@@ -1913,13 +1853,13 @@ model XpEvent {
 
   // back-relations (generated)
   xpReviews XpReview[]
-  // DB: a trainee's AWARDED total must not go below 0 after a manual adjustment
+  
 
   @@unique([workspaceId, key])
   @@index([userId, status, occurredOn])
 }
 
-// Every PM decision on an XP event (review queue). Nothing is overwritten.
+
 model XpReview {
   id          String   @id @default(uuid())
   workspaceId String
@@ -1927,7 +1867,7 @@ model XpReview {
   reviewerId  String
   fromStatus  XpStatus
   toStatus    XpStatus
-  reason      String   @db.Text // required
+  reason      String   @db.Text 
   reviewedAt  DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -1939,8 +1879,7 @@ model XpReview {
   @@index([xpEventId])
 }
 
-// Cache of the sprint streak (consecutive working days with a sprint, freezes keep it).
-// The UI computes it from SprintSubmission + StreakFreeze; this row is only a cache.
+
 model Streak {
   id                 String    @id @default(uuid())
   workspaceId        String
@@ -2006,9 +1945,9 @@ model BadgeAward {
   userId          String
   source          BadgeAwardSource
   evidence        String           @db.Text // required
-  attemptId       String? // PRD v1: TECHNICAL only, the PM-finalised (FINAL) attempt
-  projectUrl      String? // PRD v1: TECHNICAL only, https link of the reviewed project
-  projectReviewed Boolean          @default(false) // PRD v1: TECHNICAL only, PM ticked "I have reviewed this user's project"
+  attemptId       String? 
+  projectUrl      String? 
+  projectReviewed Boolean          @default(false) 
   awardedById     String
   revokedById     String?
   revokeReason    String?          @db.Text
@@ -2023,9 +1962,9 @@ model BadgeAward {
   awardedBy Pm        @relation("BadgeAwarder", fields: [awardedById], references: [pmId], onDelete: Restrict)
   revokedBy Pm?       @relation("BadgeRevoker", fields: [revokedById], references: [pmId], onDelete: Restrict)
   attempt   Attempt?  @relation(fields: [attemptId], references: [id], onDelete: Restrict)
-  // DB: CHECK for TECHNICAL badges: attemptId, projectUrl (https) and projectReviewed = true
+  
 
-  @@unique([badgeId, userId]) // a badge is earned once
+  @@unique([badgeId, userId]) 
   @@index([userId, revokedAt])
 }
 
@@ -2044,10 +1983,10 @@ model Quest {
   workspaceId String
   name        String
   description String   @db.Text
-  target      Int // DB: CHECK >= 1
+  target      Int 
   reward      Int // XP
   startDate   DateTime @db.Date
-  endDate     DateTime @db.Date // DB: not before startDate
+  endDate     DateTime @db.Date 
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -2082,7 +2021,7 @@ model QuestProgress {
   @@index([userId])
 }
 
-// "Hide me from the leaderboard" (Profile & settings).
+
 model LeaderboardPreference {
   id          String   @id @default(uuid())
   workspaceId String
@@ -2103,7 +2042,7 @@ model Kudos {
   category    KudosCategory
   message     String        @db.Text
   sentOn      DateTime      @db.Date
-  suspicious  Boolean       @default(false) // mutual kudos in the same week
+  suspicious  Boolean       @default(false) 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -2111,10 +2050,9 @@ model Kudos {
   fromUser  User      @relation("KudosSent", fields: [fromUserId], references: [userId], onDelete: Restrict)
   toUser    User      @relation("KudosReceived", fields: [toUserId], references: [userId], onDelete: Restrict)
 
-  // back-relations (generated)
+  
   xpEvents XpEvent[]
-  // DB: CHECK fromUserId <> toUserId
-
+ 
   @@index([fromUserId, sentOn])
   @@index([toUserId, sentOn])
 }

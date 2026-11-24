@@ -6,6 +6,8 @@ import { FeedbackController } from './feedback.controller.js';
 import { FeedbackService } from './feedback.service.js';
 import { TeamsController } from './teams.controller.js';
 import { TeamsService } from './teams.service.js';
+import { UserEditController } from './user-edit.controller.js';
+import { UserEditService } from './user-edit.service.js';
 import { UserProfileController } from './user-profile.controller.js';
 import { UserProfileService } from './user-profile.service.js';
 
@@ -20,18 +22,21 @@ import { UserProfileService } from './user-profile.service.js';
     TeamsController,
     UserProfileController,
     FeedbackController,
+    UserEditController,
   ],
   providers: [
     DirectoryService,
     TeamsService,
     UserProfileService,
     FeedbackService,
+    UserEditService,
   ],
   exports: [
     DirectoryService,
     TeamsService,
     UserProfileService,
     FeedbackService,
+    UserEditService,
   ],
 })
 export class DirectoryModule {}

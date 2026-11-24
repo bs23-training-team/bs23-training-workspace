@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { useMe, useUnsavedWarning } from "@/features/shell";
-import { emptyIntake, hasApprovedRetake, intakeToProfile, latestEvaluation, questionsFor, submitEvaluation, validateIntake } from "../api";
+import { emptyIntake, hasApprovedRetake, intakeToProfile, latestEvaluation, questionsFor, submitEvaluation, validateIntake } from "../mock-api";
 import { traineeOf } from "@/lib/mock/selectors";
 import { SKILL_QUIZ_DEFAULT_MINUTES, SKILL_QUIZ_MAX_VIOLATIONS } from "@/lib/mock/content";
 import type { ExpertiseEvaluation, IntakeAnswers, ProctorRule, ProctoringRecord } from "@/lib/mock/types";

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { MailCheck } from "lucide-react";
-import { verificationToken, verifyEmail } from "../api";
+import { verificationToken, verifyEmail } from "../mock-api";
 import { Alert, Button } from "@/components/ui/ui";
 
 /**

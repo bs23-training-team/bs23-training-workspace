@@ -1,6 +1,6 @@
 "use client";
 
-import { retryEmail } from "../api";
+import { retryEmail } from "../mock-api";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -10,7 +10,7 @@ import { assignmentsOf, courseById, courseProgress, BackLink } from "@/features/
 import { attemptPercent, evaluationsOf, finaliseAttempt, SkillReport } from "@/features/assessment";
 import { inScope, nameOf, traineeOf } from "@/lib/mock/selectors";
 import { levelFor, streakOf, xpTotal } from "@/features/gamification-core";
-import { saveFeedback } from "../api";
+import { saveFeedback } from "../mock-api";
 import { verifyTaskOwner } from "@/features/sprint";
 import { OfficeAttendanceTable, MeetingAttendanceTable } from "@/features/attendance";
 import { TraineeFormDialog } from "../components/trainee-form";

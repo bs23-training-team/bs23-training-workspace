@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useMe } from "@/features/shell";
-import { assignmentsOf, courseById, versionForAssignment } from "../api";
+import { assignmentsOf, courseById, versionForAssignment } from "../mock-api";
 import { LessonView } from "../components/learning";
 import { EmptyState } from "@/components/ui/ui";
 

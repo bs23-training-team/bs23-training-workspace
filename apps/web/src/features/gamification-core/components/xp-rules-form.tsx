@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { updateLevels, updateXpRules } from "../api";
+import { updateLevels, updateXpRules } from "../mock-api";
 import type { DB, Level, XpRules } from "@/lib/mock/types";
 import { Alert, Button, Card, Field, Input } from "@/components/ui/ui";
 

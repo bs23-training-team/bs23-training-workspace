@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/ui";
 import { Dialog } from "@/components/ui/dialog";
 import { useDB } from "@/lib/mock/store";
-import { retryEmail, type AccountCredentials } from "../api";
+import { retryEmail, type AccountCredentials } from "../mock-api";
 
 function CopyRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);

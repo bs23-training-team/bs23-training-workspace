@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Pencil, Plus, Trash2, AlertTriangle, CheckCircle2, ClipboardCheck } from "lucide-react";
 import { useMe } from "@/features/shell";
 import { assignmentsOf, courseById, courseProgress } from "@/features/learning";
-import { carryForward, deleteTask, dsCell, saveTask, submitSprint, validateTask, weekIdFor } from "../api";
+import { carryForward, deleteTask, dsCell, saveTask, submitSprint, validateTask, weekIdFor } from "../mock-api";
 import { traineeOf } from "@/lib/mock/selectors";
 import type { SprintTask } from "@/lib/mock/types";
 import { MeetingBanner } from "../components/meeting-banner";

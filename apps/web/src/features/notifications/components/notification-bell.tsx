@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { useDB } from "@/lib/mock/store";
-import { awaitsDecision, hiddenFromBell, markRead, unreadCount } from "../api";
+import { awaitsDecision, hiddenFromBell, markRead, unreadCount } from "../mock-api";
 import { RetakeDecisionDialog } from "@/features/assessment";
 import { cn, timeAgo } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { useMe } from "@/features/shell";
-import { requestLeave, requestReconciliation } from "../api";
+import { requestLeave, requestReconciliation } from "../mock-api";
 import type { LeaveRequest } from "@/lib/mock/types";
 import { ErpAttendance, dmy, reconDates, reconRef } from "../components/erp-attendance-table";
 import { DateMultiPicker } from "../components/date-multi-picker";

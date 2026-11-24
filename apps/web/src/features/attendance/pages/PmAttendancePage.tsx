@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { useMe } from "@/features/shell";
-import { addManualAttendance, decideLeave, mapTeamsIdentity, resolveReconciliation } from "../api";
+import { addManualAttendance, decideLeave, mapTeamsIdentity, resolveReconciliation } from "../mock-api";
 import { integration, nameOf, pmPeople } from "@/lib/mock/selectors";
 import { MeetingAttendanceTable } from "../components/attendance";
 import { ErpAttendance, dmy, reconDates } from "../components/erp-attendance-table";

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CheckCircle2, Circle, Lock, SkipForward, Award } from "lucide-react";
 import type { CourseVersion, DB } from "@/lib/mock/types";
-import { isSubtopicDone, setTopicState, topicState } from "../api";
+import { isSubtopicDone, setTopicState, topicState } from "../mock-api";
 import { Badge, Button, ProgressBar } from "@/components/ui/ui";
 import { cn } from "@/lib/utils";
 

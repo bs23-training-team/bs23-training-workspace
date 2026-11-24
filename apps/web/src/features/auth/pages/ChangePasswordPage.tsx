@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useDB } from "@/lib/mock/store";
-import { changePassword, homeFor } from "../api";
+import { changePassword, homeFor } from "../mock-api";
 import { currentUser } from "@/lib/mock/selectors";
 import { Alert, Button, Field, Input, Loading } from "@/components/ui/ui";
 

@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import type { DB, Position, AttendanceMode, Resource } from "@/lib/mock/types";
-import { createTrainee, updateTrainee, type AccountCredentials, type TraineeInput } from "../api";
+import { createTrainee, updateTrainee, type AccountCredentials, type TraineeInput } from "../mock-api";
 import { CredentialsDialog } from "./credentials-dialog";
 import { Button, Checkbox, Field, Input, Select } from "@/components/ui/ui";
 import { Dialog } from "@/components/ui/dialog";

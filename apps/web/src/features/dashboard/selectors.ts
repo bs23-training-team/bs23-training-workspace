@@ -4,9 +4,9 @@ import { type Sector, type Position, type DB } from "@/lib/mock/types";
 import { pmTrainees, pmPeople, traineeOf } from "@/lib/mock/selectors";
 import { AttendanceTally, tallyAttendance, attendanceKind, daysBetween, isPublicHoliday, DayKind } from "@/features/attendance/day-rule";
 import { todayISO, isWeekend } from "@/lib/utils";
-import { courseProgress, assignmentsOf, courseById, versionForAssignment, isSubtopicDone, overallProgress } from "@/features/learning/api";
-import { attemptsFor, latestEvaluation, attemptPercent } from "@/features/assessment/api";
-import { suggestedCourses } from "@/features/catalog/api";
+import { courseProgress, assignmentsOf, courseById, versionForAssignment, isSubtopicDone, overallProgress } from "@/features/learning/mock-api";
+import { attemptsFor, latestEvaluation, attemptPercent } from "@/features/assessment/mock-api";
+import { suggestedCourses } from "@/features/catalog/mock-api";
 
 
 export const SECTORS: { key: Sector; label: string; color: string }[] = [

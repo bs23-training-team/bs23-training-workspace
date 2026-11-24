@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Flame, Gift, Heart, Trophy } from "lucide-react";
 import { useMe } from "@/features/shell";
-import { awardOf, badgeRuleValue, levelFor, streakOf, xpTotal } from "../api";
+import { awardOf, badgeRuleValue, levelFor, streakOf, xpTotal } from "../mock-api";
 import { nameOf, pmTrainees, traineeOf } from "@/lib/mock/selectors";
 import { sendKudos, setLeaderboardHidden, Leaderboard } from "@/features/engagement";
 import type { Kudos } from "@/lib/mock/types";

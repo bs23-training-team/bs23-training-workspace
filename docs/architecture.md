@@ -246,6 +246,20 @@ stop ID reuse (rule 2); only code review can.
 - Rules Prisma cannot express are hand-written SQL at the end of the migration that introduces them
   (the `init` migration has 23 CHECK constraints, 2 partial unique indexes and 2 email triggers).
   They are marked `// DB:` in `schema.prisma`.
+- `schema.prisma` has no explanatory comments (decision of E11, 2026-11-24). The only comments are the
+  section titles and the `// DB:` markers above. What a field means is described in the PRD and in
+  `packages/contracts`, not in the schema. A PR must not add or remove `// DB:` markers without changing
+  the matching migration.
+- Naming and pointer rules (they used to be written in the header of `schema.prisma`):
+  - Model names are PascalCase, column names camelCase.
+  - Every model has `id`, `workspaceId` (relation to `Workspace`), `createdAt` and `updatedAt`.
+    Models with a login ID as primary key (`Pm`, `User`) are the exception for `id` (see 4.1).
+  - A column called `userId` always points to `User.userId`. A column called `pmId` or ending in
+    `ById` always points to `Pm.pmId`.
+  - A table used by both PMs and users (`Credential`, `AuthToken`, `Session`, `Notification`,
+    `NotificationPreference`, `DsSheetCell`, `DsSheetCellVersion`) has both a `pmId` and a `userId`
+    column, both optional, and a `// DB:` CHECK that exactly one of them is set.
+  - `generator` and `datasource` live only in `base.prisma`.
 
 ---
 
@@ -474,3 +488,4 @@ Recommended extras (not in the SRS): secret scanning, dependency audit, SonarQub
 | 2026-11-20 | Module layering accepted; empty skeletons for all 13 feature modules registered (PR #15). `pnpm setup:local`, `Migration guard`, seed in CI (PR #16). `PR title` check and auto labels (PR #17). Required checks: CI, `Migration guard`, `PR title`; `ci-required` ruleset deleted; head branches auto-deleted after merge. |
 | 2026-11-23 | ADR 0001, 0002 and 0003 combined into this file. PRD, SRS, week 1 brief and the data-model template removed from the repository. Rule 3.3 #7 (identity only from `req.user`). e2e tests run in CI. |
 | 2026-11-23 | Shape of `req.user` documented (`sub`, `sid`, `workspaceId`, `role`); login role `TRAINEE` vs resource type `TRAINEE` clarified. |
+| 2026-11-24 | `schema.prisma` keeps only section titles and `// DB:` markers; its header rules moved to 4.2. |

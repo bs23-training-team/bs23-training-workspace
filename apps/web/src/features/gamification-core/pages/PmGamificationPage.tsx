@@ -6,7 +6,7 @@ import { adjustXp, awardBadge, grantStreakFreeze, reviewXp, streakOf, xpTotal } 
 import { createQuest, verifyQuestProgress, Leaderboard } from "@/features/engagement";
 import { nameOf, pmPeople } from "@/lib/mock/selectors";
 import type { XpEvent } from "@/lib/mock/types";
-import { Alert, Badge, Button, Card, Checkbox, EmptyState, Field, Input, PageHeader, Select, StatusBadge, Table, Tabs, Td, Textarea } from "@/components/ui/ui";
+import { Alert, Badge, Button, Card, EmptyState, Field, Input, PageHeader, Select, StatusBadge, Table, Tabs, Td, Textarea } from "@/components/ui/ui";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { addDays, formatDate, todayISO, weekStartOf } from "@/lib/utils";
@@ -26,7 +26,7 @@ export default function PMGamificationPage() {
   const [quest, setQuest] = useState({ name: "", description: "", target: 3, reward: 20, start: weekStartOf(todayISO()), end: addDays(weekStartOf(todayISO()), 6) });
   const [questError, setQuestError] = useState("");
   const [freeze, setFreeze] = useState<{ tid: string; date: string; source: "LEAVE" | "HOLIDAY"; reason: string } | null>(null);
-  const [badge, setBadge] = useState<{ tid: string; badgeId: string; evidence: string; projectReviewed: boolean; projectUrl: string } | null>(null);
+  const [badge, setBadge] = useState<{ tid: string; badgeId: string; evidence: string } | null>(null);
   const [miscError, setMiscError] = useState("");
 
   const queue = db.xpEvents.filter((e) => ids.has(e.traineeUserId) && (e.status === "PENDING" || e.status === "HELD")).sort((a, b) => (a.flag ? -1 : 1) - (b.flag ? -1 : 1));
@@ -133,7 +133,7 @@ export default function PMGamificationPage() {
                       <Button size="sm" variant="ghost" onClick={() => { setMiscError(""); setFreeze({ tid: t.userId, date: todayISO(), source: "LEAVE", reason: "" }); }}>
                         Streak freeze
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => { setMiscError(""); setBadge({ tid: t.userId, badgeId: db.badges[0].id, evidence: "", projectReviewed: false, projectUrl: "" }); }}>
+                      <Button size="sm" variant="ghost" onClick={() => { setMiscError(""); setBadge({ tid: t.userId, badgeId: db.badges[0].id, evidence: "" }); }}>
                         Badge
                       </Button>
                     </div>
@@ -216,7 +216,7 @@ export default function PMGamificationPage() {
                     <span aria-hidden>{b.icon}</span> {b.name}
                   </Td>
                   <Td>
-                    <Badge tone={b.kind === "TECHNICAL" ? "purple" : b.kind === "SPECIAL" ? "amber" : "blue"}>{b.kind.toLowerCase()}</Badge>
+                    <Badge tone={b.kind === "SPECIAL" ? "amber" : "blue"}>{b.kind.toLowerCase()}</Badge>
                   </Td>
                   <Td className="max-w-md whitespace-normal text-sm">{b.criteria}</Td>
                   <Td>{db.badgeAwards.filter((a) => a.badgeId === b.id && ids.has(a.traineeUserId)).map((a) => nameOf(db, a.traineeUserId)).join(", ") || "—"}</Td>
@@ -353,7 +353,7 @@ export default function PMGamificationPage() {
             </Button>
             <Button
               onClick={() => {
-                const r = awardBadge(user.id, badge!.badgeId, badge!.tid, badge!.evidence, { reviewed: badge!.projectReviewed, url: badge!.projectUrl });
+                const r = awardBadge(user.id, badge!.badgeId, badge!.tid, badge!.evidence);
                 if (!r.ok) return setMiscError(r.error);
                 setBadge(null);
                 toast("Badge awarded.");
@@ -379,15 +379,6 @@ export default function PMGamificationPage() {
             <Field label="Evidence" htmlFor="be" required>
               <Textarea id="be" value={badge.evidence} onChange={(e) => setBadge({ ...badge, evidence: e.target.value })} />
             </Field>
-            {db.badges.find((b) => b.id === badge.badgeId)?.kind === "TECHNICAL" && (
-              <div className="space-y-3 rounded-lg border border-line bg-slate-50 p-3">
-                <p className="text-sm">A Technical badge needs a PM-finalised assessment and a project you have reviewed.</p>
-                <Field label="Project link" htmlFor="bpu" required hint="HTTPS link to the repository or demo you reviewed.">
-                  <Input id="bpu" type="url" value={badge.projectUrl} onChange={(e) => setBadge({ ...badge, projectUrl: e.target.value })} placeholder="https://github.com/…" />
-                </Field>
-                <Checkbox label="I have reviewed this user's project." checked={badge.projectReviewed} onChange={(v) => setBadge({ ...badge, projectReviewed: v })} />
-              </div>
-            )}
           </>
         )}
       </Dialog>

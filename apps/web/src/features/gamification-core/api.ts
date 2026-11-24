@@ -1,7 +1,7 @@
 "use client";
 
 import { type DB, type XpEvent, type XpRules, type Level } from "@/lib/mock/types";
-import { todayISO, addDays, isWeekend, uid, isHttpsUrl } from "@/lib/utils";
+import { todayISO, addDays, isWeekend, uid } from "@/lib/utils";
 import { Result, fail, notify, ok } from "@/lib/mock/core";
 import { getDB, mutate } from "@/lib/mock/store";
 import { inScope } from "@/lib/mock/selectors";
@@ -110,24 +110,16 @@ export function grantStreakFreeze(pmId: string, traineeUserId: string, date: str
   return ok();
 }
 
-/** Awards a badge once. A Technical badge needs a PM-finalised assessment and a PM-reviewed project (FR-ASM-07). */
-export function awardBadge(pmId: string, badgeId: string, traineeUserId: string, evidence: string, project?: { reviewed: boolean; url: string }): Result {
+/** Awards a badge once. */
+export function awardBadge(pmId: string, badgeId: string, traineeUserId: string, evidence: string): Result {
   const db = getDB();
   if (!inScope(db, pmId, traineeUserId)) return fail("This user is not in your scope.");
   if (db.badgeAwards.some((b) => b.badgeId === badgeId && b.traineeUserId === traineeUserId)) return fail("This badge is already earned.");
   const badge = db.badges.find((b) => b.id === badgeId);
   if (!badge) return fail("Badge not found.");
   if (!evidence.trim()) return fail("Add the evidence for this badge.");
-  let fullEvidence = evidence.trim();
-  if (badge.kind === "TECHNICAL") {
-    const finalised = db.attempts.some((a) => a.traineeUserId === traineeUserId && a.status === "FINAL");
-    if (!finalised) return fail("A Technical badge needs at least one PM-finalised assessment. This user has none yet.");
-    if (!project?.url.trim() || !isHttpsUrl(project.url.trim())) return fail("Add an HTTPS link to the project you reviewed.");
-    if (!project.reviewed) return fail("Confirm that you have reviewed this user's project.");
-    fullEvidence += ` · Project reviewed: ${project.url.trim()}`;
-  }
   mutate((d) => {
-    d.badgeAwards.push({ badgeId, traineeUserId, evidence: fullEvidence, awardedBy: pmId, awardedAt: todayISO() });
+    d.badgeAwards.push({ badgeId, traineeUserId, evidence: evidence.trim(), awardedBy: pmId, awardedAt: todayISO() });
     notify(d, traineeUserId, "Badge", "New badge", `You earned ${badge.name}.`, "/trainee/gamification");
   });
   return ok();

@@ -3,7 +3,7 @@ import type { AttendanceRecord, Course, DB, DSCell, ExpertiseEvaluation, Meeting
 import { QUESTION_BANK, NOTIFICATION_CATEGORIES } from "@/lib/mock/content";
 import { addDays, addMonths, isWeekend, todayISO, weekStartOf } from "@/lib/utils";
 
-export const SEED_VERSION = 15;
+export const SEED_VERSION = 16;
 
 /* ------------------------------ course content ------------------------------ */
 
@@ -585,6 +585,7 @@ export function buildSeed(): DB {
       { key: "ROADMAP", name: "Roadmap API", status: "Disconnected" },
       { key: "EMAIL", name: "Email provider", status: "Disconnected" },
     ],
+    publicHolidays: [],
     retakeRequests: [],
     sectorSnapshots: buildSectorSnapshots(today),
     currentUserId: null,

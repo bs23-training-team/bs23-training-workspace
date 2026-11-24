@@ -100,7 +100,7 @@ export default function TraineeDashboard() {
   const { courses: c, assessments: s, attendance: a, current } = d;
   const hour = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  const rate = a.rate == null ? "—" : `${a.rate}%`;
+  const rate = a.rate == null ? "No data" : `${a.rate}%`;
   const attPct = s.total ? Math.round((s.completed / s.total) * 100) : 0;
 
   return (
@@ -213,15 +213,16 @@ export default function TraineeDashboard() {
       </div>
 
       <Panel className="mt-6" title="Attendance Overview" subtitle={a.month} icon={<CalendarCheck className="h-5 w-5" />}>
-        {a.present + a.late + a.leave === 0 ? (
-          <EmptyState title="No attendance data for this month yet" description="ERP attendance is synced after each working day. A missing record is never counted as absence." />
+        {a.present + a.late + a.wfh + a.absent + a.leave === 0 ? (
+          <EmptyState title="No attendance data for this month yet" description="ERP attendance is synced after each working day. Days that are not synced yet are not counted." />
         ) : (
           <div className="grid items-center gap-6 md:grid-cols-[auto_minmax(0,1fr)_auto]">
             <Donut
-              label={`Attendance ${rate}: ${a.present} present, ${a.late} late, ${a.absent} absent, ${a.leave} on approved leave`}
+              label={`Attendance ${rate}: ${a.present} present, ${a.wfh} working from home, ${a.late} late, ${a.absent} absent, ${a.leave} on approved leave`}
               center={rate}
               segments={[
                 { value: a.present, color: "#22c55e" },
+                { value: a.wfh, color: "#0ea5e9" },
                 { value: a.late, color: "#f59e0b" },
                 { value: a.absent, color: "#ef4444" },
                 { value: a.leave, color: "#3b82f6" },
@@ -231,6 +232,7 @@ export default function TraineeDashboard() {
               <ul className="max-w-md text-[15px]">
                 {[
                   ["Present", a.present, "#22c55e"],
+                  ["Work from home", a.wfh, "#0ea5e9"],
                   ["Late", a.late, "#f59e0b"],
                   ["Absent", a.absent, "#ef4444"],
                   ["Approved Leave", a.leave, "#3b82f6"],
@@ -239,7 +241,7 @@ export default function TraineeDashboard() {
                     <i className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color as string }} />
                     {label}
                     {label === "Absent" && (
-                      <span title="A missing ERP record is not counted as absence." className="inline-flex cursor-help text-slate-400" role="img" aria-label="A missing ERP record is not counted as absence.">
+                      <span title="A working day with no record and no approved leave, once the ERP data for that day is in." className="inline-flex cursor-help text-slate-400" role="img" aria-label="A working day with no record and no approved leave, once the ERP data for that day is in.">
                         <Info className="h-4 w-4" />
                       </span>
                     )}
@@ -253,10 +255,10 @@ export default function TraineeDashboard() {
                   Attendance <span className="font-semibold tabular-nums text-emerald-600">{rate}</span>
                 </li>
               </ul>
-              <p className="mt-2 text-xs text-muted">Absent is always 0: a missing ERP record is never counted as absence.</p>
-              {a.noDataDays.length > 0 && (
+              <p className="mt-2 text-xs text-muted">Absent is worked out, never entered: a working day with no record and no approved leave, once the ERP data for that day is in.</p>
+              {a.notSyncedDays.length > 0 && (
                 <p className="mt-1 text-xs text-muted">
-                  No ERP data yet (not counted): {a.noDataDays.map((d) => parseISODate(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" })).join(", ")}. Send a reconciliation request if this is wrong.
+                  Not synced yet (not counted): {a.notSyncedDays.map((d) => parseISODate(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" })).join(", ")}. Send a reconciliation request if this is wrong.
                 </p>
               )}
             </div>

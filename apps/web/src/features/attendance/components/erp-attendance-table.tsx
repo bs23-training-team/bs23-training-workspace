@@ -4,7 +4,8 @@ import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { DB } from "@/lib/mock/types";
 import { Badge, Input, Table, Td } from "@/components/ui/ui";
-import { addDays, cn, isWeekend, todayISO } from "@/lib/utils";
+import { addDays, cn, todayISO } from "@/lib/utils";
+import { dayStatus } from "../day-rule";
 
 /** Reconciliation requests store their dates in `recordRef` as "dates:YYYY-MM-DD,YYYY-MM-DD". */
 export const reconRef = (dates: string[]) => `dates:${[...dates].sort().join(",")}`;
@@ -27,7 +28,7 @@ interface Row {
   hours?: number;
   status: Status;
   remarks: string;
-  kind: "present" | "manual" | "wfh" | "leave" | "holiday" | "none";
+  kind: "present" | "manual" | "wfh" | "leave" | "holiday" | "absent" | "not-synced";
 }
 
 const PAGE_SIZE = 30;
@@ -35,7 +36,7 @@ const PAGE_SIZE = 30;
 /**
  * "Attendances" screen in the BS ERP / Odoo style: summary tiles, one row per employee per
  * day, green rows for working days with data, month filter and pager. Data is presented as
- * fetched from the Brain Station 23 ERP API; a day without a record is never counted as absence.
+ * fetched from the Brain Station 23 ERP API; Absent is worked out by the day rule (day-rule.ts), never stored.
  */
 export function ErpAttendance({ db, traineeIds }: { db: DB; traineeIds: string[] }) {
   const today = todayISO();
@@ -51,14 +52,13 @@ export function ErpAttendance({ db, traineeIds }: { db: DB; traineeIds: string[]
     if (!tr) continue;
     for (let i = 0; i < daysInMonth; i++) {
       const date = addDays(first, i);
-      if (date < tr.onboardDate) continue;
+      const day = dayStatus(db, tr, date);
+      if (day.kind === "outside") continue;
       const base = { key: tid + date, name, employeeId: tr.traineeId, date };
-      if (isWeekend(date)) {
+      if (day.kind === "off") {
         rows.push({ ...base, status: "Holiday", remarks: "", kind: "holiday" });
-        continue;
-      }
-      const rec = db.attendance.find((a) => a.traineeUserId === tid && a.date === date);
-      if (rec) {
+      } else if (day.record) {
+        const rec = day.record;
         rows.push({
           ...base,
           signIn: rec.entry,
@@ -68,18 +68,15 @@ export function ErpAttendance({ db, traineeIds }: { db: DB; traineeIds: string[]
           remarks: [rec.source === "PM_ENTERED" ? "Manual (PM-entered)" : "", rec.lateMinutes ? `Late ${rec.lateMinutes} min` : "", !rec.exit ? "Sign-out unknown" : ""].filter(Boolean).join(" · "),
           kind: rec.source === "PM_ENTERED" ? "manual" : "present",
         });
-        continue;
-      }
-      const leave = db.leaveRequests.find((l) => l.traineeUserId === tid && l.status === "APPROVED" && l.start <= date && l.end >= date);
-      if (leave) {
-        rows.push({ ...base, status: "Leave", remarks: `${leave.type} leave`, kind: "leave" });
-        continue;
-      }
-      if (tr.attendanceMode === "ONLINE") {
+      } else if (day.leave) {
+        rows.push({ ...base, status: "Leave", remarks: `${day.leave.type} leave`, kind: "leave" });
+      } else if (day.kind === "wfh") {
         rows.push({ ...base, status: "Working Day", remarks: "Work from home (online user)", kind: "wfh" });
-        continue;
+      } else if (day.kind === "absent") {
+        rows.push({ ...base, status: "Working Day", remarks: "Absent: no record and no approved leave", kind: "absent" });
+      } else {
+        rows.push({ ...base, status: "Working Day", remarks: "Not synced yet (not counted)", kind: "not-synced" });
       }
-      rows.push({ ...base, status: "Working Day", remarks: date < today ? "No ERP record (not counted as absence)" : "", kind: "none" });
     }
   }
   rows.sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
@@ -93,7 +90,8 @@ export function ErpAttendance({ db, traineeIds }: { db: DB; traineeIds: string[]
     { label: "WFH", value: count("wfh"), tone: "text-sky-500" },
     { label: "Manual", value: count("manual"), tone: "text-slate-500" },
     { label: "Leave", value: count("leave"), tone: "text-orange-500" },
-    { label: "Absent", value: 0, tone: "text-red-600" },
+    { label: "Absent", value: count("absent"), tone: "text-red-600" },
+    { label: "Not synced", value: count("not-synced"), tone: "text-slate-500" },
     { label: "Office trip", value: 0, tone: "text-violet-600" },
   ];
 
@@ -122,7 +120,7 @@ export function ErpAttendance({ db, traineeIds }: { db: DB; traineeIds: string[]
         </div>
       </div>
 
-      <ul className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-9" aria-label="Attendance summary">
+      <ul className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-10" aria-label="Attendance summary">
         {tiles.map((t) => (
           <li key={t.label} className="rounded-xl border border-line bg-white px-2 py-3 text-center">
             <p className={cn("text-2xl font-semibold", t.tone)}>{t.value}</p>

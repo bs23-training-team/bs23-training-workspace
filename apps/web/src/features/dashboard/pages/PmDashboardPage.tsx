@@ -17,6 +17,7 @@ const TONES = {
   red: "bg-red-50 text-red-700",
   blue: "bg-brand-50 text-brand-700",
   purple: "bg-violet-50 text-violet-700",
+  slate: "bg-slate-100 text-slate-700",
 } as const;
 
 function Tile({ label, value, tone, hint }: { label: string; value: ReactNode; tone: keyof typeof TONES; hint?: string }) {
@@ -95,8 +96,8 @@ export default function PMDashboard() {
         <StatCard label="Inactive Users" value={d.inactive} hint="Period ended · archived" icon={<UserX className="h-5 w-5" />} href="/pm/archive" />
         <StatCard
           label="Attendance Rate"
-          value={a.rate == null ? "—" : `${a.rate}%`}
-          hint={d.isHoliday ? "Weekend / holiday today" : `Today · ${a.present + a.late} checked in`}
+          value={a.rate == null ? "No data" : `${a.rate}%`}
+          hint={d.isHoliday ? "Weekend / holiday today" : `Today · ${a.present + a.late + a.wfh} present or working from home`}
           icon={<Activity className="h-5 w-5" />}
           href="/pm/attendance"
         />
@@ -199,18 +200,21 @@ export default function PMDashboard() {
           <Section title="Today's attendance">
             <div className="mb-3 flex items-baseline justify-between text-sm">
               <span>Attendance rate</span>
-              <b className="text-lg tabular-nums">{a.rate == null ? "—" : `${a.rate}%`}</b>
+              <b className="text-lg tabular-nums">{a.rate == null ? "No data" : `${a.rate}%`}</b>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Tile label="Present" value={a.present} tone="green" />
+              <Tile label="Work from home" value={a.wfh} tone="blue" hint="Online users" />
               <Tile label="Late" value={a.late} tone="amber" />
-              <Tile label="Absent" value={a.absent} tone="red" hint="Marked absent" />
+              <Tile label="Absent" value={a.absent} tone="red" hint="No record and no leave" />
               <Tile label="On leave" value={a.leave} tone="purple" hint="Approved leave" />
+              <Tile label="Not synced yet" value={a.notSynced} tone="slate" hint="Not counted" />
             </div>
             <div className="mt-3">
               <Split
                 parts={[
                   { label: "Present", value: a.present, color: "#10b981" },
+                  { label: "Work from home", value: a.wfh, color: "#0ea5e9" },
                   { label: "Late", value: a.late, color: "#f59e0b" },
                   { label: "Absent", value: a.absent, color: "#ef4444" },
                   { label: "On leave", value: a.leave, color: "#8b5cf6" },
@@ -220,7 +224,7 @@ export default function PMDashboard() {
             {d.isHoliday ? (
               <p className="mt-3 text-xs text-muted">Weekend / holiday: no attendance is expected today.</p>
             ) : (
-              a.noData > 0 && <p className="mt-3 text-xs text-muted">{a.noData} user(s) have no ERP record yet today. A missing record is not counted as absence.</p>
+              a.notSynced > 0 && <p className="mt-3 text-xs text-muted">{a.notSynced} user(s) are not synced yet. Those days are not counted until the ERP data is in.</p>
             )}
           </Section>
         </Card>

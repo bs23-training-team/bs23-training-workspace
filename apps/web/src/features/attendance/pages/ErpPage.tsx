@@ -54,7 +54,7 @@ export default function ERPPage() {
 
       {tab === "erp" && (
         <div className="space-y-4">
-          <Alert tone="blue">Attendance is fetched from the Brain Station 23 ERP API. Missing source data is never counted as absence or zero hours. If something is wrong, send a reconciliation request.</Alert>
+          <Alert tone="blue">Attendance is fetched from the Brain Station 23 ERP API. Absent is a working day with no record and no approved leave, once the ERP data for that day is in. A day that is not synced yet is not counted. If something is wrong, send a reconciliation request.</Alert>
           <ErpAttendance db={db} traineeIds={[user.id]} />
         </div>
       )}

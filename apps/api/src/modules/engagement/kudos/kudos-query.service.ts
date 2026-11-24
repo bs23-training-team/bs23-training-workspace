@@ -12,7 +12,9 @@ import type { KudosPort } from '../../growth-core/ports/kudos.port.js';
 export interface KudosView {
   id: string;
   fromUserId: string;
+  fromName: string;
   toUserId: string;
+  toName: string;
   category: KudosCategory;
   message: string;
   sentOn: string;
@@ -27,17 +29,22 @@ const DEFAULT_LIMIT = 50;
 type KudosRow = {
   id: string;
   fromUserId: string;
+  fromUser: { name: string };
   toUserId: string;
+  toUser: { name: string };
   category: KudosCategory;
   message: string;
   sentOn: Date;
   suspicious: boolean;
 };
+const WITH_NAMES = { fromUser: { select: { name: true } }, toUser: { select: { name: true } } } as const;
 // Built field by field (no spread of the row), so a new column can never reach a user by accident.
 const toUserView = (k: KudosRow): KudosView => ({
   id: k.id,
   fromUserId: k.fromUserId,
+  fromName: k.fromUser.name,
   toUserId: k.toUserId,
+  toName: k.toUser.name,
   category: k.category,
   message: k.message,
   sentOn: k.sentOn.toISOString().slice(0, 10),
@@ -84,6 +91,7 @@ export class KudosQueryService implements KudosPort {
         : { OR: [{ fromUser: { pmId: input.viewer.pmId } }, { toUser: { pmId: input.viewer.pmId } }] };
     const rows = await this.prisma.kudos.findMany({
       where: { workspaceId: input.workspaceId, ...who },
+      include: WITH_NAMES,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip,
       take: take + 1,
@@ -97,6 +105,7 @@ export class KudosQueryService implements KudosPort {
   async listForUser(workspaceId: string, userId: string, limit = DEFAULT_LIMIT): Promise<KudosView[]> {
     const rows = await this.prisma.kudos.findMany({
       where: { workspaceId, OR: [{ fromUserId: userId }, { toUserId: userId }] },
+      include: WITH_NAMES,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
     });
@@ -107,6 +116,7 @@ export class KudosQueryService implements KudosPort {
   async listForPm(workspaceId: string, pmId: string, limit = DEFAULT_LIMIT): Promise<PmKudosView[]> {
     const rows = await this.prisma.kudos.findMany({
       where: { workspaceId, OR: [{ fromUser: { pmId } }, { toUser: { pmId } }] },
+      include: WITH_NAMES,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
     });

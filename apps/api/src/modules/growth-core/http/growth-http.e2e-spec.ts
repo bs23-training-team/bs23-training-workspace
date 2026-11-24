@@ -163,7 +163,16 @@ describe('growth-core HTTP routes (database, req.user set by the test)', () => {
 
       const mine = await as(user(U1)).get('/me/growth');
       expect(mine.status).toBe(200);
-      expect(mine.body).toEqual({ awardedXp: 30, pendingXp: 0, level: null, streak: { current: 0, longest: 0 }, badges: [] });
+      // this test workspace has no levels, so there is no level and no next level
+      expect(mine.body).toEqual({
+        awardedXp: 30,
+        pendingXp: 0,
+        level: null,
+        nextLevel: null,
+        xpToNext: null,
+        streak: { current: 0, longest: 0 },
+        badges: [],
+      });
     });
 
     it('takes the PM from the sign-in, never from the body: a PM field in the body is ignored, another PM is refused', async () => {

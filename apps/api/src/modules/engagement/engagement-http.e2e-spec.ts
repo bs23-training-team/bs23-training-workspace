@@ -186,6 +186,40 @@ describe('engagement HTTP routes (database, req.user set by the test)', () => {
     });
   });
 
+  describe('kudos: names and the limits a user sees', () => {
+    it('GET /kudos carries the names of the sender and the receiver, for a user and for a PM', async () => {
+      await sendKudos(U1, U2);
+      const mine = (await as(user(U2)).get('/kudos')).body as { kudos: { fromName: string; toName: string }[] };
+      expect(mine.kudos[0]).toMatchObject({ fromName: `Name ${U1}`, toName: `Name ${U2}` });
+      const theirs = (await as(pm()).get('/kudos')).body as { kudos: { fromName: string; toName: string }[] };
+      expect(theirs.kudos[0]).toMatchObject({ fromName: `Name ${U1}`, toName: `Name ${U2}` });
+    });
+
+    it('GET /me/kudos-limits gives sent this week, the weekly limit and the cooldown, per user', async () => {
+      expect((await as(user(U1)).get('/me/kudos-limits')).body).toEqual({ sentThisWeek: 0, sendLimitPerWeek: 3, cooldownDays: 7 });
+      await sendKudos(U1, U2);
+      await sendKudos(U1, U3);
+      expect((await as(user(U1)).get('/me/kudos-limits')).body).toMatchObject({ sentThisWeek: 2 });
+      expect((await as(user(U2)).get('/me/kudos-limits')).body).toMatchObject({ sentThisWeek: 0 }); // receiving does not count
+    });
+
+    it('follows the XP rules, and agrees with the refusal when the limit is reached', async () => {
+      await prisma.xpRule.update({ where: { workspaceId }, data: { kudosSendLimitPerWeek: 1, kudosCooldownDays: 2 } });
+      expect((await as(user(U1)).get('/me/kudos-limits')).body).toMatchObject({ sendLimitPerWeek: 1, cooldownDays: 2 });
+      await sendKudos(U1, U2);
+      const limits = (await as(user(U1)).get('/me/kudos-limits')).body as { sentThisWeek: number; sendLimitPerWeek: number };
+      expect(limits.sentThisWeek).toBe(limits.sendLimitPerWeek);
+      const refused = await sendKudos(U1, U3);
+      expect([refused.status, errorCode(refused)]).toEqual([422, 'SEND_LIMIT']);
+      await prisma.xpRule.update({ where: { workspaceId }, data: { kudosSendLimitPerWeek: 3, kudosCooldownDays: 7 } });
+    });
+
+    it('is for users only and needs a sign-in', async () => {
+      expect((await as(pm()).get('/me/kudos-limits')).status).toBe(403);
+      expect((await as(null).get('/me/kudos-limits')).status).toBe(401);
+    });
+  });
+
   // The suspicious flag is a PM's information (SRS: private fields are removed on the server). U1 and U2 send each
   // other kudos in the same week: a mutual exchange, so both kudos are suspicious and their XP is held and flagged.
   describe('privacy: the suspicious flag never reaches a user', () => {
@@ -208,7 +242,9 @@ describe('engagement HTTP routes (database, req.user set by the test)', () => {
       const mine = await as(user(U1)).get('/kudos');
       const rows = (mine.body as { kudos: Record<string, unknown>[] }).kudos;
       expect(rows).toHaveLength(2);
-      for (const row of rows) expect(Object.keys(row).sort()).toEqual(['category', 'fromUserId', 'id', 'message', 'sentOn', 'toUserId']);
+      for (const row of rows) {
+        expect(Object.keys(row).sort()).toEqual(['category', 'fromName', 'fromUserId', 'id', 'message', 'sentOn', 'toName', 'toUserId']);
+      }
       expect(JSON.stringify(mine.body)).not.toContain('suspicious');
 
       const theirs = await as(pm()).get('/kudos');

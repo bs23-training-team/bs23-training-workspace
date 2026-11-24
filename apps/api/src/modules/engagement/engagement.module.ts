@@ -7,6 +7,7 @@ import { LeaderboardPreferenceService } from './leaderboard/leaderboard-preferen
 import { LeaderboardService } from './leaderboard/leaderboard.service.js';
 import { QuestsService } from './quests/quests.service.js';
 import { KudosQueryModule } from './kudos/kudos-query.module.js';
+import { KudosLimitsService } from './kudos/kudos-limits.service.js';
 import { KudosService } from './kudos/kudos.service.js';
 import { ENGAGEMENT_NOTIFICATIONS, NoopEngagementNotifications } from './ports/engagement-notification.port.js';
 
@@ -17,6 +18,7 @@ import { ENGAGEMENT_NOTIFICATIONS, NoopEngagementNotifications } from './ports/e
   controllers: [KudosController, QuestsController, LeaderboardController],
   providers: [
     KudosService,
+    KudosLimitsService,
     LeaderboardService,
     LeaderboardPreferenceService,
     QuestsService,

@@ -262,6 +262,22 @@ stop ID reuse (rule 2); only code review can.
     column, both optional, and a `// DB:` CHECK that exactly one of them is set.
   - `generator` and `datasource` live only in `base.prisma`.
 
+### 4.3 Who sees and who changes users (decision of 2026-11-24, confirmed by the team lead)
+
+- **`Pm` and `User` stay two tables in v1.** There is no shared `Account` table. A person who is both
+  does not exist in v1; the email rule in 4.1 (one email in only one of the two tables) stays.
+- **Reading: every PM sees every user of the workspace** (lists, search, export, profile, XP,
+  streaks, badges, kudos, review queue). Archived users are included where the page is about
+  history (Archive, search). A user sees only their own data (and what the product shows to peers).
+- **Writing: only the managing PM** (`User.pmId`) changes a user: Edit user, feedback, XP decisions
+  and adjustments, streak freezes, badge awards and revokes, moving a user back from the Archive. Feedback is private to the managing PM (read and write).
+  Another PM gets `403` with code `FORBIDDEN_SCOPE`. Lists tell the UI which rows the caller manages
+  (for example `managedByYou`), so the UI can hide the buttons.
+- **Where the read rule lives:** directory (E02) in its own services; growth-core (E10) in
+  `visibility/pm-visible-users.ts` (`pmVisibleUsers`). If the rule changes, change those places only,
+  never a controller.
+- **Always:** every query still filters on `req.user.workspaceId` (rule 7 in 3.3).
+
 ---
 
 ## 5. Database, migrations and seeds
@@ -491,3 +507,4 @@ Recommended extras (not in the SRS): secret scanning, dependency audit, SonarQub
 | 2026-11-23 | Shape of `req.user` documented (`sub`, `sid`, `workspaceId`, `role`); login role `TRAINEE` vs resource type `TRAINEE` clarified. |
 | 2026-11-24 | `schema.prisma` keeps only section titles and `// DB:` markers; its header rules moved to 4.2. |
 | 2026-11-24 | Web connection started: step 0 renamed each web module's `api.ts` to `mock-api.ts` (PR #41); API now allows the web origin with CORS (`WEB_ORIGIN`, PR #49); guide `docs/web-api-integration.md` added. The unused `// DB:` marker for TECHNICAL badges removed from `schema.prisma`. |
+| 2026-11-24 | Decisions recorded in 4.3: every PM reads every user, only the managing PM changes a user; `Pm` and `User` stay two tables in v1. |

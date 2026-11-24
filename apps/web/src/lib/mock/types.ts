@@ -631,6 +631,8 @@ export interface DB {
   notifications: Notification[];
   notificationPrefs: NotificationPreference[];
   integrations: Integration[];
+  /** Public holidays (FR-ATT-08 step 1). Empty until a source provides them. */
+  publicHolidays: { date: string; name: string }[];
   sectorSnapshots: SectorSnapshot[];
   retakeRequests: RetakeRequest[];
   currentUserId: string | null;

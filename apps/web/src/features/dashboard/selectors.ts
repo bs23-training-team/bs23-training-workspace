@@ -2,8 +2,8 @@
 
 import { type Sector, type Position, type DB } from "@/lib/mock/types";
 import { pmTrainees, pmPeople, traineeOf } from "@/lib/mock/selectors";
-import { AttendanceTally, tallyAttendance, attendanceKind, DayKind } from "@/features/attendance/day-rule";
-import { todayISO, isWeekend, addDays } from "@/lib/utils";
+import { AttendanceTally, tallyAttendance, attendanceKind, daysBetween, isPublicHoliday, DayKind } from "@/features/attendance/day-rule";
+import { todayISO, isWeekend } from "@/lib/utils";
 import { courseProgress, assignmentsOf, courseById, versionForAssignment, isSubtopicDone, overallProgress } from "@/features/learning/api";
 import { attemptsFor, latestEvaluation, attemptPercent } from "@/features/assessment/api";
 import { suggestedCourses } from "@/features/catalog/api";
@@ -115,7 +115,7 @@ export function pmDashboard(db: DB, pmId: string): PMDashboardData {
 
   return {
     today,
-    isHoliday: isWeekend(today),
+    isHoliday: isWeekend(today) || isPublicHoliday(db, today),
     total: people.length,
     active: active.length,
     inactive: people.length - active.length,
@@ -135,8 +135,8 @@ export interface TraineeDashboardData {
   courses: { total: number; completed: number; inProgress: number; upcoming: number; overall: number };
   current: { courseId: string; title: string; pct: number; nextUp?: string; href: string } | null;
   assessments: { total: number; completed: number; upcoming: number; attempts: number; average: number | null; next: { title: string; href: string } | null };
-  /** `noDataDays`: working days this month with no ERP record. Listed in a note, never counted as absence. */
-  attendance: AttendanceTally & { month: string; noDataDays: string[] };
+  /** `notSyncedDays`: past working days this month whose ERP data is not in yet. Listed in a note, not counted. */
+  attendance: AttendanceTally & { month: string; notSyncedDays: string[] };
 }
 
 export function traineeDashboard(db: DB, userId: string): TraineeDashboardData {
@@ -165,14 +165,13 @@ export function traineeDashboard(db: DB, userId: string): TraineeDashboardData {
   const allScores = sets.flatMap((s) => scored(s.id));
   const nextSet = sets.find((s) => !scored(s.id).length);
 
-  // attendance: this month up to today; missing ERP data is never absence
+  // attendance: this month up to today, by the one day rule (FR-ATT-08)
   const monthStart = `${today.slice(0, 7)}-01`;
-  const kinds: (DayKind | null)[] = [];
-  const noDataDays: string[] = [];
-  for (let d = monthStart; d <= today; d = addDays(d, 1)) {
+  const kinds: DayKind[] = [];
+  const notSyncedDays: string[] = [];
+  for (const d of daysBetween(monthStart, today)) {
     const k = attendanceKind(db, t, d);
-    if (k === "none" && d === today) continue; // today's ERP data arrives later
-    if (k === "none") noDataDays.push(d);
+    if (k === "not-synced" && d < today) notSyncedDays.push(d);
     kinds.push(k);
   }
 
@@ -187,6 +186,6 @@ export function traineeDashboard(db: DB, userId: string): TraineeDashboardData {
       average: allScores.length ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length) : null,
       next: nextSet ? { title: nextSet.title.startsWith(courseById(db, nextSet.courseId)?.title ?? "\0") ? nextSet.title : `${courseById(db, nextSet.courseId)?.title ?? "Course"} – ${nextSet.title}`, href: `/trainee/assessments/${nextSet.id}` } : null,
     },
-    attendance: { ...tallyAttendance(kinds), noDataDays, month: new Date(`${monthStart}T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" }) },
+    attendance: { ...tallyAttendance(kinds), notSyncedDays, month: new Date(`${monthStart}T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" }) },
   };
 }

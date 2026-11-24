@@ -57,7 +57,7 @@ export function daysBetween(a: string, b: string) {
 
 export function isWeekend(iso: string) {
   const d = parseISODate(iso).getDay();
-  return d === 5 || d === 6; // Fri/Sat weekend in Bangladesh — Assumption, confirm with team
+  return d === 5 || d === 6; // Fri/Sat weekend (PRD FR-ATT-08)
 }
 
 export function formatDate(iso?: string) {

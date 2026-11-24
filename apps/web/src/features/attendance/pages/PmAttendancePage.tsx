@@ -44,7 +44,7 @@ export default function AttendancePage() {
 
   return (
     <div>
-      <PageHeader title="Attendance" description="ERP is the official source for office attendance. Unavailable data is never counted as absence or zero hours." />
+      <PageHeader title="Attendance" description="ERP is the official source for office attendance. Absent is worked out, not entered: a working day with no record and no approved leave, once the ERP data is in." />
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Field label="Trainee" htmlFor="aw">
           <Select id="aw" value={pick.trainee} onChange={(e) => choose("trainee", e.target.value)} className="w-56">

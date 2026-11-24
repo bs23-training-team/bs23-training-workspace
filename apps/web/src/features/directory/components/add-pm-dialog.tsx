@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { createPM } from "../api";
+import { createPM, type AccountCredentials } from "../api";
+import { CredentialsDialog } from "./credentials-dialog";
 import { Button, Field, Input } from "@/components/ui/ui";
 import { Dialog } from "@/components/ui/dialog";
 
@@ -9,14 +10,21 @@ import { Dialog } from "@/components/ui/dialog";
 export function AddPMDialog({ creatorId, open, onClose, onSaved }: { creatorId: string; open: boolean; onClose: () => void; onSaved: (msg: string) => void }) {
   const [f, setF] = useState({ name: "", email: "", pmCode: "", password: "" });
   const [error, setError] = useState("");
+  const [creds, setCreds] = useState<AccountCredentials | null>(null);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
 
   const save = () => {
     const r = createPM(creatorId, f);
     if (!r.ok) return setError(r.error);
-    onSaved(`PM account created for ${f.name.trim()}.`);
+    setCreds(r.data!);
+  };
+
+  const finish = () => {
+    onSaved(`PM account created for ${creds?.name ?? f.name.trim()}.`);
     onClose();
   };
+
+  if (creds) return <CredentialsDialog creds={creds} onClose={finish} />;
 
   return (
     <Dialog

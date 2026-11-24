@@ -2,7 +2,8 @@
 
 import { useState, type ReactNode } from "react";
 import type { DB, Position, AttendanceMode, Resource } from "@/lib/mock/types";
-import { createTrainee, updateTrainee, type TraineeInput } from "../api";
+import { createTrainee, updateTrainee, type AccountCredentials, type TraineeInput } from "../api";
+import { CredentialsDialog } from "./credentials-dialog";
 import { Button, Checkbox, Field, Input, Select } from "@/components/ui/ui";
 import { Dialog } from "@/components/ui/dialog";
 import { POSITION_LABEL, MODE_LABEL, RESOURCE_LABEL, addDays, addMonths, todayISO } from "@/lib/utils";
@@ -28,6 +29,7 @@ export function TraineeFormDialog({ db, pmId, editUserId, open, onClose, onSaved
       : { traineeId: "", name: "", email: "", tempPassword: "", position: "FRONTEND", attendanceMode: "PHYSICAL", resource: "TRAINEE", onboardDate: todayISO(), periodEnd: addMonths(todayISO(), 3), skillAssessmentMinutes: 20, skillAssessmentMarks: 20, teamIds: [] },
   );
   const [error, setError] = useState("");
+  const [creds, setCreds] = useState<AccountCredentials | null>(null);
   const teams = db.teams.filter((x) => x.pmId === pmId);
 
   const departureNote = t?.archivedAt
@@ -37,11 +39,23 @@ export function TraineeFormDialog({ db, pmId, editUserId, open, onClose, onSaved
       : "The user moves to the Archive on the departure date.";
 
   const save = () => {
-    const r = editUserId ? updateTrainee(pmId, editUserId, f) : createTrainee(pmId, f);
+    if (editUserId) {
+      const r = updateTrainee(pmId, editUserId, f);
+      if (!r.ok) return setError(r.error);
+      onSaved(t?.archivedAt ? "User reactivated and moved back to All Users." : "User updated.");
+      return onClose();
+    }
+    const r = createTrainee(pmId, f);
     if (!r.ok) return setError(r.error);
-    onSaved(editUserId ? (t?.archivedAt ? "User reactivated and moved back to All Users." : "User updated.") : `User account created. ${f.name} must change the temporary password on first login.`);
+    setCreds(r.data!);
+  };
+
+  const finish = () => {
+    onSaved(`User account created for ${creds?.name ?? f.name}.`);
     onClose();
   };
+
+  if (creds) return <CredentialsDialog creds={creds} onClose={finish} />;
 
   return (
     <Dialog

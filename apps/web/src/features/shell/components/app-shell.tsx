@@ -79,7 +79,7 @@ export function AppShell({ role, children }: { role: Role; children: ReactNode }
   let redirect: string | null = null;
   if (!user) redirect = "/login";
   else if (user.role !== role) redirect = homeFor(user.id);
-  else if (user.role === "TRAINEE" && user.mustChangePassword) redirect = "/change-password";
+  else if (user.mustChangePassword) redirect = "/change-password";
   else if (gated && pathname !== "/trainee/onboarding") redirect = "/trainee/onboarding";
 
   useEffect(() => {

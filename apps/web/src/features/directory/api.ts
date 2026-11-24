@@ -112,7 +112,7 @@ export function createPM(creatorId: string, input: { name: string; email: string
   if (db.users.some((u) => u.pmCode?.toLowerCase() === code.toLowerCase()) || db.trainees.some((t) => t.traineeId.toLowerCase() === code.toLowerCase())) return fail("This ID is already in use.");
   mutate((d) => {
     const id = uid("pm");
-    d.users.push({ id, name: input.name.trim(), email: input.email.trim(), role: "PM", pmCode: code, password: input.password, mustChangePassword: false, emailVerified: true, createdAt: nowIso() });
+    d.users.push({ id, name: input.name.trim(), email: input.email.trim(), role: "PM", pmCode: code, password: input.password, mustChangePassword: true, emailVerified: true, createdAt: nowIso() });
     d.notificationPrefs.push(...d.notificationPrefs.filter((p) => p.userId === "pm1").map((p) => ({ ...p, userId: id, showInBell: true })));
   });
   return ok();

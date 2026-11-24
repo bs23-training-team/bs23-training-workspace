@@ -47,7 +47,7 @@ export function AddPMDialog({ creatorId, open, onClose, onSaved }: { creatorId: 
         <Field label="PM email" htmlFor="pme" required>
           <Input id="pme" type="email" value={f.email} onChange={set("email")} autoComplete="off" />
         </Field>
-        <Field label="Password" htmlFor="pmp" required hint="Minimum 8 characters">
+        <Field label="Temporary password" htmlFor="pmp" required hint="Minimum 8 characters. The new PM must change it at first sign-in.">
           <Input id="pmp" type="password" value={f.password} onChange={set("password")} autoComplete="new-password" />
         </Field>
       </div>

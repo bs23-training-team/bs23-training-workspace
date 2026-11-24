@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { UpdateUserRequest } from '@bs23/contracts';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -40,7 +40,7 @@ describe('UserEditService.updateUser', () => {
     prisma.user.findFirst.mockReset().mockImplementation(({ where }: { where: Record<string, unknown> }) =>
       // 1st kind of call: the user being edited. 2nd kind: "someone else with this email".
       where.userId === 'BS23001'
-        ? Promise.resolve({ archivedAt: null, departureDate: new Date('2027-01-31T00:00:00Z') })
+        ? Promise.resolve({ pmId: 'PM001', archivedAt: null, departureDate: new Date('2027-01-31T00:00:00Z') })
         : Promise.resolve(null),
     );
     prisma.user.update.mockReset().mockResolvedValue({});
@@ -69,6 +69,17 @@ describe('UserEditService.updateUser', () => {
       prisma.user.findFirst.mockResolvedValue(null);
       await expect(run()).rejects.toThrow('User not found.');
       expect(prisma.user.findFirst.mock.calls[0][0].where).toEqual({ userId: 'BS23001', workspaceId: 'ws1' });
+    });
+
+    it('answers FORBIDDEN_SCOPE for a user managed by another PM and changes nothing', async () => {
+      prisma.user.findFirst.mockResolvedValue({ pmId: 'PM002', archivedAt: null, departureDate: null });
+      const error = await run().catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect((error as ForbiddenException).getResponse()).toMatchObject({ code: 'FORBIDDEN_SCOPE' });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.membership.updateMany).not.toHaveBeenCalled();
+      expect(prisma.membership.upsert).not.toHaveBeenCalled();
     });
   });
 
@@ -118,7 +129,9 @@ describe('UserEditService.updateUser', () => {
     it('an unchanged date is fine even if it is already close or past', async () => {
       prisma.user.findFirst.mockImplementation(({ where }: { where: Record<string, unknown> }) =>
         Promise.resolve(
-          where.userId === 'BS23001' ? { archivedAt: null, departureDate: new Date('2026-11-15T00:00:00Z') } : null,
+          where.userId === 'BS23001'
+            ? { pmId: 'PM001', archivedAt: null, departureDate: new Date('2026-11-15T00:00:00Z') }
+            : null,
         ),
       );
       await run({ departureDate: '2026-11-15' });
@@ -131,7 +144,7 @@ describe('UserEditService.updateUser', () => {
 
     it('may stay empty for a user who has none (reactivated earlier)', async () => {
       prisma.user.findFirst.mockImplementation(({ where }: { where: Record<string, unknown> }) =>
-        Promise.resolve(where.userId === 'BS23001' ? { archivedAt: null, departureDate: null } : null),
+        Promise.resolve(where.userId === 'BS23001' ? { pmId: 'PM001', archivedAt: null, departureDate: null } : null),
       );
       await run({ departureDate: null });
       expect(prisma.user.update.mock.calls[0][0].data.departureDate).toBeNull();
@@ -143,7 +156,11 @@ describe('UserEditService.updateUser', () => {
       prisma.user.findFirst.mockImplementation(({ where }: { where: Record<string, unknown> }) =>
         Promise.resolve(
           where.userId === 'BS23001'
-            ? { archivedAt: new Date('2026-08-02T00:00:00Z'), departureDate: new Date('2026-08-01T00:00:00Z') }
+            ? {
+                pmId: 'PM001',
+                archivedAt: new Date('2026-08-02T00:00:00Z'),
+                departureDate: new Date('2026-08-01T00:00:00Z'),
+              }
             : null,
         ),
       );
@@ -166,7 +183,7 @@ describe('UserEditService.updateUser', () => {
       prisma.user.findFirst.mockImplementation(({ where }: { where: Record<string, unknown> }) =>
         Promise.resolve(
           where.userId === 'BS23001'
-            ? { archivedAt: null, departureDate: new Date('2027-01-31T00:00:00Z') }
+            ? { pmId: 'PM001', archivedAt: null, departureDate: new Date('2027-01-31T00:00:00Z') }
             : { userId: 'BS23002' },
         ),
       );

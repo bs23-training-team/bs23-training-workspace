@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { UpdateUserRequest, UserProfileResponse } from '@bs23/contracts';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import type { PmActor } from './directory.actor.js';
+import { forbiddenScope, type PmActor } from './directory.actor.js';
 import { UserProfileService } from './user-profile.service.js';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -26,9 +26,11 @@ export class UserEditService {
 
     const current = await this.prisma.user.findFirst({
       where: { userId, workspaceId },
-      select: { archivedAt: true, departureDate: true },
+      select: { pmId: true, archivedAt: true, departureDate: true },
     });
     if (!current) throw new NotFoundException('User not found.');
+    // Every PM sees every user, but only the managing PM changes one (decision in the PR #31 review).
+    if (current.pmId !== actor.pmId) throw forbiddenScope('user');
 
     const name = input.name.trim();
     const email = input.email.trim();

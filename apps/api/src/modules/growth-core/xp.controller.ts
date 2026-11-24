@@ -4,6 +4,7 @@ import { CurrentActor, GamificationHttp, Roles } from './http/actor.guard.js';
 import { pmIdOf, userIdOf, type Actor } from './http/actor.js';
 import { bodyOf, num, oneOf, query, str } from './http/parse.js';
 import { GrowthTriggersService } from './triggers/growth-triggers.service.js';
+import { PmGrowthSummaryService } from './xp/pm-growth-summary.service.js';
 import { XpAdjustmentService } from './xp/xp-adjustment.service.js';
 import { XpQueryService } from './xp/xp-query.service.js';
 import { XpReviewService } from './xp/xp-review.service.js';
@@ -19,6 +20,7 @@ export class XpController {
     private readonly review: XpReviewService,
     private readonly adjustments: XpAdjustmentService,
     private readonly xp: XpQueryService,
+    private readonly summaries: PmGrowthSummaryService,
     private readonly triggers: GrowthTriggersService,
   ) {}
 
@@ -72,6 +74,16 @@ export class XpController {
       ...(query(userId) ? { userId: query(userId) as string } : {}),
       cursor: query(cursor) ?? null,
     });
+  }
+
+  /**
+   * One line per user (XP, level, streak) for the PM's Trainees tab. The users come from the directory's rule
+   * (pmVisibleUsers), not from the PM's own team.
+   */
+  @Get('pm/growth-summary')
+  @Roles('PM')
+  summary(@CurrentActor() actor: Actor, @Query('cursor') cursor?: unknown) {
+    return this.summaries.page(actor.workspaceId, { cursor: query(cursor) ?? null });
   }
 
   /** A user's own level, XP, streak and badges. */

@@ -161,12 +161,15 @@ export type BadgeKind = (typeof BADGE_KINDS)[number];
 export const BADGE_RULE_TYPES = ['ON_TIME_SPRINT_STREAK', 'SPRINT_STREAK', 'KUDOS_DISTINCT_SENDERS', 'MANUAL'] as const;
 export type BadgeRuleType = (typeof BADGE_RULE_TYPES)[number];
 
-/** Body of POST /pm/badges. A Behavioral badge needs a rule and a threshold of at least 1; a Special badge is MANUAL. */
+/**
+ * Body of POST /pm/badges. A Behavioral badge needs a rule and a threshold of at least 1; a Special badge is MANUAL.
+ * `kind` is optional: a badge with a rule is Behavioral, one without is Special. If it is sent it must match the rule.
+ */
 export interface CreateBadgeRequest {
   name: string;
   /** An emoji. */
   icon: string;
-  kind: BadgeKind;
+  kind?: BadgeKind;
   criteria: string;
   ruleType?: BadgeRuleType;
   threshold?: number | null;
@@ -199,4 +202,81 @@ export interface RetireBadgeResponse {
 
 export interface RevokeBadgeResponse {
   revoked: true;
+}
+
+export const BADGE_AWARD_SOURCES = ['AUTOMATIC', 'MANUAL'] as const;
+export type BadgeAwardSource = (typeof BADGE_AWARD_SOURCES)[number];
+
+/** The rule of a Behavioral badge. A Special badge has none. */
+export interface BadgeRuleView {
+  type: BadgeRuleType;
+  threshold: number;
+}
+
+/** What every badge in GET /badges has, for a user and for a PM. */
+export interface BadgeBase {
+  badgeId: string;
+  name: string;
+  icon: string;
+  kind: BadgeKind;
+  criteria: string;
+  rule: BadgeRuleView | null;
+  /** Set when the badge is retired: it is no longer awarded, awards already given stay. */
+  retiredAt: string | null;
+}
+
+/** A user's own award. The revoke reason is not here: the user gets it in the notice. */
+export interface MyBadgeAward {
+  awardId: string;
+  source: BadgeAwardSource;
+  awardedAt: string;
+  revokedAt: string | null;
+}
+
+/** A badge as a user sees it in GET /badges. */
+export interface UserBadgeView extends BadgeBase {
+  mine: MyBadgeAward | null;
+  /** Where the user stands on the rule, in the rule's own unit. null for a Special badge or a badge already held. */
+  progress: { value: number; threshold: number } | null;
+}
+
+/** An award as a PM sees it. */
+export interface PmBadgeAward {
+  awardId: string;
+  userId: string;
+  userName: string;
+  source: BadgeAwardSource;
+  awardedAt: string;
+  /** The PM who awarded it by hand. null for an automatic award: show "System". */
+  awardedBy: string | null;
+  revokedAt: string | null;
+  revokeReason: string | null;
+}
+
+/** A badge as a PM sees it in GET /badges: with who holds it. */
+export interface PmBadgeView extends BadgeBase {
+  awards: PmBadgeAward[];
+}
+
+/** Answer of GET /badges?cursor=. What it holds depends on who is asking. */
+export type BadgePage =
+  | { viewer: 'USER'; badges: UserBadgeView[]; nextCursor: string | null }
+  | { viewer: 'PM'; badges: PmBadgeView[]; nextCursor: string | null };
+
+/** One line of GET /pm/growth-summary (the PM's Trainees tab). */
+export interface PmGrowthSummaryRow {
+  userId: string;
+  name: string;
+  /** XP that counts: AWARDED only. */
+  awardedXp: number;
+  /** XP waiting for a PM (PENDING and HELD), shown apart. */
+  pendingXp: number;
+  level: string | null;
+  /** As stored: refreshed after a sprint and by the nightly run. */
+  streak: { current: number; longest: number };
+}
+
+export interface PmGrowthSummaryPage {
+  users: PmGrowthSummaryRow[];
+  nextCursor: string | null;
 }

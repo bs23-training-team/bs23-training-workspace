@@ -10,6 +10,8 @@ import { FeedbackController } from './feedback.controller.js';
 import { FeedbackService } from './feedback.service.js';
 import { MyDirectoryController } from './my-directory.controller.js';
 import { MyDirectoryService } from './my-directory.service.js';
+import { PeersController } from './peers.controller.js';
+import { PeersService } from './peers.service.js';
 import { SearchController } from './search.controller.js';
 import { SearchService } from './search.service.js';
 import { SkillsController } from './skills.controller.js';
@@ -38,6 +40,7 @@ import { UserProfileService } from './user-profile.service.js';
     MyDirectoryController,
     SearchController,
     SkillsController,
+    PeersController,
   ],
   providers: [
     DirectoryService,
@@ -50,6 +53,7 @@ import { UserProfileService } from './user-profile.service.js';
     MyDirectoryService,
     SearchService,
     SkillsService,
+    PeersService,
   ],
   exports: [
     DirectoryService,
@@ -62,6 +66,7 @@ import { UserProfileService } from './user-profile.service.js';
     MyDirectoryService,
     SearchService,
     SkillsService,
+    PeersService,
   ],
 })
 export class DirectoryModule {}

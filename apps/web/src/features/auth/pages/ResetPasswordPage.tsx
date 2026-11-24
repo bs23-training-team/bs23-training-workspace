@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { resetPassword } from "../api";
+import { resetPassword } from "../mock-api";
 import { Alert, Button, Field, Input } from "@/components/ui/ui";
 
 function Inner() {

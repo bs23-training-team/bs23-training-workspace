@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useMe } from "@/features/shell";
-import { evaluationsOf, latestRetake, requestRetake } from "../api";
+import { evaluationsOf, latestRetake, requestRetake } from "../mock-api";
 import { SkillReport } from "../components/skill-report";
 import { Alert, Button, PageHeader, Select } from "@/components/ui/ui";
 import { useToast } from "@/components/ui/toast";

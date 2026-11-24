@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { DB, User } from "@/lib/mock/types";
-import { changePassword, endSession, setPhoto, validatePhoto } from "../api";
+import { changePassword, endSession, setPhoto, validatePhoto } from "../mock-api";
 import { setNotificationPref } from "@/features/notifications";
 import { ALWAYS_SHOWN_CATEGORIES, NOTIFICATION_CATEGORIES } from "@/lib/mock/content";
 import { Avatar, Badge, Button, Card, Checkbox, Field, Input, Select } from "@/components/ui/ui";

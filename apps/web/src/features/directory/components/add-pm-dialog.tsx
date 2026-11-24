@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createPM, type AccountCredentials } from "../api";
+import { createPM, type AccountCredentials } from "../mock-api";
 import { CredentialsDialog } from "./credentials-dialog";
 import { Button, Field, Input } from "@/components/ui/ui";
 import { Dialog } from "@/components/ui/dialog";

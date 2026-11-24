@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { useMe } from "@/features/shell";
-import { assignmentsOf, courseById, courseProgress } from "../api";
+import { assignmentsOf, courseById, courseProgress } from "../mock-api";
 import { requestCourse } from "@/features/catalog";
 import { TRACKS } from "@/lib/mock/content";
 import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, ProgressBar, Select, StatusBadge, Table, Tabs, Td, Textarea } from "@/components/ui/ui";

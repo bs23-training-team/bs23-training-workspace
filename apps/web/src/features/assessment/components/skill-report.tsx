@@ -1,7 +1,7 @@
 "use client";
 import type { DB, ExpertiseEvaluation } from "@/lib/mock/types";
 import { PROCTOR_RULE_LABEL, QUESTION_BANK, SKILL_QUIZ_MAX_VIOLATIONS } from "@/lib/mock/content";
-import { skillAnalysis } from "../api";
+import { skillAnalysis } from "../mock-api";
 import { formatClock } from "./skill-quiz";
 import { Alert, Badge, Card, KeyValue, StatusBadge, Table, Td } from "@/components/ui/ui";
 import { formatDateTime } from "@/lib/utils";

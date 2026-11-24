@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { login } from "../api";
+import { login } from "../mock-api";
 import { Alert, Button, Checkbox, Field, Input } from "@/components/ui/ui";
 
 export default function LoginPage() {

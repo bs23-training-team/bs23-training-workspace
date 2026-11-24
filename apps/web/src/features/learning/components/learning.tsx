@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Lock, PlayCircle, Video } from "lucide-react";
 import type { Course, CourseVersion, DB } from "@/lib/mock/types";
 import { attemptPercent, attemptsFor } from "@/features/assessment";
-import { completeSubtopic, isSubtopicDone, topicState } from "../api";
+import { completeSubtopic, isSubtopicDone, topicState } from "../mock-api";
 import { integration } from "@/lib/mock/selectors";
 import { CourseRoadmap } from "./course-roadmap";
 import { Alert, Badge, Button, Card, EmptyState, IntegrationStatus, ProgressBar, StatusBadge } from "@/components/ui/ui";

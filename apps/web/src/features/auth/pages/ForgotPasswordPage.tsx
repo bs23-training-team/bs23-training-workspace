@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { requestPasswordReset } from "../api";
+import { requestPasswordReset } from "../mock-api";
 import { isEmail } from "@/lib/utils";
 import { Alert, Button, Field, Input } from "@/components/ui/ui";
 

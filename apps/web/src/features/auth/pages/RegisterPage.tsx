@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { registerPM } from "../api";
+import { registerPM } from "../mock-api";
 import { Button, Field, Input } from "@/components/ui/ui";
 
 export default function RegisterPage() {

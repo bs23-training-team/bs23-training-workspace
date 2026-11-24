@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMe } from "@/features/shell";
-import { adjustXp, awardBadge, BADGE_RULE_LABEL, createBadge, grantStreakFreeze, retireBadge, revokeBadge, reviewXp, streakOf, xpTotal } from "../api";
+import { adjustXp, awardBadge, BADGE_RULE_LABEL, createBadge, grantStreakFreeze, retireBadge, revokeBadge, reviewXp, streakOf, xpTotal } from "../mock-api";
 import type { BadgeRuleType } from "@/lib/mock/types";
 import { createQuest, verifyQuestProgress, Leaderboard } from "@/features/engagement";
 import { nameOf, pmPeople } from "@/lib/mock/selectors";

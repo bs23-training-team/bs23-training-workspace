@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { DB } from "@/lib/mock/types";
-import { decideRetake } from "../api";
+import { decideRetake } from "../mock-api";
 import { Button, Field, Input, StatusBadge } from "@/components/ui/ui";
 import { Dialog } from "@/components/ui/dialog";
 import { RESOURCE_LABEL, formatDateTime } from "@/lib/utils";

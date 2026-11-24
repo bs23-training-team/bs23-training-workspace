@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { useMe } from "@/features/shell";
-import { addCourse, approveSuggestion, assignCourse, decideCourseRequest, suggestedCourses } from "../api";
+import { addCourse, approveSuggestion, assignCourse, decideCourseRequest, suggestedCourses } from "../mock-api";
 import { courseById, publishedVersion } from "@/features/learning";
 import { integration, nameOf, pmPeople, pmTrainees, traineeOf } from "@/lib/mock/selectors";
 import { latestEvaluation } from "@/features/assessment";

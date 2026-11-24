@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Clock, ShieldAlert, WifiOff } from "lucide-react";
 import { useMe } from "@/features/shell";
-import { appealAttempt, attemptPercent, attemptsFor, submitAttempt } from "../api";
+import { appealAttempt, attemptPercent, attemptsFor, submitAttempt } from "../mock-api";
 import { assignmentsOf, courseById, BackLink } from "@/features/learning";
 import type { IntegrityEvent, Question } from "@/lib/mock/types";
 import { Alert, Badge, Button, Card, Checkbox, EmptyState, Field, StatusBadge, Table, Td, Textarea } from "@/components/ui/ui";

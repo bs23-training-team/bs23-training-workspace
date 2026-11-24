@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Download, Pencil, Plus, Search } from "lucide-react";
 import { useMe } from "@/features/shell";
 import { assignmentsOf, courseById, overallProgress } from "@/features/learning";
-import { createTeam } from "../api";
+import { createTeam } from "../mock-api";
 import { nameOf, pmTrainees } from "@/lib/mock/selectors";
 import { skillsOf } from "@/features/assessment";
 import { streakOf, xpTotal } from "@/features/gamification-core";

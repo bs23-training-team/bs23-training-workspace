@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, Download, Save } from "lucide-react";
 import { useMe, useUnsavedWarning } from "@/features/shell";
-import { addSprintWeek, dsCell, saveDSCell, simulateTraineeEdit, weekIdFor } from "../api";
+import { addSprintWeek, dsCell, saveDSCell, simulateTraineeEdit, weekIdFor } from "../mock-api";
 import { nameOf, pmTrainees } from "@/lib/mock/selectors";
 import type { DSCell, DSColumn } from "@/lib/mock/types";
 import { DS_DAY_COLS, ExcelSheet, dayBandLabel, weekTabLabel } from "../components/excel-sheet";

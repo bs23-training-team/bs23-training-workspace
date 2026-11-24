@@ -3,7 +3,10 @@ import { SEARCH_RESULT_LIMIT, type UserSearchResponse } from '@bs23/contracts';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { PmActor } from './directory.actor.js';
 
-/** The PM header search (FR-DIR-10): active AND archived users, by name, User ID or email. */
+/**
+ * The PM header search (FR-DIR-10): active AND archived users, by name or User ID. Not by email (PRD
+ * FR-DIR-02): every PM finds every user, so an email search would let a PM look up another PM's users by address.
+ */
 @Injectable()
 export class SearchService {
   constructor(private readonly prisma: PrismaService) {}
@@ -19,7 +22,6 @@ export class SearchService {
         OR: [
           { name: { contains: text, mode: 'insensitive' } },
           { userId: { contains: text, mode: 'insensitive' } },
-          { email: { contains: text, mode: 'insensitive' } },
         ],
       },
       orderBy: [{ name: 'asc' }, { userId: 'asc' }],

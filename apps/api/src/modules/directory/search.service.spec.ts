@@ -23,7 +23,7 @@ describe('SearchService.searchUsers', () => {
     expect(prisma.user.findMany).not.toHaveBeenCalled();
   });
 
-  it('searches name, User ID and email (ignoring case) in the whole workspace, archived users included', async () => {
+  it('searches name and User ID (ignoring case), never email, in the whole workspace, archived users included', async () => {
     await service.searchUsers(PM, '  Bris ');
     const arg = prisma.user.findMany.mock.calls[0][0];
     expect(arg.where.workspaceId).toBe('ws1');
@@ -31,8 +31,8 @@ describe('SearchService.searchUsers', () => {
     expect(arg.where.OR).toEqual([
       { name: { contains: 'Bris', mode: 'insensitive' } },
       { userId: { contains: 'Bris', mode: 'insensitive' } },
-      { email: { contains: 'Bris', mode: 'insensitive' } },
     ]);
+    expect(JSON.stringify(arg.where.OR)).not.toContain('email');
   });
 
   it('returns at most 6 results in a stable order', async () => {

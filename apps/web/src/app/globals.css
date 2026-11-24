@@ -1,26 +1,184 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* BS23 Training Workspace design tokens */
+@theme {
+  --color-brand-50: #eef6ff;
+  --color-brand-100: #d9eaff;
+  --color-brand-200: #b6d5ff;
+  --color-brand-500: #2f6fed;
+  --color-brand-600: #1f5bd6;
+  --color-brand-700: #1a49ad;
+  --color-brand-900: #0f2a63;
+  --color-ink: #16202e;
+  --color-muted: #5b6676;
+  --color-line: #e3e8ef;
+  --color-canvas: #f5f7fb;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+html,
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Sector Growth Analytics chart (src/components/domain/sector-growth.tsx) */
+.sg-chart text {
+  fill: var(--color-muted);
+  font-size: 11px;
+}
+.sg-chart .sg-grid line {
+  stroke: #eef1f6;
+}
+.sg-chart .sg-grid .sg-base {
+  stroke: #cbd5e1;
+}
+.sg-chart .sg-xl .sg-sub {
+  font-size: 10px;
+  fill: #94a3b8;
+}
+.sg-chart .sg-xl .sg-xsel {
+  fill: var(--color-ink);
+  font-weight: 600;
+}
+.sg-chart .g-trend,
+.sg-chart .g-compare {
+  transition: opacity 0.45s ease;
+}
+.sg-chart.mode-compare .g-trend,
+.sg-chart.mode-trend .g-compare {
+  opacity: 0;
+  pointer-events: none;
+}
+.sg-chart.mode-compare .g-compare,
+.sg-chart.mode-trend .g-trend {
+  transition-delay: 0.12s;
+}
+.sg-ser {
+  transition: opacity 0.3s;
+}
+.sg-ser.dim {
+  opacity: 0.2;
+}
+.sg-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.5s ease, stroke-width 0.25s;
+}
+.sg-chart.mode-trend .sg-line {
+  transition: stroke-dashoffset 1s cubic-bezier(0.65, 0, 0.35, 1) var(--d, 0s), stroke-width 0.25s;
+}
+.sg-chart.mode-compare .sg-line {
+  stroke-dashoffset: 1;
+}
+.sg-ser.sel .sg-line {
+  stroke-width: 3.75;
+}
+.sg-area {
+  transition: opacity 0.7s ease 0.25s;
+}
+.sg-chart.entering .sg-area {
+  opacity: 0;
+}
+.sg-chart.entering .sg-line {
+  stroke-dashoffset: 1;
+  transition: none;
+}
+.sg-chart.mode-compare .sg-area {
+  opacity: 0;
+  transition-delay: 0s;
+}
+.sg-enddot {
+  transition: transform 0.25s;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.sg-ser.sel .sg-enddot {
+  transform: scale(1.35);
+}
+.sg-xh line {
+  stroke: #cbd5e1;
+  stroke-dasharray: 3 3;
+}
+.sg-bw {
+  cursor: pointer;
+  outline: none;
+}
+.sg-bar {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transform: scaleY(0);
+  transition: transform 0.35s ease, opacity 0.25s;
+}
+.sg-chart.mode-compare .sg-bar {
+  transform: scaleY(1);
+  transition: transform 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) var(--d, 0s), opacity 0.25s;
+}
+.sg-bw .sg-hit {
+  fill: transparent;
+}
+.sg-bw:hover .sg-hit {
+  fill: #f8fafc;
+}
+.sg-bw:focus-visible .sg-hit {
+  fill: #f8fafc;
+  stroke: var(--color-brand-500);
+  stroke-width: 1.5;
+}
+.sg-bw.dim .sg-bar {
+  opacity: 0.3;
+}
+.sg-bw.dim .sg-vlabel {
+  opacity: 0.4;
+}
+.sg-bw.sel .sg-bar {
+  stroke: var(--color-ink);
+  stroke-opacity: 0.55;
+  stroke-width: 1.5;
+}
+.sg-chart text.sg-vlabel {
+  font-size: 13px;
+  font-weight: 700;
+  fill: var(--color-ink);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.25s, transform 0.25s;
+}
+.sg-chart.mode-compare text.sg-vlabel {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.4s ease var(--ld, 0.3s), transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) var(--ld, 0.3s);
+}
+.sg-chart.mode-compare .sg-bw.dim text.sg-vlabel {
+  opacity: 0.4;
+}
+.sg-thumb {
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sg-chart *,
+  .sg-thumb,
+  .sg-pb {
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
 }

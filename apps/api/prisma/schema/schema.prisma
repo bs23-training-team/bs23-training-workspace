@@ -94,7 +94,8 @@ model Pm {
   name               String
   mustChangePassword Boolean  @default(false) 
   emailVerified      Boolean  @default(false)
-  photoPath          String?   bio                String?
+  photoPath          String?   
+  bio                String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

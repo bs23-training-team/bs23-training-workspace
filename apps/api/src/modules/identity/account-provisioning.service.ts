@@ -446,7 +446,7 @@ export class AccountProvisioningService {
                 await recordAuthEvent(tx, {
                     type: 'auth.account_created',
                     workspaceId,
-                    account: { role: 'TRAINEE', id: userId },
+                    account: { role: 'USER', id: userId },
                     actorPmId: actorPm.pmId,
                     notification: {
                         category: SECURITY_CATEGORY,

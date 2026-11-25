@@ -56,7 +56,7 @@ async function main() {
 
   if (TID && TPASS) {
     const t = await login(TID, TPASS);
-    check('Trainee ID login -> 200 with role TRAINEE', t.status === 200 && t.body?.user?.role === 'TRAINEE', `${t.status} ${t.text.slice(0, 120)}`);
+    check('Trainee ID login -> 200 with role USER', t.status === 200 && t.body?.user?.role === 'USER', `${t.status} ${t.text.slice(0, 120)}`);
     if (TEMAIL) check('Trainee EMAIL login rejected (401)', (await login(TEMAIL, TPASS)).status === 401);
     else skip('trainee email rejected', 'E2E_TRAINEE_EMAIL not set');
   } else skip('Trainee flow', 'E2E_TRAINEE_ID / E2E_TRAINEE_PASSWORD not set');

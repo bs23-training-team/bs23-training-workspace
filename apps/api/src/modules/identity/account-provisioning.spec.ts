@@ -136,7 +136,7 @@ describe('AccountProvisioningService.createPm (Add PM, PRD FR-DIR-09)', () => {
         const other = h.db.addWorkspace({ slug: 'other' });
 
         await expect(
-            h.provisioning.createPm({ sub: user.userId, role: 'TRAINEE', workspaceId: user.workspaceId }, newPm()),
+            h.provisioning.createPm({ sub: user.userId, role: 'USER', workspaceId: user.workspaceId }, newPm()),
         ).rejects.toThrow(ForbiddenException);
         await expect(
             h.provisioning.createPm({ ...actor, sub: 'PM999' }, newPm()),
@@ -319,7 +319,7 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
         expect(h.db.rows('authToken')).toHaveLength(0);
 
         const login = await h.service.login({ identifier: 'bs23002', password: TEMP });
-        expect(login.user).toMatchObject({ id: 'BS23002', role: 'TRAINEE', mustChangePassword: true });
+        expect(login.user).toMatchObject({ id: 'BS23002', role: 'USER', mustChangePassword: true });
         await expect(
             h.service.login({ identifier: 'new.trainee@example.com', password: TEMP }),
         ).rejects.toThrow('Invalid credentials.');
@@ -333,7 +333,7 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
         await h.service.login({ identifier: 'BS23002', password: TEMP });
         const [current] = h.db.rows('session');
 
-        await h.service.changePassword('TRAINEE', 'BS23002', first.user.workspaceId, current.id as string, {
+        await h.service.changePassword('USER', 'BS23002', first.user.workspaceId, current.id as string, {
             currentPassword: TEMP,
             newPassword: NEW_PASSWORD,
         });
@@ -359,7 +359,7 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
             {
                 workspaceId: workspace.id,
                 type: 'auth.account_created',
-                payload: { accountRole: 'TRAINEE', accountId: 'BS23002', actorPmId: 'PM001' },
+                payload: { accountRole: 'USER', accountId: 'BS23002', actorPmId: 'PM001' },
             },
         ]);
         const stored = JSON.stringify([h.db.rows('notification'), h.db.rows('outboxEvent')]);
@@ -372,7 +372,7 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
         const other = h.db.addWorkspace({ slug: 'other' });
 
         await expect(
-            h.provisioning.createTrainee({ sub: user.userId, role: 'TRAINEE', workspaceId: user.workspaceId }, input()),
+            h.provisioning.createTrainee({ sub: user.userId, role: 'USER', workspaceId: user.workspaceId }, input()),
         ).rejects.toThrow(ForbiddenException);
         await expect(h.provisioning.createTrainee({ ...actor, sub: 'PM999' }, input())).rejects.toThrow(ForbiddenException);
         await expect(h.provisioning.createTrainee({ ...actor, workspaceId: other.id }, input())).rejects.toThrow(ForbiddenException);

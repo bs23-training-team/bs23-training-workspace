@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useMe } from "../components/hooks";
 import { traineeOf } from "@/lib/mock/selectors";
-import { updateProfile, PasswordCard, PhotoUpload } from "@/features/auth";
+import { updateProfile, PasswordCard, PhotoUpload, SessionsCard } from "@/features/auth";
 import { Button, Card, Field, Input, KeyValue, PageHeader, Textarea } from "@/components/ui/ui";
 import { useToast } from "@/components/ui/toast";
 import { formatDate, MODE_LABEL, POSITION_LABEL } from "@/lib/utils";
@@ -35,8 +35,8 @@ export default function TraineeProfilePage() {
               <Textarea id="bio" value={f.bio} onChange={(e) => setF({ ...f, bio: e.target.value })} />
             </Field>
             <Button
-              onClick={() => {
-                const r = updateProfile(user.id, f);
+              onClick={async () => {
+                const r = await updateProfile(f);
                 if (!r.ok) return setError(r.error);
                 setError("");
                 toast("Profile saved.");
@@ -63,7 +63,8 @@ export default function TraineeProfilePage() {
             </Link>
           </div>
         </Card>
-        <PasswordCard userId={user.id} />
+        <PasswordCard />
+        <SessionsCard />
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ export type AuthUserPayload = {
     sub: string;
     sid: string;
     workspaceId: string;
-    /** Derived from the table the account lives in (Pm -> PM, User -> TRAINEE). */
+    /** Pm -> PM; User -> its `resource` (TRAINEE, CENTRAL_LND, INDUSTRIAL_ATTACHMENT or SBU). */
     role: AuthRole;
 };
 

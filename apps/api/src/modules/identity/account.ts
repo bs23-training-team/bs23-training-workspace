@@ -3,11 +3,13 @@
  *
  * The schema has two login tables (ADR 0003, docs/adr/0003-login-ids-as-primary-keys.md):
  *   - `Pm`   primary key `pmId`   (e.g. "PM002")   -> login role PM
- *   - `User` primary key `userId` (e.g. "BS23001") -> login role TRAINEE
- * There is NO role column. The role is the table the person was found in.
- * Per the PRD every non-PM account (Trainee, Central L&D, Industrial
- * Attachment, SBU) has the login role "user", stored as TRAINEE, and lands on
- * /trainee/dashboard; the Resources value is only informational here.
+ *   - `User` primary key `userId` (e.g. "BS23001") -> login role = `User.resource`
+ * There is NO role column. A person found in `Pm` has the role PM. A person
+ * found in `User` has the role named by their `resource` column: TRAINEE,
+ * CENTRAL_LND, INDUSTRIAL_ATTACHMENT or SBU. All four share the same
+ * dashboard (/trainee/dashboard) and the same permissions; only the role value
+ * differs. Use `isUserRole(role)` to ask "is this a User account (any of the
+ * four)?" instead of comparing with one value.
  *
  * Credential, AuthToken and Session each point at exactly one of the two
  * tables through `pmId` or `userId` (a database CHECK enforces "exactly one").
@@ -16,7 +18,25 @@
  * unit test.
  */
 
-export type AuthRole = 'PM' | 'TRAINEE';
+/** The four kinds of `User` account; the value is `User.resource`. */
+export const USER_ROLES = [
+    'TRAINEE',
+    'CENTRAL_LND',
+    'INDUSTRIAL_ATTACHMENT',
+    'SBU',
+] as const;
+
+export type UserRole = (typeof USER_ROLES)[number];
+
+export type AuthRole = 'PM' | UserRole;
+
+/**
+ * True for each of the four User roles; false for a PM and for any other
+ * value (so a bad or missing role is never treated as a User).
+ */
+export function isUserRole(role: unknown): role is UserRole {
+    return (USER_ROLES as readonly unknown[]).includes(role);
+}
 
 /** The signed-in person as the API and the web app see them. */
 export type Account = {
@@ -27,7 +47,7 @@ export type Account = {
     name: string;
     email: string;
     mustChangePassword: boolean;
-    /** Users only: TRAINEE | CENTRAL_LND | INDUSTRIAL_ATTACHMENT | SBU. */
+    /** Users only: the same value as `role` (TRAINEE | CENTRAL_LND | INDUSTRIAL_ATTACHMENT | SBU). */
     resource?: string;
 };
 
@@ -38,7 +58,6 @@ export const PM_FIELDS = {
     name: true,
     email: true,
     mustChangePassword: true,
-    emailVerified: true,
 } as const;
 
 /** Columns read from `User` (use as a Prisma `select`). */
@@ -48,7 +67,6 @@ export const USER_FIELDS = {
     name: true,
     email: true,
     mustChangePassword: true,
-    emailVerified: true,
     resource: true,
     pmId: true,
     archivedAt: true,
@@ -61,7 +79,6 @@ export type PmRow = {
     name: string;
     email: string;
     mustChangePassword: boolean;
-    emailVerified: boolean;
 };
 
 export type UserRow = {
@@ -70,12 +87,24 @@ export type UserRow = {
     name: string;
     email: string;
     mustChangePassword: boolean;
-    emailVerified: boolean;
     resource: string;
     pmId: string;
     archivedAt: Date | null;
     departureDate: Date | null;
 };
+
+/**
+ * The role of a `User` account is its `resource`. The database enum only holds
+ * the four known values; anything else is a data error and must not silently
+ * become a working role, so it throws.
+ */
+export function userRoleFromResource(resource: string): UserRole {
+    if ((USER_ROLES as readonly string[]).includes(resource)) {
+        return resource as UserRole;
+    }
+
+    throw new Error(`Unknown User.resource "${resource}".`);
+}
 
 export function accountFromPm(pm: PmRow): Account {
     return {
@@ -90,7 +119,7 @@ export function accountFromPm(pm: PmRow): Account {
 
 export function accountFromUser(user: UserRow): Account {
     return {
-        role: 'TRAINEE',
+        role: userRoleFromResource(user.resource),
         id: user.userId,
         workspaceId: user.workspaceId,
         name: user.name,
@@ -142,19 +171,15 @@ export function isUserInactive(
     );
 }
 
-/** Why an existing account may not sign in (null = it may). */
-export type SignInBlock = 'EMAIL_NOT_VERIFIED' | 'INACTIVE' | null;
+/**
+ * Why an existing account may not sign in (null = it may). Only a User can be
+ * blocked (inactive). A PM is never blocked: there is no email verification.
+ */
+export type SignInBlock = 'INACTIVE' | null;
 
-/** FR-AUTH-04: a PM cannot sign in until their email is verified. */
-export function pmSignInBlock(pm: Pick<PmRow, 'emailVerified'>): SignInBlock {
-    return pm.emailVerified ? null : 'EMAIL_NOT_VERIFIED';
-}
-
-/** PRD section 7 (US-04, US-06): the exact messages shown for each block. */
-export function signInBlockMessage(block: Exclude<SignInBlock, null>): string {
-    return block === 'EMAIL_NOT_VERIFIED'
-        ? 'Verify your email before signing in.'
-        : 'This account is inactive. Ask your PM to activate it.';
+/** PRD section 7 (US-06): the exact message shown for a block. */
+export function signInBlockMessage(_block: Exclude<SignInBlock, null>): string {
+    return 'This account is inactive. Ask your PM to activate it.';
 }
 
 export function userSignInBlock(
@@ -184,7 +209,7 @@ export function resolveSessionOwner(
     if (session.pm) {
         return {
             account: accountFromPm(session.pm),
-            block: pmSignInBlock(session.pm),
+            block: null,
         };
     }
 

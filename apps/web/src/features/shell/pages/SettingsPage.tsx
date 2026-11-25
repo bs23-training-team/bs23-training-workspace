@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMe } from "../components/hooks";
-import { updateProfile, NotificationPrefsCard, PasswordCard, PhotoUpload } from "@/features/auth";
+import { updateProfile, NotificationPrefsCard, PasswordCard, PhotoUpload, SessionsCard } from "@/features/auth";
 import { XpRulesForm } from "@/features/gamification-core";
 import { Button, Card, Field, Input, PageHeader, Tabs } from "@/components/ui/ui";
 import { useToast } from "@/components/ui/toast";
@@ -37,8 +37,8 @@ export default function PMSettingsPage() {
               </Field>
               <p className="text-sm text-muted">Email: {user.email}</p>
               <Button
-                onClick={() => {
-                  const r = updateProfile(user.id, { name, bio: user.bio ?? "" });
+                onClick={async () => {
+                  const r = await updateProfile({ name, bio: user.bio ?? "" });
                   toast(r.ok ? "Profile saved." : r.error, r.ok ? "success" : "error");
                 }}
               >
@@ -46,7 +46,8 @@ export default function PMSettingsPage() {
               </Button>
             </div>
           </Card>
-          <PasswordCard userId={user.id} />
+          <PasswordCard />
+          <SessionsCard />
         </div>
       )}
 

@@ -10,7 +10,7 @@
  *   - JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be set and different.
  *   - Each must be at least 32 characters. Shorter is an error in production
  *     and only a warning elsewhere, so existing development setups keep working.
- *   - WEB_APP_URL (used in verification and password-reset email links) must be an http(s) URL. It is
+ *   - WEB_APP_URL (used in password-reset and account-created email links) must be an http(s) URL. It is
  *     required in production; elsewhere a missing value only warns.
  */
 
@@ -64,7 +64,7 @@ export function checkJwtConfig(env: JwtConfigEnv): JwtConfigProblem[] {
     if (isBlank(env.WEB_APP_URL)) {
         problems.push({
             level: production ? 'error' : 'warning',
-            message: 'WEB_APP_URL is required (it is used to build verification and password-reset links).',
+            message: 'WEB_APP_URL is required (it is used to build password-reset and sign-in links).',
         });
     } else {
         let valid = false;
@@ -82,7 +82,7 @@ export function checkJwtConfig(env: JwtConfigEnv): JwtConfigProblem[] {
                 message: 'WEB_APP_URL must be an http(s) URL.',
             });
         } else if (production && !secure) {
-            // SEC-10: verification and password-reset links carry a secret
+            // SEC-10: password-reset links carry a secret
             // token, so in a deployed (production) environment they must
             // point at an https page. Plain http stays fine for local work.
             problems.push({

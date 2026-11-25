@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { DB, Position, AttendanceMode, Resource } from "@/lib/mock/types";
-import { createTrainee, updateTrainee, type AccountCredentials, type TraineeInput } from "../mock-api";
+import { applyTraineeEdit, type AccountCredentials, type TraineeInput } from "../mock-api";
+import { createTrainee, getTrainee, listTeams, updateTrainee, type ApiTeam } from "../api";
 import { CredentialsDialog } from "./credentials-dialog";
 import { Button, Checkbox, Field, Input, Select } from "@/components/ui/ui";
 import { Dialog } from "@/components/ui/dialog";
@@ -19,39 +20,74 @@ function Section({ title, note, children }: { title: string; note?: string; chil
   );
 }
 
-/** Create/edit trainee (FR-DIR-03). ID and email must be unique; new accounts get a temporary password. */
-export function TraineeFormDialog({ db, pmId, editUserId, open, onClose, onSaved }: { db: DB; pmId: string; editUserId?: string; open: boolean; onClose: () => void; onSaved: (msg: string) => void }) {
+/**
+ * Create/edit trainee (FR-DIR-03, FR-DIR-05). Both go to the real API. The ID and the email are unique in the whole
+ * system; new accounts get a temporary password. `editUserId` is the id of the (mock) list row being edited; the real
+ * user ID is its `traineeId`, and the form is filled from the API, not from the mock.
+ */
+export function TraineeFormDialog({ db, editUserId, open, onClose, onSaved }: { db: DB; editUserId?: string; open: boolean; onClose: () => void; onSaved: (msg: string) => void }) {
   const t = editUserId ? db.trainees.find((x) => x.userId === editUserId) : undefined;
   const u = editUserId ? db.users.find((x) => x.id === editUserId) : undefined;
   const [f, setF] = useState<TraineeInput>(() =>
     t && u
-      ? { traineeId: t.traineeId, name: u.name, email: u.email, tempPassword: "", position: t.position, attendanceMode: t.attendanceMode, resource: t.resource, onboardDate: t.onboardDate, periodEnd: t.periodEnd, skillAssessmentMinutes: t.skillAssessmentMinutes ?? 20, skillAssessmentMarks: t.skillAssessmentMarks ?? 20, teamIds: t.teamIds }
-      : { traineeId: "", name: "", email: "", tempPassword: "", position: "FRONTEND", attendanceMode: "PHYSICAL", resource: "TRAINEE", onboardDate: todayISO(), periodEnd: addMonths(todayISO(), 3), skillAssessmentMinutes: 20, skillAssessmentMarks: 20, teamIds: [] },
+      ? { userId: t.traineeId, name: u.name, email: u.email, temporaryPassword: "", position: t.position, attendanceMode: t.attendanceMode, resource: t.resource, onboardDate: t.onboardDate, departureDate: t.periodEnd, skillAssessmentMinutes: t.skillAssessmentMinutes ?? 20, skillAssessmentMarks: t.skillAssessmentMarks ?? 20, teamIds: t.teamIds }
+      : { userId: "", name: "", email: "", temporaryPassword: "", position: "FRONTEND", attendanceMode: "PHYSICAL", resource: "TRAINEE", onboardDate: todayISO(), departureDate: addMonths(todayISO(), 3), skillAssessmentMinutes: 20, skillAssessmentMarks: 20, teamIds: [] },
   );
   const [error, setError] = useState("");
   const [creds, setCreds] = useState<AccountCredentials | null>(null);
-  const teams = db.teams.filter((x) => x.pmId === pmId);
+  const [doneMessage, setDoneMessage] = useState("");
+  // Both create and edit go to the real API, so the teams must be the real ones (their IDs live in Postgres).
+  const [apiTeams, setApiTeams] = useState<ApiTeam[]>([]);
+  useEffect(() => {
+    void listTeams().then((r) => (r.ok ? setApiTeams(r.data ?? []) : setError(r.error)));
+  }, []);
+  const teams = apiTeams;
 
-  const departureNote = t?.archivedAt
+  // Editing: the saved values come from the API (the mock row only says WHICH user). `original` is what the API
+  // says about the user before the edit: it decides the labels and whether the departure date is required.
+  const [loading, setLoading] = useState(!!editUserId);
+  const [original, setOriginal] = useState({ archived: !!t?.archivedAt, hadDeparture: !!t?.periodEnd });
+  const realUserId = t?.traineeId;
+  useEffect(() => {
+    if (!realUserId) return;
+    void getTrainee(realUserId).then((r) => {
+      setLoading(false);
+      if (!r.ok) return setError(r.error);
+      const a = r.data!;
+      setOriginal({ archived: a.archived, hadDeparture: a.departureDate !== null });
+      setF({ userId: a.userId, name: a.name, email: a.email, temporaryPassword: "", position: a.position, attendanceMode: a.attendanceMode, resource: a.resource, onboardDate: a.onboardDate, departureDate: a.departureDate ?? "", skillAssessmentMinutes: a.skillAssessmentMinutes ?? 20, skillAssessmentMarks: a.skillAssessmentMarks ?? 20, teamIds: a.teamIds });
+    });
+  }, [realUserId]);
+
+  const departureNote = original.archived
     ? "Pick a date after today to extend the period. Saving moves the user back to All Users."
-    : t && !t.periodEnd && !f.periodEnd
+    : editUserId && !original.hadDeparture && !f.departureDate
       ? "No departure date is set. Pick a date to set one."
       : "The user moves to the Archive on the departure date.";
 
-  const save = () => {
+  const save = async () => {
+    setError("");
     if (editUserId) {
-      const r = updateTrainee(pmId, editUserId, f);
+      const r = await updateTrainee(f.userId, f);
       if (!r.ok) return setError(r.error);
-      onSaved(t?.archivedAt ? "User reactivated and moved back to All Users." : "User updated.");
-      return onClose();
+      const done = r.data!;
+      applyTraineeEdit(editUserId, f, done.reactivated);
+      const message = done.reactivated ? "User reactivated and moved back to All Users." : "User updated.";
+      if (!done.passwordReset) {
+        onSaved(message);
+        return onClose();
+      }
+      // A new temporary password was set: show it once, like after Add user.
+      setDoneMessage(message);
+      return setCreds({ name: f.name, accountId: f.userId, email: f.email, temporaryPassword: f.temporaryPassword ?? "", deliveryId: "", mailStatus: done.emailSent ? "ACCEPTED" : "FAILED" });
     }
-    const r = createTrainee(pmId, f);
+    const r = await createTrainee(f);
     if (!r.ok) return setError(r.error);
     setCreds(r.data!);
   };
 
   const finish = () => {
-    onSaved(`User account created for ${creds?.name ?? f.name}.`);
+    onSaved(doneMessage || `User account created for ${creds?.name ?? f.name}.`);
     onClose();
   };
 
@@ -68,7 +104,7 @@ export function TraineeFormDialog({ db, pmId, editUserId, open, onClose, onSaved
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={save}>{editUserId ? (t?.archivedAt ? "Save and reactivate" : "Save changes") : "Create account"}</Button>
+          <Button onClick={save} disabled={loading}>{editUserId ? (original.archived ? "Save and reactivate" : "Save changes") : "Create account"}</Button>
         </>
       }
     >
@@ -77,10 +113,13 @@ export function TraineeFormDialog({ db, pmId, editUserId, open, onClose, onSaved
           {error}
         </p>
       )}
+      {loading ? (
+        <p className="text-sm text-muted">Loading the saved details…</p>
+      ) : (
       <div className="space-y-5">
         <Section title="Account" note={editUserId ? "Leave the password empty to keep the current one." : "Minimum 8 characters. The user must change it on first login."}>
           <Field label="User ID" htmlFor="tid" required>
-            <Input id="tid" value={f.traineeId} onChange={(e) => setF({ ...f, traineeId: e.target.value })} placeholder="BS23008" />
+            <Input id="tid" value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })} placeholder="BS23008" disabled={!!editUserId} />
           </Field>
           <Field label="User name" htmlFor="tn" required>
             <Input id="tn" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
@@ -89,7 +128,7 @@ export function TraineeFormDialog({ db, pmId, editUserId, open, onClose, onSaved
             <Input id="te" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
           </Field>
           <Field label={editUserId ? "Reset temporary password" : "Temporary password"} htmlFor="tp" required={!editUserId}>
-            <Input id="tp" type="text" value={f.tempPassword} onChange={(e) => setF({ ...f, tempPassword: e.target.value })} autoComplete="off" />
+            <Input id="tp" type="text" value={f.temporaryPassword} onChange={(e) => setF({ ...f, temporaryPassword: e.target.value })} autoComplete="off" />
           </Field>
         </Section>
 
@@ -148,8 +187,8 @@ export function TraineeFormDialog({ db, pmId, editUserId, open, onClose, onSaved
           <Field label="Onboarding date" htmlFor="tod" required>
             <Input id="tod" type="date" value={f.onboardDate} onChange={(e) => setF({ ...f, onboardDate: e.target.value })} />
           </Field>
-          <Field label="Departure date" htmlFor="tper" required={!!t?.archivedAt || !(t && !t.periodEnd)}>
-            <Input id="tper" type="date" min={f.onboardDate ? addDays(f.onboardDate, 1) : undefined} value={f.periodEnd} onChange={(e) => setF({ ...f, periodEnd: e.target.value })} />
+          <Field label="Departure date" htmlFor="tper" required={!editUserId || original.archived || original.hadDeparture}>
+            <Input id="tper" type="date" min={f.onboardDate ? addDays(f.onboardDate, 1) : undefined} value={f.departureDate} onChange={(e) => setF({ ...f, departureDate: e.target.value })} />
           </Field>
         </Section>
 
@@ -168,6 +207,7 @@ export function TraineeFormDialog({ db, pmId, editUserId, open, onClose, onSaved
           </Field>
         </Section>
       </div>
+      )}
     </Dialog>
   );
 }

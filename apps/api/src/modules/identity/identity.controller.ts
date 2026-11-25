@@ -9,10 +9,17 @@ import {
     Param,
     ParseUUIDPipe,
     Post,
+    Patch,
+    Put,
     Req,
+    Res,
+    UploadedFile,
     UseGuards,
+    UseInterceptors,
     ValidationPipe,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { RateLimitGuard } from './guards/rate-limit.guard.js';
 import { RolesGuard } from './guards/roles.guard.js';
@@ -21,15 +28,17 @@ import { AllowMustChangePassword, Roles } from './decorators/access.decorators.j
 import { RateLimit } from './decorators/rate-limit.decorator.js';
 import type { AuthenticatedRequest } from './types.js';
 import { IdentityService } from './identity.service.js';
+import { ProfileService } from './profile.service.js';
+import { PHOTO_MAX_BYTES } from './photo.js';
+import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RefreshDto } from './dto/refresh.dto.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { ResetPasswordDto } from './dto/reset-password.dto.js';
-import { VerifyEmailDto } from './dto/verify-email.dto.js';
-import { RequestVerificationDto } from './dto/request-verification.dto.js';
 import { CreatePmDto } from './dto/create-pm.dto.js';
 import { CreateTraineeDto } from './dto/create-trainee.dto.js';
+import { UpdateTraineeDto } from './dto/update-trainee.dto.js';
 
 // `expectedType` makes validation independent of emitted decorator metadata
 // (a test runner such as Vitest does not emit it), so the same DTO rules apply
@@ -56,6 +65,7 @@ export class IdentityController {
         @Inject(IdentityService) private readonly identityService: IdentityService,
         @Inject(AccountProvisioningService)
         private readonly provisioning: AccountProvisioningService,
+        @Inject(ProfileService) private readonly profile: ProfileService,
     ) { }
 
     // One login endpoint for both roles. `identifier` is the registered email
@@ -78,34 +88,6 @@ export class IdentityController {
     @RateLimit('refresh')
     refresh(@Body(validation(RefreshDto)) dto: RefreshDto) {
         return this.identityService.refresh(dto.refreshToken);
-    }
-
-    // ----- Email verification (public, the emailed token is the credential) --
-
-    @Post('email/verify')
-    @HttpCode(200)
-    @UseGuards(RateLimitGuard)
-    @RateLimit('email-verify')
-    verifyEmail(@Body(validation(VerifyEmailDto)) dto: VerifyEmailDto) {
-        return this.identityService.verifyEmail(dto);
-    }
-
-    // A PM who never received the link asks for a new one by email address.
-    // The answer is always the same (no account enumeration).
-    @Post('email/verify/request')
-    @HttpCode(200)
-    @UseGuards(RateLimitGuard)
-    @RateLimit('email-verify-request')
-    requestVerification(@Body(validation(RequestVerificationDto)) dto: RequestVerificationDto) {
-        return this.identityService.requestVerification(dto);
-    }
-
-    @Post('email/verify/resend')
-    @HttpCode(200)
-    @UseGuards(RateLimitGuard)
-    @RateLimit('email-verify')
-    resendVerification(@Body(validation(VerifyEmailDto)) dto: VerifyEmailDto) {
-        return this.identityService.resendVerification(dto);
     }
 
     // ----- Password recovery (public) ---------------------------------
@@ -146,6 +128,36 @@ export class IdentityController {
         return this.provisioning.createTrainee(req.user, dto);
     }
 
+    // Edit User (FR-DIR-05): read the saved values, then save. PM only, only the PM's own users.
+    @Get('accounts/trainees/:userId')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles('PM')
+    getTrainee(@Param('userId') userId: string, @Req() req: AuthenticatedRequest) {
+        return this.provisioning.getTrainee(req.user, userId);
+    }
+
+    @Patch('accounts/trainees/:userId')
+    @UseGuards(RateLimitGuard, JwtAuthGuard, RolesGuard)
+    @RateLimit('account-provision')
+    @Roles('PM')
+    updateTrainee(
+        @Param('userId') userId: string,
+        @Body(validation(UpdateTraineeDto)) dto: UpdateTraineeDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.provisioning.updateTrainee(req.user, userId, dto);
+    }
+
+    // Retry of the "account created" email (the credentials dialog's Retry button).
+    @Post('accounts/:accountId/resend-email')
+    @HttpCode(200)
+    @UseGuards(RateLimitGuard, JwtAuthGuard, RolesGuard)
+    @RateLimit('account-provision')
+    @Roles('PM')
+    resendAccountEmail(@Param('accountId') accountId: string, @Req() req: AuthenticatedRequest) {
+        return this.provisioning.resendAccountEmail(req.user, accountId);
+    }
+
     // ----- Signed-in account -------------------------------------------
 
     @UseGuards(JwtAuthGuard)
@@ -161,6 +173,45 @@ export class IdentityController {
     @Get('me')
     me(@Req() req: AuthenticatedRequest) {
         return this.identityService.me(req.user.role, req.user.sub);
+    }
+
+    // ----- Own profile: name, bio, photo (PRD US34). Always the caller's own row. -----
+
+    @UseGuards(JwtAuthGuard)
+    @Patch('me/profile')
+    updateProfile(
+        @Body(validation(UpdateProfileDto)) dto: UpdateProfileDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.profile.updateProfile(req.user.role, req.user.sub, dto);
+    }
+
+    // multipart/form-data with one file field named "photo". The 2 MB limit is enforced while
+    // the upload is read; the file type is decided from its bytes in ProfileService.
+    @UseGuards(JwtAuthGuard)
+    @Put('me/photo')
+    @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: PHOTO_MAX_BYTES, files: 1 } }))
+    setPhoto(
+        @UploadedFile() file: { buffer?: Uint8Array } | undefined,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.profile.setPhoto(req.user.role, req.user.sub, file);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Get('me/photo')
+    async getPhoto(@Req() req: AuthenticatedRequest, @Res() res: Response) {
+        const { bytes, mime } = await this.profile.getPhoto(req.user.role, req.user.sub);
+        res.setHeader('Content-Type', mime);
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.send(bytes);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Delete('me/photo')
+    removePhoto(@Req() req: AuthenticatedRequest) {
+        return this.profile.removePhoto(req.user.role, req.user.sub);
     }
 
     // Change Password (also completes the mandatory first-login change)

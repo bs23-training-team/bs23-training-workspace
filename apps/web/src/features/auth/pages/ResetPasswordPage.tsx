@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { resetPassword } from "../mock-api";
+import { resetPassword } from "../api";
 import { Alert, Button, Field, Input } from "@/components/ui/ui";
 
 function Inner() {
@@ -13,9 +13,9 @@ function Inner() {
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const r = resetPassword(token, pw, confirm);
+    const r = await resetPassword(token, pw, confirm);
     if (!r.ok) return setError(r.error);
     setDone(true);
   };

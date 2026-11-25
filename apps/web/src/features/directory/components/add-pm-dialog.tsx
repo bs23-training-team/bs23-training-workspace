@@ -1,20 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { createPM, type AccountCredentials } from "../mock-api";
+import type { AccountCredentials } from "../mock-api";
+import { createPm } from "../api";
 import { CredentialsDialog } from "./credentials-dialog";
 import { Button, Field, Input } from "@/components/ui/ui";
 import { Dialog } from "@/components/ui/dialog";
 
-/** Create another PM account from the dashboard. The new PM signs in with the email or PM ID. */
-export function AddPMDialog({ creatorId, open, onClose, onSaved }: { creatorId: string; open: boolean; onClose: () => void; onSaved: (msg: string) => void }) {
-  const [f, setF] = useState({ name: "", email: "", pmCode: "", password: "" });
+/** Create another PM account from the dashboard. The new PM signs in with the email and the temporary password. */
+export function AddPMDialog({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: (msg: string) => void }) {
+  const [f, setF] = useState({ name: "", email: "", pmId: "", password: "" });
   const [error, setError] = useState("");
   const [creds, setCreds] = useState<AccountCredentials | null>(null);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
 
-  const save = () => {
-    const r = createPM(creatorId, f);
+  const save = async () => {
+    setError("");
+    const r = await createPm(f);
     if (!r.ok) return setError(r.error);
     setCreds(r.data!);
   };
@@ -50,7 +52,7 @@ export function AddPMDialog({ creatorId, open, onClose, onSaved }: { creatorId: 
           <Input id="pmn" value={f.name} onChange={set("name")} autoComplete="off" />
         </Field>
         <Field label="PM ID" htmlFor="pmi" required>
-          <Input id="pmi" value={f.pmCode} onChange={set("pmCode")} placeholder="PM003" autoComplete="off" />
+          <Input id="pmi" value={f.pmId} onChange={set("pmId")} placeholder="PM003" autoComplete="off" />
         </Field>
         <Field label="PM email" htmlFor="pme" required>
           <Input id="pme" type="email" value={f.email} onChange={set("email")} autoComplete="off" />

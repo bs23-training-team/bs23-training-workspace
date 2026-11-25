@@ -35,4 +35,15 @@ describe('requireTrainee', () => {
   it('answers 403 for a PM', () => {
     expect(() => requireTrainee(pmReq)).toThrow(ForbiddenException);
   });
+
+  it('accepts every User resource role, not only TRAINEE', () => {
+    for (const role of ['CENTRAL_LND', 'INDUSTRIAL_ATTACHMENT', 'SBU']) {
+      const req = { user: { sub: 'BS23002', sid: 's3', workspaceId: 'ws1', role } };
+      expect(requireTrainee(req)).toEqual({ userId: 'BS23002', workspaceId: 'ws1' });
+    }
+  });
+
+  it('answers 403 for an unknown role', () => {
+    expect(() => requireTrainee({ user: { sub: 'X1', workspaceId: 'ws1', role: 'ADMIN' } })).toThrow(ForbiddenException);
+  });
 });

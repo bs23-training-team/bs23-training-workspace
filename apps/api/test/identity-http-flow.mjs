@@ -17,7 +17,7 @@
 const BASE = (process.env.API_BASE_URL ?? 'http://localhost:4000').replace(/\/+$/, '');
 const { E2E_PM_EMAIL: PM_EMAIL, E2E_PM_PASSWORD: PM_PASSWORD, E2E_TRAINEE_ID: TID, E2E_TRAINEE_EMAIL: TEMAIL, E2E_TRAINEE_PASSWORD: TPASS } = process.env;
 let passed = 0, failed = 0, skipped = 0;
-const check = (name, ok, detail = '') => { ok ? passed++ : failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${ok ? '' : '  -> ' + detail}`); };
+const check = (name, ok, detail = '') => { if (ok) passed++; else failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${ok ? '' : '  -> ' + detail}`); };
 const skip = (name, why) => { skipped++; console.log(`SKIP  ${name} (${why})`); };
 async function api(method, path, { token, body } = {}) {
   const res = await fetch(BASE + path, { method, headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });

@@ -17,12 +17,9 @@ import { LoginDto } from './dto/login.dto.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { ResetPasswordDto } from './dto/reset-password.dto.js';
-import { RequestVerificationDto } from './dto/request-verification.dto.js';
-import { VerifyEmailDto } from './dto/verify-email.dto.js';
 import { normalizeEmail } from './email.js';
 import { exposeDevTokens, webAppUrl } from './identity-env.js';
 import { recordAuthEvent, SECURITY_CATEGORY } from './auth-events.js';
-import { sendVerificationMail } from './verification-mail.js';
 import {
     DUMMY_PASSWORD_HASH,
     hashPassword,
@@ -34,10 +31,10 @@ import {
     accountFromPm,
     accountFromUser,
     ownerData,
-    pmSignInBlock,
     resolveSessionOwner,
     signInBlockMessage,
     toSessionUser,
+    userRoleFromResource,
     userSignInBlock,
     type Account,
     type AuthRole,
@@ -53,8 +50,6 @@ const SESSION_TTL_DAYS = 7;
 const REMEMBERED_SESSION_TTL_DAYS = 30;
 // The shared schema documents a 30-minute reset link (AuthTokenType comment).
 const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
-// FR-AUTH-04: a verification link token is valid for 24 hours.
-const VERIFICATION_TTL_MS = DAY_MS;
 const sha256 = (value: string) =>
     createHash('sha256').update(value).digest('hex');
 
@@ -92,7 +87,7 @@ export class IdentityService {
     // Helpers
     // ---------------------------------------------------------------
 
-    // Raw verification / reset tokens are only returned in API responses when
+    // The raw reset token is only returned in API responses when
     // IDENTITY_EXPOSE_DEV_TOKENS=true outside production (see identity-env.ts).
     private exposeDevTokens(): boolean {
         return exposeDevTokens(this.configService);
@@ -115,204 +110,6 @@ export class IdentityService {
             .join(' ');
 
         this.logger[level](`security_event=${event}${details ? ` ${details}` : ''}`);
-    }
-
-    private sendVerification(owner: { name: string; email: string }, token: string) {
-        return sendVerificationMail(this.mailService, this.webAppUrl(), owner, token);
-    }
-
-    // Public: the emailed single-use token is the credential. A bad token and
-    // an expired token get different errors (`code`) so the page can offer a
-    // new link only for an expired one.
-    async verifyEmail(dto: VerifyEmailDto) {
-        const record = await this.prisma.authToken.findUnique({
-            where: { tokenHash: sha256(dto.token) },
-        });
-
-        if (!record || record.type !== 'EMAIL_VERIFICATION' || record.usedAt) {
-            throw this.verificationInvalid();
-        }
-
-        if (record.expiresAt <= new Date()) {
-            throw new BadRequestException({
-                statusCode: 400,
-                error: 'Bad Request',
-                code: 'VERIFICATION_LINK_EXPIRED',
-                message: 'This verification link has expired.',
-            });
-        }
-
-        await this.prisma.$transaction(async (tx) => {
-            // Single-use claim: only one concurrent request can win this.
-            const claimed = await tx.authToken.updateMany({
-                where: {
-                    id: record.id,
-                    usedAt: null,
-                    expiresAt: { gt: new Date() },
-                },
-                data: { usedAt: new Date() },
-            });
-
-            if (claimed.count === 0) {
-                throw this.verificationInvalid();
-            }
-
-            if (record.pmId) {
-                await tx.pm.update({
-                    where: { pmId: record.pmId },
-                    data: { emailVerified: true },
-                });
-            } else if (record.userId) {
-                await tx.user.update({
-                    where: { userId: record.userId },
-                    data: { emailVerified: true },
-                });
-            }
-
-            await recordAuthEvent(tx, {
-                type: 'auth.email_verified',
-                workspaceId: record.workspaceId,
-                account: record.pmId
-                    ? { role: 'PM', id: record.pmId }
-                    : { role: 'TRAINEE', id: record.userId as string },
-            });
-        });
-
-        this.audit('email_verified', { account: record.pmId ?? record.userId ?? undefined });
-
-        return { message: 'Email verified. You can now sign in.' };
-    }
-
-    // Public: an expired link offers a new one. Holding the old token proves
-    // which registration it is; the new link goes to the registered address.
-    async resendVerification(dto: VerifyEmailDto) {
-        const record = await this.prisma.authToken.findUnique({
-            where: { tokenHash: sha256(dto.token) },
-            include: { pm: true, user: true },
-        });
-
-        const owner = record?.pm ?? record?.user ?? null;
-
-        if (
-            !record ||
-            record.type !== 'EMAIL_VERIFICATION' ||
-            record.usedAt ||
-            !owner ||
-            owner.emailVerified
-        ) {
-            throw this.verificationInvalid();
-        }
-
-        if (record.expiresAt > new Date()) {
-            throw new BadRequestException(
-                'This verification link is still valid. Use the link in your email.',
-            );
-        }
-
-        const token = randomBytes(32).toString('hex');
-        const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MS);
-        const ownerColumns = record.pmId
-            ? { pmId: record.pmId }
-            : { userId: record.userId as string };
-
-        await this.prisma.$transaction(async (tx) => {
-            await tx.authToken.updateMany({
-                where: {
-                    ...ownerColumns,
-                    type: 'EMAIL_VERIFICATION',
-                    usedAt: null,
-                },
-                data: { usedAt: new Date() },
-            });
-
-            await tx.authToken.create({
-                data: {
-                    workspaceId: record.workspaceId,
-                    ...ownerColumns,
-                    type: 'EMAIL_VERIFICATION',
-                    tokenHash: sha256(token),
-                    expiresAt,
-                },
-            });
-        });
-
-        const { emailSent, link } = await this.sendVerification(owner, token);
-
-        return {
-            message: 'A new verification link has been sent.',
-            emailSent,
-            expiresAt,
-            ...(this.exposeDevTokens() && link
-                ? { verificationLink: link, verificationToken: token }
-                : {}),
-        };
-    }
-
-    // Public: a PM who never got the link (no mail provider yet, a lost
-    // email) asks for a new one by email address. The answer is always the
-    // same, so it never reveals whether an address is registered. Only a PM
-    // that still has to verify is eligible (users are not blocked on email).
-    // Earlier unused links are invalidated and the new one goes to the
-    // registered address only.
-    async requestVerification(dto: RequestVerificationDto): Promise<{
-        message: string;
-        verificationLink?: string;
-        verificationToken?: string;
-    }> {
-        const generic = {
-            message:
-                'If this email belongs to an account that still has to be verified, a new verification link will be sent.',
-        };
-
-        const matches = await this.prisma.pm.findMany({
-            where: { email: { equals: normalizeEmail(dto.email), mode: 'insensitive' } },
-            select: PM_FIELDS,
-            take: 2,
-        });
-
-        // No account, an already verified PM, or one email shared by several
-        // PMs (email is unique per workspace only): do nothing.
-        if (matches.length !== 1 || matches[0].emailVerified) {
-            return generic;
-        }
-
-        const pm = matches[0];
-        const token = randomBytes(32).toString('hex');
-        const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MS);
-
-        await this.prisma.$transaction(async (tx) => {
-            await tx.authToken.updateMany({
-                where: { pmId: pm.pmId, type: 'EMAIL_VERIFICATION', usedAt: null },
-                data: { usedAt: new Date() },
-            });
-
-            await tx.authToken.create({
-                data: {
-                    workspaceId: pm.workspaceId,
-                    pmId: pm.pmId,
-                    type: 'EMAIL_VERIFICATION',
-                    tokenHash: sha256(token),
-                    expiresAt,
-                },
-            });
-        });
-
-        this.audit('verification_requested', { account: pm.pmId });
-
-        const { link } = await this.sendVerification(pm, token);
-
-        return this.exposeDevTokens() && link
-            ? { ...generic, verificationLink: link, verificationToken: token }
-            : generic;
-    }
-
-    private verificationInvalid() {
-        return new BadRequestException({
-            statusCode: 400,
-            error: 'Bad Request',
-            code: 'VERIFICATION_LINK_INVALID',
-            message: 'This verification link is invalid.',
-        });
     }
 
     // ---------------------------------------------------------------
@@ -393,7 +190,7 @@ export class IdentityService {
             return {
                 account: accountFromPm(pm),
                 passwordHash: pm.credential.passwordHash,
-                block: pmSignInBlock(pm),
+                block: null as SignInBlock,
             };
         }
 
@@ -609,7 +406,7 @@ export class IdentityService {
         if (role === 'PM') {
             const pm = await this.prisma.pm.findUnique({
                 where: { pmId: id },
-                select: { ...PM_FIELDS, createdAt: true },
+                select: { ...PM_FIELDS, bio: true, photoPath: true, createdAt: true },
             });
 
             if (!pm) {
@@ -619,7 +416,8 @@ export class IdentityService {
             return {
                 user: {
                     ...toSessionUser(accountFromPm(pm)),
-                    emailVerified: pm.emailVerified,
+                    bio: pm.bio ?? '',
+                    hasPhoto: Boolean(pm.photoPath),
                     createdAt: pm.createdAt,
                 },
             };
@@ -627,7 +425,7 @@ export class IdentityService {
 
         const user = await this.prisma.user.findUnique({
             where: { userId: id },
-            select: { ...USER_FIELDS, createdAt: true },
+            select: { ...USER_FIELDS, bio: true, photoPath: true, createdAt: true },
         });
 
         if (!user) {
@@ -637,7 +435,8 @@ export class IdentityService {
         return {
             user: {
                 ...toSessionUser(accountFromUser(user)),
-                emailVerified: user.emailVerified,
+                bio: user.bio ?? '',
+                hasPhoto: Boolean(user.photoPath),
                 pmId: user.pmId,
                 createdAt: user.createdAt,
             },
@@ -720,6 +519,10 @@ export class IdentityService {
             throw new UnauthorizedException('Current password is incorrect.');
         }
 
+        if (dto.newPassword !== dto.confirmPassword) {
+            throw new BadRequestException('Passwords do not match.');
+        }
+
         if (dto.currentPassword === dto.newPassword) {
             throw new BadRequestException(
                 'New password must be different from the current password.',
@@ -781,8 +584,8 @@ export class IdentityService {
     }
 
     // The accounts an email address may reset the password of. Both tables,
-    // case-insensitive, all workspaces. An account that cannot sign in yet
-    // (unverified PM, archived user) is not eligible.
+    // case-insensitive, all workspaces. An account that cannot sign in
+    // (an archived user) is not eligible.
     private async findResetCandidates(email: string) {
         const where = {
             email: { equals: normalizeEmail(email), mode: 'insensitive' as const },
@@ -796,7 +599,7 @@ export class IdentityService {
         return [
             ...pms.map((pm) => ({
                 account: accountFromPm(pm),
-                block: pmSignInBlock(pm),
+                block: null as SignInBlock,
             })),
             ...users.map((user) => ({
                 account: accountFromUser(user),
@@ -896,11 +699,25 @@ export class IdentityService {
             throw new BadRequestException('Password reset token has expired.');
         }
 
-        const owner = record.pmId
-            ? { role: 'PM' as const, id: record.pmId }
-            : record.userId
-              ? { role: 'TRAINEE' as const, id: record.userId }
-              : null;
+        if (dto.newPassword !== dto.confirmPassword) {
+            throw new BadRequestException('Passwords do not match.');
+        }
+
+        // PM -> role PM. User -> role is the User's `resource`, read here.
+        let owner: { role: AuthRole; id: string } | null = null;
+
+        if (record.pmId) {
+            owner = { role: 'PM', id: record.pmId };
+        } else if (record.userId) {
+            const user = await this.prisma.user.findUnique({
+                where: { userId: record.userId },
+                select: { resource: true },
+            });
+
+            owner = user
+                ? { role: userRoleFromResource(user.resource), id: record.userId }
+                : null;
+        }
 
         if (!owner) {
             throw invalid();

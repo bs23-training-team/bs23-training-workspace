@@ -13,6 +13,12 @@ describe('actorFromRequestUser (E01 req.user -> the signed-in person)', () => {
     expect(actorFromRequestUser({ sub: 'PM001', sid: 's1', workspaceId: 'w1', role: 'PM' })).toEqual({ role: 'PM', pmId: 'PM001', workspaceId: 'w1' });
   });
 
+  it('reads a user of every resource type (CENTRAL_LND, INDUSTRIAL_ATTACHMENT, SBU) the same way', () => {
+    for (const role of ['CENTRAL_LND', 'INDUSTRIAL_ATTACHMENT', 'SBU']) {
+      expect(actorFromRequestUser({ sub: 'BS23002', sid: 's1', workspaceId: 'w1', role })).toEqual({ role: 'USER', userId: 'BS23002', workspaceId: 'w1' });
+    }
+  });
+
   it('reads a user: role TRAINEE, sub is the userId', () => {
     expect(actorFromRequestUser({ sub: 'BS23001', sid: 's1', workspaceId: 'w1', role: 'TRAINEE' })).toEqual({ role: 'USER', userId: 'BS23001', workspaceId: 'w1' });
   });

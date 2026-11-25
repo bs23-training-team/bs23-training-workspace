@@ -1,7 +1,5 @@
 import { createHash } from 'node:crypto';
 
-import { BadRequestException } from '@nestjs/common';
-
 import {
     NEW_PASSWORD,
     PASSWORD,
@@ -12,19 +10,8 @@ import {
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
-// The body a client would receive from the HttpException the call throws.
-async function responseOf(call: Promise<unknown>) {
-    try {
-        await call;
-    } catch (error) {
-        return (error as BadRequestException).getResponse() as Record<string, unknown>;
-    }
-    throw new Error('expected the call to throw');
-}
-
-// A PM that an authorized PM created through AccountProvisioningService: it
-// starts unverified, with an emailed (dev-exposed) verification token. The
-// creating PM is PM001, the new PM is PM002.
+// A PM that an authorized PM created through AccountProvisioningService. It can
+// sign in at once (no email verification). The creating PM is PM001, the new PM is PM002.
 const register = async (h: Harness, email = 'Reg.PM@Example.com') => {
     const actorPm = h.db.rows('pm')[0] ?? (await seedAccounts(h)).pm;
 
@@ -36,92 +23,150 @@ const register = async (h: Harness, email = 'Reg.PM@Example.com') => {
 
 const newPm = (h: Harness) => h.db.rows('pm').find((row) => row.pmId === 'PM002');
 
-describe('email verification of a provisioned PM (FR-AUTH-04)', () => {
-    it('provision -> refused sign-in -> verify -> sign-in works', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const reg = await register(h);
+describe('a provisioned PM (there is no email verification)', () => {
+    it('provision -> the PM can sign in at once, with a password change required', async () => {
+        const h = await makeHarness();
+        const created = await register(h);
+
+        expect(created).toMatchObject({ pmId: 'PM002', mustChangePassword: true, emailSent: false });
+        expect(created).not.toHaveProperty('verificationToken');
+        expect(created).not.toHaveProperty('verificationLink');
+        expect(newPm(h)?.emailVerified).toBe(true);
+        // No token of any kind is created for the new PM.
+        expect(h.db.rows('authToken')).toHaveLength(0);
 
         await expect(
             h.service.login({ identifier: 'reg.pm@example.com', password: 'WrongPass123' }),
         ).rejects.toThrow('Invalid credentials.');
-        await expect(
-            h.service.login({ identifier: 'reg.pm@example.com', password: PASSWORD }),
-        ).rejects.toThrow('Verify your email before signing in.');
-
-        const verified = await h.service.verifyEmail({ token: reg.verificationToken as string });
-        expect(verified.message).toContain('verified');
-        expect(newPm(h)?.emailVerified).toBe(true);
-
         const login = await h.service.login({ identifier: 'REG.PM@example.com', password: PASSWORD });
         expect(login.user).toMatchObject({ id: 'PM002', role: 'PM', mustChangePassword: true });
     });
 
-    it('the link works once', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const reg = await register(h);
-        await h.service.verifyEmail({ token: reg.verificationToken as string });
+    it('emails the credentials: the ID and the temporary password (the mail body is never logged)', async () => {
+        const h = await makeHarness();
+        await register(h);
 
-        const body = await responseOf(h.service.verifyEmail({ token: reg.verificationToken as string }));
-        expect(body.code).toBe('VERIFICATION_LINK_INVALID');
+        expect(h.mail.send).toHaveBeenCalledTimes(1);
+        const mail = h.mail.send.mock.calls[0][0];
+        expect(mail.to).toBe('reg.pm@example.com');
+        expect(mail.text).toContain('PM002');
+        expect(mail.text).toContain(PASSWORD);
+        expect(mail.text).not.toMatch(/token=/);
     });
 
-    it('an unknown token is "invalid", an expired one is "expired" (distinct errors)', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const reg = await register(h);
+    it('reports emailSent true only when the provider really delivered', async () => {
+        const h = await makeHarness();
+        h.mail.send.mockResolvedValueOnce({ delivered: true, transport: 'console' as const });
 
-        expect((await responseOf(h.service.verifyEmail({ token: 'f'.repeat(64) }))).code).toBe(
-            'VERIFICATION_LINK_INVALID',
-        );
-
-        h.db.rows('authToken')[h.db.rows('authToken').length - 1].expiresAt = new Date(Date.now() - 1000);
-        const expired = await responseOf(h.service.verifyEmail({ token: reg.verificationToken as string }));
-        expect(expired.code).toBe('VERIFICATION_LINK_EXPIRED');
-        expect(newPm(h)?.emailVerified).toBe(false);
+        expect((await register(h)).emailSent).toBe(true);
     });
 
-    it('a password-reset token cannot verify an email, and the other way round', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        await seedAccounts(h);
-        const forgot = await h.service.forgotPassword({ workEmail: 'pm001@bs23.test' });
-        const reg = await register(h);
-        // seedAccounts ran once above; register reuses that workspace and PM.
+    it('a mail failure never fails the account creation', async () => {
+        const h = await makeHarness();
+        h.mail.send.mockRejectedValueOnce(new Error('smtp down'));
 
-        expect(
-            (await responseOf(h.service.verifyEmail({ token: forgot.resetToken as string }))).code,
-        ).toBe('VERIFICATION_LINK_INVALID');
+        const created = await register(h);
+
+        expect(created).toMatchObject({ pmId: 'PM002', emailSent: false });
+        expect(newPm(h)).toBeDefined();
+    });
+
+    it('has no email-verification routes or service methods any more', async () => {
+        const h = await makeHarness();
+
+        expect((h.service as unknown as Record<string, unknown>).verifyEmail).toBeUndefined();
+        expect((h.service as unknown as Record<string, unknown>).resendVerification).toBeUndefined();
+        expect((h.service as unknown as Record<string, unknown>).requestVerification).toBeUndefined();
+    });
+});
+
+describe('retry of the credentials email (FR-AUTH-08): issues a new temporary password', () => {
+    const pending = async (h: Harness) => {
+        const seeded = await seedAccounts(h);
+        // A user who has not signed in yet: still on the temporary password.
+        h.db.rows('user')[0].mustChangePassword = true;
+        h.db.rows('pm')[0].mustChangePassword = false;
+        const actor = { sub: seeded.pm.pmId as string, role: 'PM' as const, workspaceId: seeded.pm.workspaceId as string };
+
+        return { ...seeded, actor };
+    };
+
+    it('replaces the password, emails the new one, returns it once, and the old one stops working', async () => {
+        const h = await makeHarness();
+        const { user, actor } = await pending(h);
+
+        const result = await h.provisioning.resendAccountEmail(actor, (user.userId as string).toLowerCase());
+
+        expect(result.emailSent).toBe(false);
+        expect(result.temporaryPassword).toMatch(/^[A-HJ-NP-Za-km-z2-9]{14}$/);
+        expect(h.mail.send).toHaveBeenCalledTimes(1);
+        const mail = h.mail.send.mock.calls[0][0];
+        expect(mail.to).toBe(user.email);
+        expect(mail.text).toContain(user.userId as string);
+        expect(mail.text).toContain(result.temporaryPassword);
+
+        await expect(h.service.login({ identifier: user.userId as string, password: PASSWORD })).rejects.toThrow('Invalid credentials.');
+        const login = await h.service.login({ identifier: user.userId as string, password: result.temporaryPassword });
+        expect(login.user).toMatchObject({ id: user.userId, mustChangePassword: true });
+    });
+
+    it('every call issues a different password, and ends the sessions opened with the old one', async () => {
+        const h = await makeHarness();
+        const { user, actor } = await pending(h);
+        await h.service.login({ identifier: user.userId as string, password: PASSWORD });
+        expect(h.db.rows('session').filter((row) => row.endedAt === null)).toHaveLength(1);
+
+        const first = await h.provisioning.resendAccountEmail(actor, user.userId as string);
+        const second = await h.provisioning.resendAccountEmail(actor, user.userId as string);
+
+        expect(first.temporaryPassword).not.toBe(second.temporaryPassword);
+        expect(h.db.rows('session').filter((row) => row.endedAt === null)).toHaveLength(0);
+    });
+
+    it('refuses an account that already chose its own password (use Forgot password), and changes nothing', async () => {
+        const h = await makeHarness();
+        const { pm, actor } = await pending(h);
+
+        await expect(h.provisioning.resendAccountEmail(actor, pm.pmId as string)).rejects.toThrow('Use Forgot password instead.');
+
+        expect(h.mail.send).toHaveBeenCalledTimes(0);
+        await h.service.login({ identifier: pm.email as string, password: PASSWORD });
+    });
+
+    it('never puts the new password in a log line or an outbox event', async () => {
+        const h = await makeHarness();
+        const { user, actor } = await pending(h);
+        const logged: string[] = [];
+        const spy = vi.spyOn(console, 'log').mockImplementation((...args) => void logged.push(args.join(' ')));
+
+        const result = await h.provisioning.resendAccountEmail(actor, user.userId as string);
+        spy.mockRestore();
+
+        expect(JSON.stringify(h.db.rows('outboxEvent'))).not.toContain(result.temporaryPassword);
+        expect(logged.join('\n')).not.toContain(result.temporaryPassword);
+    });
+
+    it('answers 404 for an unknown account and for an account of another workspace', async () => {
+        const h = await makeHarness();
+        const { actor } = await pending(h);
+        const other = h.db.addWorkspace({ slug: 'other' });
+        h.db.addUser(h.passwordHash, { userId: 'BS23999', workspaceId: other.id, email: 'far@bs23.test', mustChangePassword: true });
+
+        await expect(h.provisioning.resendAccountEmail(actor, 'NOPE1')).rejects.toThrow('Account not found.');
+        await expect(h.provisioning.resendAccountEmail(actor, 'BS23999')).rejects.toThrow('Account not found.');
+        expect(h.mail.send).toHaveBeenCalledTimes(0);
+    });
+
+    it('refuses a user (not a PM) as the caller', async () => {
+        const h = await makeHarness();
+        const { user } = await pending(h);
+
         await expect(
-            h.service.resetPassword({ token: reg.verificationToken as string, newPassword: NEW_PASSWORD }),
-        ).rejects.toThrow('Invalid or already used reset token.');
-    });
-
-    it('an expired link can be replaced, and the old link then stops working', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const reg = await register(h);
-        h.db.rows('authToken')[h.db.rows('authToken').length - 1].expiresAt = new Date(Date.now() - 1000);
-
-        const resent = await h.service.resendVerification({ token: reg.verificationToken as string });
-
-        expect(resent.verificationToken).not.toBe(reg.verificationToken);
-        expect(h.mail.send).toHaveBeenCalledTimes(2);
-        expect((await responseOf(h.service.verifyEmail({ token: reg.verificationToken as string }))).code).toBe(
-            'VERIFICATION_LINK_INVALID',
-        );
-        await h.service.verifyEmail({ token: resent.verificationToken as string });
-        expect(newPm(h)?.emailVerified).toBe(true);
-    });
-
-    it('refuses to resend while the link is still valid, and after verification', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const reg = await register(h);
-
-        await expect(
-            h.service.resendVerification({ token: reg.verificationToken as string }),
-        ).rejects.toThrow('This verification link is still valid.');
-
-        await h.service.verifyEmail({ token: reg.verificationToken as string });
-        expect(
-            (await responseOf(h.service.resendVerification({ token: reg.verificationToken as string }))).code,
-        ).toBe('VERIFICATION_LINK_INVALID');
+            h.provisioning.resendAccountEmail(
+                { sub: user.userId as string, role: 'TRAINEE', workspaceId: user.workspaceId as string },
+                user.userId as string,
+            ),
+        ).rejects.toThrow('Only a PM of this workspace can create accounts.');
     });
 });
 
@@ -158,12 +203,12 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         const result = await h.service.forgotPassword({ workEmail: 'BS23001@bs23.test' });
         expect(h.db.rows('authToken')[0]).toMatchObject({ userId: 'BS23001', pmId: null });
 
-        await h.service.resetPassword({ token: result.resetToken as string, newPassword: NEW_PASSWORD });
+        await h.service.resetPassword({ token: result.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
         const login = await h.service.login({ identifier: 'BS23001', password: NEW_PASSWORD });
         expect(login.user.role).toBe('TRAINEE');
     });
 
-    it('does not send a reset to an unverified PM or an archived user', async () => {
+    it('sends a reset to a PM whatever its (unused) emailVerified flag, but not to an archived user', async () => {
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
         h.db.addPm(h.passwordHash, {
@@ -179,17 +224,20 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
             archivedAt: new Date(),
         });
 
-        await h.service.forgotPassword({ workEmail: 'unverified@bs23.test' });
         await h.service.forgotPassword({ workEmail: 'archived@bs23.test' });
-
         expect(h.mail.send).toHaveBeenCalledTimes(0);
         expect(h.db.rows('authToken')).toHaveLength(0);
+
+        await h.service.forgotPassword({ workEmail: 'unverified@bs23.test' });
+        expect(h.mail.send).toHaveBeenCalledTimes(1);
+        expect(h.db.rows('authToken')).toMatchObject([{ pmId: 'PM002', type: 'PASSWORD_RESET' }]);
     });
 
-    it('skips an email that matches more than one account (open E10/E11 decision)', async () => {
+    it('skips an email that matches more than one account (old data: new data cannot, the email is unique everywhere)', async () => {
         const h = await makeHarness();
         await seedAccounts(h);
         const other = h.db.addWorkspace({ slug: 'second' });
+        h.db.enforceEmailTriggers = false; // rows from before the global-unique-email migration
         h.db.addPm(h.passwordHash, { pmId: 'PM002', workspaceId: other.id, email: 'pm001@bs23.test' });
 
         const result = await h.service.forgotPassword({ workEmail: 'pm001@bs23.test' });
@@ -206,9 +254,9 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         const second = await h.service.forgotPassword({ workEmail: 'pm001@bs23.test' });
 
         await expect(
-            h.service.resetPassword({ token: first.resetToken as string, newPassword: NEW_PASSWORD }),
+            h.service.resetPassword({ token: first.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD }),
         ).rejects.toThrow('Invalid or already used reset token.');
-        await h.service.resetPassword({ token: second.resetToken as string, newPassword: NEW_PASSWORD });
+        await h.service.resetPassword({ token: second.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
     });
 
     it('reset sets the new password, clears mustChangePassword, ends all sessions and is single-use', async () => {
@@ -223,7 +271,7 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         await h.service.login({ identifier: 'BS23020', password: PASSWORD });
         const forgot = await h.service.forgotPassword({ workEmail: 'forgetful@bs23.test' });
 
-        await h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD });
+        await h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
 
         expect(h.db.rows('user').find((u) => u.userId === 'BS23020')?.mustChangePassword).toBe(false);
         expect(h.db.rows('session').every((s) => s.endedAt)).toBe(true);
@@ -234,7 +282,7 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         await h.service.login({ identifier: 'BS23020', password: NEW_PASSWORD });
 
         await expect(
-            h.service.resetPassword({ token: forgot.resetToken as string, newPassword: 'An0therPass!z3' }),
+            h.service.resetPassword({ token: forgot.resetToken as string, newPassword: 'An0therPass!z3', confirmPassword: 'An0therPass!z3' }),
         ).rejects.toThrow('Invalid or already used reset token.');
     });
 
@@ -244,63 +292,53 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         const forgot = await h.service.forgotPassword({ workEmail: 'pm001@bs23.test' });
 
         await expect(
-            h.service.resetPassword({ token: 'f'.repeat(64), newPassword: NEW_PASSWORD }),
+            h.service.resetPassword({ token: 'f'.repeat(64), newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD }),
         ).rejects.toThrow('Invalid or already used reset token.');
 
         h.db.rows('authToken')[h.db.rows('authToken').length - 1].expiresAt = new Date(Date.now() - 1000);
         await expect(
-            h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD }),
+            h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD }),
         ).rejects.toThrow('Password reset token has expired.');
     });
 });
 
-describe('requesting a new verification link by email (a PM who never got one)', () => {
-    it('sends a fresh link to an unverified PM, invalidates the old one, and the new link verifies', async () => {
+describe('confirm password is checked by the API', () => {
+    it('reset-password refuses a confirmation that differs and keeps the token usable', async () => {
         const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const reg = await register(h);
-        h.mail.send.mockClear();
+        await seedAccounts(h);
+        const forgot = await h.service.forgotPassword({ workEmail: 'pm001@bs23.test' });
 
-        const requested = await h.service.requestVerification({ email: 'REG.pm@example.com' });
+        await expect(
+            h.service.resetPassword({
+                token: forgot.resetToken as string,
+                newPassword: NEW_PASSWORD,
+                confirmPassword: 'Different-Passw0rd!',
+            }),
+        ).rejects.toThrow('Passwords do not match.');
 
-        expect(h.mail.send).toHaveBeenCalledTimes(1);
-        expect(h.mail.send.mock.calls[0][0].to).toBe('reg.pm@example.com');
-        expect(requested.verificationToken).toBeDefined();
-        expect(requested.verificationToken).not.toBe(reg.verificationToken);
-
-        // The first link no longer works, the new one does.
-        const old = await responseOf(h.service.verifyEmail({ token: reg.verificationToken as string }));
-        expect(old.code).toBe('VERIFICATION_LINK_INVALID');
-        await h.service.verifyEmail({ token: requested.verificationToken as string });
-        expect(newPm(h)?.emailVerified).toBe(true);
+        // The mismatch is checked before the token is spent.
+        await h.service.resetPassword({
+            token: forgot.resetToken as string,
+            newPassword: NEW_PASSWORD,
+            confirmPassword: NEW_PASSWORD,
+        });
     });
 
-    it('answers identically for an unknown email, a verified PM, a trainee and an ambiguous email, and sends nothing', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
+    it('change-password refuses a confirmation that differs', async () => {
+        const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
-        const other = h.db.addWorkspace({ slug: 'other' });
-        h.db.addPm('hash', { pmId: 'PM050', workspaceId: other.id, email: 'dup@example.com', emailVerified: false });
-        h.db.addPm('hash', { pmId: 'PM051', workspaceId: workspace.id, email: 'DUP@example.com', emailVerified: false });
-        h.mail.send.mockClear();
+        await h.service.login({ identifier: 'BS23001', password: PASSWORD });
+        const [session] = h.db.rows('session');
 
-        const answers = [];
-        for (const email of ['nobody@example.com', 'pm001@bs23.test', 'bs23001@bs23.test', 'dup@example.com']) {
-            answers.push(await h.service.requestVerification({ email }));
-        }
-
-        expect(new Set(answers.map((a) => JSON.stringify(a))).size).toBe(1);
-        expect(h.mail.send).not.toHaveBeenCalled();
-        expect(h.db.rows('authToken')).toHaveLength(0);
-    });
-
-    it('never returns the token outside the dev flag, and only the hash is stored', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'false' });
-        await register(h);
-
-        const requested = await h.service.requestVerification({ email: 'reg.pm@example.com' });
-
-        expect(Object.keys(requested)).toEqual(['message']);
-        const mailed = /token=([0-9a-f]{64})/.exec(h.mail.send.mock.calls.at(-1)![0].text)![1];
-        expect(JSON.stringify(h.db.rows('authToken'))).not.toContain(mailed);
+        await expect(
+            h.service.changePassword('TRAINEE', 'BS23001', workspace.id as string, session.id as string, {
+                currentPassword: PASSWORD,
+                newPassword: NEW_PASSWORD,
+                confirmPassword: 'Different-Passw0rd!',
+            }),
+        ).rejects.toThrow('Passwords do not match.');
+        // The old password still works: nothing was changed.
+        await h.service.login({ identifier: 'BS23001', password: PASSWORD });
     });
 });
 
@@ -318,7 +356,7 @@ describe('forgot-password is atomic', () => {
         h.db.authToken.create = create;
 
         expect(h.db.rows('authToken').filter((row) => !row.usedAt)).toHaveLength(1);
-        await h.service.resetPassword({ token: first.resetToken as string, newPassword: NEW_PASSWORD });
+        await h.service.resetPassword({ token: first.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
     });
 });
 
@@ -331,7 +369,7 @@ describe('notifications and outbox events for authentication (FR-14, FR-15)', ()
 
         await h.service.changePassword('TRAINEE', 'BS23001', workspace.id, session.id as string, {
             currentPassword: PASSWORD,
-            newPassword: NEW_PASSWORD,
+            newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD,
         });
 
         expect(login.user.id).toBe('BS23001');
@@ -355,7 +393,7 @@ describe('notifications and outbox events for authentication (FR-14, FR-15)', ()
         await expect(
             h.service.changePassword('TRAINEE', 'BS23001', workspace.id, session.id as string, {
                 currentPassword: NEW_PASSWORD,
-                newPassword: 'Third-Passw0rd!z',
+                newPassword: 'Third-Passw0rd!z', confirmPassword: 'Third-Passw0rd!z',
             }),
         ).rejects.toThrow('boom');
         h.db.outboxEvent.create = create;
@@ -367,7 +405,7 @@ describe('notifications and outbox events for authentication (FR-14, FR-15)', ()
         const { workspace } = await seedAccounts(h);
         const forgot = await h.service.forgotPassword({ workEmail: 'pm001@bs23.test' });
 
-        await h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD });
+        await h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
 
         expect(h.db.rows('notification')).toMatchObject([{ workspaceId: workspace.id, pmId: 'PM001', userId: null }]);
         expect(h.db.rows('outboxEvent')).toMatchObject([
@@ -375,20 +413,16 @@ describe('notifications and outbox events for authentication (FR-14, FR-15)', ()
         ]);
     });
 
-    it('email verification writes auth.email_verified and no secret or address reaches the payloads', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const reg = await register(h);
-        h.db.rows('notification').length = 0;
-        h.db.rows('outboxEvent').length = 0;
-
-        await h.service.verifyEmail({ token: reg.verificationToken as string });
+    it('creating a PM writes auth.account_created and no secret or address reaches the payloads', async () => {
+        const h = await makeHarness();
+        await register(h);
 
         expect(h.db.rows('outboxEvent')).toMatchObject([
-            { type: 'auth.email_verified', payload: { accountRole: 'PM', accountId: 'PM002' } },
+            { type: 'auth.account_created', payload: { accountRole: 'PM', accountId: 'PM002' } },
         ]);
         const stored = JSON.stringify(h.db.rows('outboxEvent'));
-        expect(stored).not.toContain(reg.verificationToken as string);
         expect(stored).not.toContain('reg.pm@example.com');
+        expect(stored).not.toContain(PASSWORD);
     });
 
     it('a failed login, an unsuccessful reset and a rejected token write no event', async () => {
@@ -396,7 +430,7 @@ describe('notifications and outbox events for authentication (FR-14, FR-15)', ()
         await seedAccounts(h);
 
         await expect(h.service.login({ identifier: 'BS23001', password: 'Wrong-Passw0rd!' })).rejects.toThrow();
-        await expect(h.service.resetPassword({ token: 'f'.repeat(64), newPassword: NEW_PASSWORD })).rejects.toThrow();
+        await expect(h.service.resetPassword({ token: 'f'.repeat(64), newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD })).rejects.toThrow();
 
         expect(h.db.rows('outboxEvent')).toHaveLength(0);
         expect(h.db.rows('notification')).toHaveLength(0);

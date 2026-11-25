@@ -13,6 +13,7 @@ import type {
   TraineePublishedReportDetail,
   TraineePublishedReportItem,
 } from '@bs23/contracts';
+import { USER_ROLES } from '../identity/account.js';
 import { Roles } from '../identity/decorators/access.decorators.js';
 import { JwtAuthGuard } from '../identity/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../identity/guards/roles.guard.js';
@@ -130,7 +131,7 @@ export class ReportsController {
  */
 @Controller('me/reports')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('TRAINEE')
+@Roles(...USER_ROLES)
 export class MyReportsController {
   constructor(private readonly reports: ReportsService) {}
 

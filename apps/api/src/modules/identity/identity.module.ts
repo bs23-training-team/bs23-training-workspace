@@ -6,6 +6,8 @@ import { IdentityService } from './identity.service.js';
 import { AccountProvisioningService } from './account-provisioning.service.js';
 import { AccountLifecycleService } from './account-lifecycle.service.js';
 import { MailService } from './mail.service.js';
+import { ProfileService } from './profile.service.js';
+import { ProfilePhotoStorage } from './profile-photo.storage.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { RateLimitGuard } from './guards/rate-limit.guard.js';
 import { RolesGuard } from './guards/roles.guard.js';
@@ -63,13 +65,15 @@ const identityConfigCheck = {
         AccountProvisioningService,
         AccountLifecycleService,
         MailService,
+        ProfileService,
+        ProfilePhotoStorage,
         JwtAuthGuard,
         RolesGuard,
         RateLimitGuard,
         identityConfigCheck,
     ],
     // Other modules protect their routes with
-    // `@UseGuards(JwtAuthGuard, RolesGuard)` + `@Roles('PM' | 'TRAINEE')`.
+    // `@UseGuards(JwtAuthGuard, RolesGuard)` + `@Roles('PM')` or `@Roles(...USER_ROLES)`.
     // JwtModule is re-exported because JwtAuthGuard injects JwtService, so a
     // module that imports IdentityModule can instantiate the guard.
     // E02 calls AccountProvisioningService to create PM / user logins.

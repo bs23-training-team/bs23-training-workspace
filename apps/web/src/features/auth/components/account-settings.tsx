@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DB, User } from "@/lib/mock/types";
-import { changePassword, endSession, setPhoto, validatePhoto } from "../mock-api";
+import { validatePhoto } from "../mock-api";
+import { changePassword, endSession, listSessions, removePhoto, uploadPhoto, type ApiSession } from "../api";
 import { setNotificationPref } from "@/features/notifications";
 import { ALWAYS_SHOWN_CATEGORIES, NOTIFICATION_CATEGORIES } from "@/lib/mock/content";
 import { Avatar, Badge, Button, Card, Checkbox, Field, Input, Select } from "@/components/ui/ui";
@@ -29,9 +30,7 @@ export function PhotoUpload({ user }: { user: User }) {
             const err = validatePhoto(f);
             if (err) return setError(err);
             setError("");
-            const reader = new FileReader();
-            reader.onload = () => setPhoto(user.id, reader.result as string);
-            reader.readAsDataURL(f);
+            void uploadPhoto(f).then((r) => !r.ok && setError(r.error));
           }}
         />
         <div className="flex gap-2">
@@ -39,7 +38,7 @@ export function PhotoUpload({ user }: { user: User }) {
             Upload photo
           </Button>
           {user.photoUrl && (
-            <Button size="sm" variant="ghost" onClick={() => setPhoto(user.id, undefined)}>
+            <Button size="sm" variant="ghost" onClick={() => void removePhoto().then((r) => !r.ok && setError(r.error))}>
               Remove
             </Button>
           )}
@@ -55,7 +54,7 @@ export function PhotoUpload({ user }: { user: User }) {
   );
 }
 
-export function PasswordCard({ userId }: { userId: string }) {
+export function PasswordCard() {
   const toast = useToast();
   const [f, setF] = useState({ current: "", next: "", confirm: "" });
   const [error, setError] = useState("");
@@ -77,8 +76,8 @@ export function PasswordCard({ userId }: { userId: string }) {
           <Input id="cp3" type="password" value={f.confirm} onChange={(e) => setF({ ...f, confirm: e.target.value })} autoComplete="new-password" />
         </Field>
         <Button
-          onClick={() => {
-            const r = changePassword(userId, f.current, f.next, f.confirm);
+          onClick={async () => {
+            const r = await changePassword(f.current, f.next, f.confirm);
             if (!r.ok) return setError(r.error);
             setError("");
             setF({ current: "", next: "", confirm: "" });
@@ -114,21 +113,64 @@ export function NotificationPrefsCard({ db, userId }: { db: DB; userId: string }
   );
 }
 
-export function SessionsCard({ db, userId }: { db: DB; userId: string }) {
-  const sessions = db.sessions.filter((s) => s.userId === userId);
+/** A short, readable name from a User-Agent text, for example "Chrome on Windows". */
+function deviceLabel(userAgent: string | null): string {
+  if (!userAgent) return "Unknown device";
+  const browser = /Edg\//.test(userAgent) ? "Edge" : /OPR\/|Opera/.test(userAgent) ? "Opera" : /Firefox\//.test(userAgent) ? "Firefox" : /Chrome\//.test(userAgent) ? "Chrome" : /Safari\//.test(userAgent) ? "Safari" : null;
+  const os = /Windows/.test(userAgent) ? "Windows" : /Android/.test(userAgent) ? "Android" : /iPhone|iPad|iOS/.test(userAgent) ? "iOS" : /Mac OS X|Macintosh/.test(userAgent) ? "macOS" : /Linux/.test(userAgent) ? "Linux" : null;
+  if (browser && os) return `${browser} on ${os}`;
+  return browser ?? os ?? "Unknown device";
+}
+
+/** The signed-in account's live sessions, from the API. Ending another session signs that device out. */
+export function SessionsCard() {
+  const toast = useToast();
+  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
+  const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    void listSessions().then((r) => {
+      if (!alive) return;
+      if (r.ok) {
+        setSessions(r.data ?? []);
+        setError("");
+      } else setError(r.error);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [reload]);
+
   return (
-    <Card title="Active sessions" description="Server-side session list (Assumption). Ending a session signs that device out.">
+    <Card title="Active sessions" description="Places where you are signed in. Ending a session signs that device out.">
+      {error && (
+        <p role="alert" className="mb-2 text-sm text-red-600">
+          {error}
+        </p>
+      )}
+      {sessions === null && !error && <p className="text-sm text-muted">Loading…</p>}
       <ul className="divide-y divide-line">
-        {sessions.map((s) => (
+        {sessions?.map((s) => (
           <li key={s.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
             <span>
-              <span className="font-medium">{s.device}</span>
+              <span className="font-medium">{deviceLabel(s.device)}</span>
               <span className="block text-xs text-muted">Signed in {formatDateTime(s.createdAt)}</span>
             </span>
-            {s.id === db.currentSessionId ? (
+            {s.current ? (
               <Badge tone="green">This device</Badge>
             ) : (
-              <Button size="sm" variant="secondary" onClick={() => endSession(s.id)}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  const r = await endSession(s.id);
+                  if (!r.ok) return setError(r.error);
+                  toast("Session ended.");
+                  setReload((n) => n + 1);
+                }}
+              >
                 End session
               </Button>
             )}

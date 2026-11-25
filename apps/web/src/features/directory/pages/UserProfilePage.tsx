@@ -349,7 +349,7 @@ export default function TraineeProfilePM() {
         </div>
       )}
 
-      {edit > 0 && <TraineeFormDialog key={edit} db={db} pmId={user.id} editUserId={id} open onClose={() => setEdit(0)} onSaved={(m) => toast(m)} />}
+      {edit > 0 && <TraineeFormDialog key={edit} db={db} editUserId={id} open onClose={() => setEdit(0)} onSaved={(m) => toast(m)} />}
 
       <Dialog
         open={!!fin}

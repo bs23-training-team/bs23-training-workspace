@@ -1,5 +1,7 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 
+import { isUserRole } from '../identity/account.js';
+
 /** The signed-in PM, taken from `req.user` (docs/architecture.md section 3.3, rule 7). */
 export interface PmActor {
   pmId: string;
@@ -29,6 +31,6 @@ export function requirePm(req: RequestWithUser): PmActor {
 export function requireTrainee(req: RequestWithUser): TraineeActor {
   const user = req.user;
   if (!user?.sub || !user.workspaceId) throw new UnauthorizedException('Authentication is required.');
-  if (user.role !== 'TRAINEE') throw new ForbiddenException('Trainee role is required.');
+  if (!isUserRole(user.role)) throw new ForbiddenException('Trainee role is required.');
   return { userId: user.sub, workspaceId: user.workspaceId };
 }

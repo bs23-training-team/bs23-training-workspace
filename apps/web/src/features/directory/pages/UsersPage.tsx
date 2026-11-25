@@ -233,7 +233,7 @@ export default function AllUsersPage() {
         </div>
       )}
 
-      {form.open && <TraineeFormDialog key={form.key} db={db} pmId={user.id} editUserId={form.id} open onClose={() => setForm({ ...form, open: false })} onSaved={(m) => toast(m)} />}
+      {form.open && <TraineeFormDialog key={form.key} db={db} editUserId={form.id} open onClose={() => setForm({ ...form, open: false })} onSaved={(m) => toast(m)} />}
 
       <Dialog
         open={teamOpen}

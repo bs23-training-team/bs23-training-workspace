@@ -2,13 +2,14 @@ import {
     accountFromPm,
     accountFromUser,
     isUserInactive,
+    isUserRole,
     nextPmId,
     orgToday,
     ownerData,
-    pmSignInBlock,
     resolveSessionOwner,
     slugify,
     toSessionUser,
+    USER_ROLES,
     userSignInBlock,
 } from './account.js';
 
@@ -48,13 +49,26 @@ describe('roles come from the table, not a role column', () => {
         });
     });
 
-    it('every User row is a TRAINEE keyed by userId, whatever its resource', () => {
+    it('the role of a User row is its resource, keyed by userId', () => {
         for (const resource of ['TRAINEE', 'CENTRAL_LND', 'INDUSTRIAL_ATTACHMENT', 'SBU']) {
             const account = accountFromUser({ ...user, resource });
-            expect(account.role).toBe('TRAINEE');
+            expect(account.role).toBe(resource);
             expect(account.id).toBe('BS23001');
             expect(account.resource).toBe(resource);
         }
+    });
+
+    it('refuses a User row whose resource is not one of the four', () => {
+        expect(() => accountFromUser({ ...user, resource: 'ADMIN' })).toThrow('Unknown User.resource');
+    });
+
+    it('isUserRole is true for the four User roles and false for PM', () => {
+        for (const role of USER_ROLES) {
+            expect(isUserRole(role)).toBe(true);
+        }
+        expect(isUserRole('PM')).toBe(false);
+        expect(isUserRole('ADMIN')).toBe(false);
+        expect(isUserRole(undefined)).toBe(false);
     });
 
     it('toSessionUser never carries a hash or token, and omits resource for a PM', () => {
@@ -68,9 +82,8 @@ describe('roles come from the table, not a role column', () => {
 });
 
 describe('sign-in blocks', () => {
-    it('an unverified PM is blocked, a verified PM is not (FR-AUTH-04)', () => {
-        expect(pmSignInBlock({ emailVerified: false })).toBe('EMAIL_NOT_VERIFIED');
-        expect(pmSignInBlock({ emailVerified: true })).toBe(null);
+    it('a PM is never blocked: there is no email verification', () => {
+        expect(resolveSessionOwner({ pm }, NOW)?.block).toBe(null);
     });
 
     it('an active user is not blocked', () => {
@@ -103,9 +116,8 @@ describe('sign-in blocks', () => {
         expect(isUserInactive({ archivedAt: null, departureDate: departure }, justPastDhakaMidnight)).toBe(true);
     });
 
-    it('email verification is not required of users (only PMs verify)', () => {
-        const unverified = { ...user, emailVerified: false };
-        expect(userSignInBlock(unverified, NOW)).toBe(null);
+    it('only an inactive user is blocked', () => {
+        expect(userSignInBlock({ ...user, archivedAt: NOW }, NOW)).toBe('INACTIVE');
     });
 });
 
@@ -117,14 +129,13 @@ describe('ownerData / resolveSessionOwner', () => {
 
     it('resolves the owner and role of a session from its relation', () => {
         expect(resolveSessionOwner({ pm, user: null }, NOW)?.account.role).toBe('PM');
-        expect(resolveSessionOwner({ pm: null, user }, NOW)?.account.role).toBe('TRAINEE');
+        // The fixture user's resource is SBU, so that is its role.
+        expect(resolveSessionOwner({ pm: null, user }, NOW)?.account.role).toBe('SBU');
         expect(resolveSessionOwner({ pm: null, user: null }, NOW)).toBe(null);
     });
 
     it('reports why the owner may not continue', () => {
-        expect(resolveSessionOwner({ pm: { ...pm, emailVerified: false } }, NOW)?.block).toBe(
-            'EMAIL_NOT_VERIFIED',
-        );
+        // A PM is never blocked: there is no email verification.
         expect(resolveSessionOwner({ user: { ...user, archivedAt: NOW } }, NOW)?.block).toBe(
             'INACTIVE',
         );

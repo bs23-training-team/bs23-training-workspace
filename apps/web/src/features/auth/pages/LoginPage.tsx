@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { login } from "../mock-api";
+import { login } from "../api";
 import { Alert, Button, Checkbox, Field, Input } from "@/components/ui/ui";
 
 export default function LoginPage() {
@@ -16,7 +16,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
     if (!identity.trim() || !password) {
@@ -24,7 +24,7 @@ export default function LoginPage() {
       return;
     }
     setLoading(true);
-    const r = login(identity, password, remember);
+    const r = await login(identity, password, remember);
     setLoading(false);
     if (!r.ok) setError(r.error);
     else router.replace(r.data!.redirect);
@@ -61,18 +61,13 @@ export default function LoginPage() {
           Sign in
         </Button>
       </form>
-      <p className="mt-6 text-center text-sm text-muted">
-        PM without an account?{" "}
-        <Link href="/register" className="font-medium text-brand-600 hover:underline">
-          PM registration only
-        </Link>
-      </p>
+      <p className="mt-6 text-center text-sm text-muted">New PM accounts are created by an existing PM from the PM dashboard.</p>
       <div className="mt-8">
-        <Alert tone="blue" title="Demo accounts (mock data)">
+        <Alert tone="blue" title="Local API seed accounts">
           <ul className="mt-1 space-y-0.5 text-xs">
-            <li>PM: sarah@bs23.com / Password123</li>
-            <li>User: BS23001 / Password123</li>
-            <li>New user (first login): BS23002 / Temp1234</li>
+            <li>PM: pm001@bs23.test / Password123!</li>
+            <li>User: BS23001 / Password123!</li>
+            <li>Sign-in is checked by the real API (apps/api seed data).</li>
           </ul>
         </Alert>
       </div>

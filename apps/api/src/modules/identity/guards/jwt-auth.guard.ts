@@ -68,8 +68,7 @@ export class JwtAuthGuard implements CanActivate {
         // The owner (and so the role) comes from the database: a session row
         // that points at a Pm is a PM, one that points at a User is a user.
         // It also re-checks the account state on every request: a user whose
-        // departure date has passed (FR-AUTH-06) or a PM without a verified
-        // email is refused immediately.
+        // departure date has passed (FR-AUTH-06) is refused immediately.
         const owner = session ? resolveSessionOwner(session) : null;
 
         if (

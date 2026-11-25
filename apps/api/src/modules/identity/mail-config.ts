@@ -6,7 +6,7 @@
  *   console   development only. Prints a one-line notice (recipient masked,
  *             NO message body, so no link or token ever reaches the log).
  *   disabled  sends nothing. This is the production default until a provider
- *             is approved; verification and reset emails are NOT delivered.
+ *             is approved; reset and account-created emails are NOT delivered.
  *
  * An approved provider is added as one more MailProvider class in
  * mail.service.ts plus a new name here and its own environment variables
@@ -53,7 +53,7 @@ export function resolveMailProvider(env: MailConfigEnv): {
         problems.push({
             level: 'warning',
             message:
-                'Email delivery is disabled (no approved mail provider is configured): verification and password-reset emails are NOT sent.',
+                'Email delivery is disabled (no approved mail provider is configured): password-reset and account-created emails are NOT sent.',
         });
     }
 

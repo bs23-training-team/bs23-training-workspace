@@ -33,8 +33,6 @@ export const DEFAULT_RATE_LIMITS = {
     'password-forgot': { limit: 5, windowSeconds: 3600, by: 'ip+identifier' },
     'password-forgot-ip': { limit: 20, windowSeconds: 3600, by: 'ip' },
     'password-reset': { limit: 10, windowSeconds: 3600, by: 'ip' },
-    'email-verify': { limit: 10, windowSeconds: 3600, by: 'ip' },
-    'email-verify-request': { limit: 5, windowSeconds: 3600, by: 'ip+identifier' },
     'account-provision': { limit: 60, windowSeconds: 3600, by: 'ip' },
 } as const satisfies Record<string, RateLimitPolicy>;
 

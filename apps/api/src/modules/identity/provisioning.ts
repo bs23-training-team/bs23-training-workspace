@@ -83,17 +83,29 @@ type Db = Pick<PrismaService, 'pm' | 'user'>;
 
 /**
  * True when the email belongs to any PM or user in ANY workspace
- * (case-insensitive). Used before creating an account, because the schema only
- * guarantees uniqueness per workspace and login looks emails up everywhere.
+ * (case-insensitive). Agreed rule: an email, a PM ID and a User ID are each
+ * unique in the whole system, not only inside one workspace. The database
+ * enforces it too (see the migration "global_unique_email"); this check gives
+ * the clean 409 answer before the database has to refuse.
+ *
+ * `except` leaves one existing user out, so a user can keep their own email
+ * when they are edited.
  */
-export async function emailInUse(db: Db, email: string): Promise<boolean> {
+export async function emailInUse(
+    db: Db,
+    email: string,
+    except?: { userId: string },
+): Promise<boolean> {
     const where = {
         email: { equals: normalizeEmail(email), mode: 'insensitive' as const },
     };
 
     const [pm, user] = await Promise.all([
         db.pm.findFirst({ where, select: { pmId: true } }),
-        db.user.findFirst({ where, select: { userId: true } }),
+        db.user.findFirst({
+            where: except ? { ...where, userId: { not: except.userId } } : where,
+            select: { userId: true },
+        }),
     ]);
 
     return Boolean(pm || user);

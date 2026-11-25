@@ -55,7 +55,7 @@ export default function ArchivePage() {
           })}
         </Table>
       )}
-      {form.id && <TraineeFormDialog key={form.key} db={db} pmId={user.id} editUserId={form.id} open onClose={() => setForm({ key: form.key })} onSaved={(m) => toast(m)} />}
+      {form.id && <TraineeFormDialog key={form.key} db={db} editUserId={form.id} open onClose={() => setForm({ key: form.key })} onSaved={(m) => toast(m)} />}
     </div>
   );
 }

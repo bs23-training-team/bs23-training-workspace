@@ -230,8 +230,8 @@ export default function PMDashboard() {
         </Card>
       </div>
 
-      {userOpen > 0 && <TraineeFormDialog key={userOpen} db={db} pmId={user.id} open onClose={() => setUserOpen(0)} onSaved={(m) => toast(m)} />}
-      {pmOpen > 0 && <AddPMDialog key={pmOpen} creatorId={user.id} open onClose={() => setPmOpen(0)} onSaved={(m) => toast(m)} />}
+      {userOpen > 0 && <TraineeFormDialog key={userOpen} db={db} open onClose={() => setUserOpen(0)} onSaved={(m) => toast(m)} />}
+      {pmOpen > 0 && <AddPMDialog key={pmOpen} open onClose={() => setPmOpen(0)} onSaved={(m) => toast(m)} />}
     </div>
   );
 }

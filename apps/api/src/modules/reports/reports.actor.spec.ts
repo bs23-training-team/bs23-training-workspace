@@ -59,6 +59,23 @@ describe('reports.actor', () => {
       expect(actor).toEqual({ role: 'TRAINEE', userId: 'BS23001', workspaceId: 'ws-1' });
     });
 
+    it('accepts every User resource role (CENTRAL_LND, INDUSTRIAL_ATTACHMENT, SBU)', () => {
+      for (const role of ['CENTRAL_LND', 'INDUSTRIAL_ATTACHMENT', 'SBU'] as const) {
+        const actor = requireUserActor({
+          user: { sub: 'BS23002', sid: 'sess-3', workspaceId: 'ws-1', role },
+        });
+        expect(actor).toEqual({ role, userId: 'BS23002', workspaceId: 'ws-1' });
+      }
+    });
+
+    it('throws ForbiddenException for a role that is not PM or a User resource', () => {
+      expect(() =>
+        requireUserActor({
+          user: { sub: 'X1', sid: 's', workspaceId: 'ws-1', role: 'ADMIN' as never },
+        }),
+      ).toThrow(ForbiddenException);
+    });
+
     it('throws UnauthorizedException when req.user or required fields are missing', () => {
       expect(() => requireUserActor({})).toThrow(UnauthorizedException);
       expect(() => requireUserActor({ user: undefined })).toThrow(UnauthorizedException);

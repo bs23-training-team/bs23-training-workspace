@@ -8,16 +8,17 @@ import { isEmail, uid, todayISO } from "@/lib/utils";
 
 
 export interface TraineeInput {
-  traineeId: string;
+  /** Same name as the API field: the user ID, e.g. BS23001. */
+  userId: string;
   name: string;
   email: string;
-  tempPassword?: string;
+  temporaryPassword?: string;
   position: Position;
   attendanceMode: AttendanceMode;
   resource: Resource;
   onboardDate: string;
   /** Departure date (ISO). Empty is allowed only for a reactivated user whose date is not set yet. */
-  periodEnd: string;
+  departureDate: string;
   /** Time (minutes) and total marks for the first-login skill assessment. */
   skillAssessmentMinutes: number;
   skillAssessmentMarks: number;
@@ -35,7 +36,7 @@ export interface AccountCredentials {
   name: string;
   accountId: string;
   email: string;
-  tempPassword: string;
+  temporaryPassword: string;
   deliveryId: string;
   mailStatus: "QUEUED" | "ACCEPTED" | "FAILED";
 }
@@ -50,59 +51,41 @@ function queueAccountEmail(d: DB, userId: string, recipient: string): { id: stri
 
 export function createTrainee(pmId: string, input: TraineeInput): Result<AccountCredentials> {
   const db = getDB();
-  if (!input.traineeId.trim() || !input.name.trim() || !input.email.trim() || !input.onboardDate) return fail("Fill in every required field.");
+  if (!input.userId.trim() || !input.name.trim() || !input.email.trim() || !input.onboardDate) return fail("Fill in every required field.");
   if (!isEmail(input.email)) return fail("Enter a valid email address.");
-  if (!input.tempPassword || input.tempPassword.length < 8) return fail("Temporary password must be at least 8 characters.");
+  if (!input.temporaryPassword || input.temporaryPassword.length < 8) return fail("Temporary password must be at least 8 characters.");
   if (!input.teamIds.length) return fail("Choose at least one team.");
   const settingsError = assessmentSettingsError(input);
   if (settingsError) return fail(settingsError);
-  if (!input.periodEnd) return fail("Choose a departure date.");
-  if (input.periodEnd <= input.onboardDate) return fail("The departure date must be after the onboarding date.");
-  if (db.trainees.some((t) => t.traineeId.toLowerCase() === input.traineeId.trim().toLowerCase())) return fail("A user with this ID already exists.");
+  if (!input.departureDate) return fail("Choose a departure date.");
+  if (input.departureDate <= input.onboardDate) return fail("The departure date must be after the onboarding date.");
+  if (db.trainees.some((t) => t.traineeId.toLowerCase() === input.userId.trim().toLowerCase())) return fail("A user with this ID already exists.");
   if (db.users.some((u) => u.email.toLowerCase() === input.email.trim().toLowerCase())) return fail("An account with this email already exists.");
   let mail = { id: "", status: "FAILED" as "ACCEPTED" | "FAILED" };
   mutate((d) => {
     const id = uid("u");
     mail = queueAccountEmail(d, id, input.email.trim());
-    d.users.push({ id, name: input.name.trim(), email: input.email.trim(), role: "TRAINEE", password: input.tempPassword!, mustChangePassword: true, emailVerified: true, createdAt: nowIso() });
-    d.trainees.push({ userId: id, traineeId: input.traineeId.trim().toUpperCase(), position: input.position, attendanceMode: input.attendanceMode, resource: input.resource, onboardDate: input.onboardDate, periodEnd: input.periodEnd, skillAssessmentMinutes: input.skillAssessmentMinutes, skillAssessmentMarks: input.skillAssessmentMarks, skills: [], teamIds: input.teamIds, pmId, hideFromLeaderboard: false });
+    d.users.push({ id, name: input.name.trim(), email: input.email.trim(), role: "TRAINEE", password: input.temporaryPassword!, mustChangePassword: true, emailVerified: true, createdAt: nowIso() });
+    d.trainees.push({ userId: id, traineeId: input.userId.trim().toUpperCase(), position: input.position, attendanceMode: input.attendanceMode, resource: input.resource, onboardDate: input.onboardDate, periodEnd: input.departureDate, skillAssessmentMinutes: input.skillAssessmentMinutes, skillAssessmentMarks: input.skillAssessmentMarks, skills: [], teamIds: input.teamIds, pmId, hideFromLeaderboard: false });
   });
-  return ok({ name: input.name.trim(), accountId: input.traineeId.trim().toUpperCase(), email: input.email.trim(), tempPassword: input.tempPassword!, deliveryId: mail.id, mailStatus: mail.status });
+  return ok({ name: input.name.trim(), accountId: input.userId.trim().toUpperCase(), email: input.email.trim(), temporaryPassword: input.temporaryPassword!, deliveryId: mail.id, mailStatus: mail.status });
 }
 
-export function updateTrainee(pmId: string, userId: string, input: TraineeInput): Result {
-  const db = getDB();
-  if (!input.name.trim() || !input.email.trim() || !input.onboardDate) return fail("Fill in every required field.");
-  if (!isEmail(input.email)) return fail("Enter a valid email address.");
-  if (!input.teamIds.length) return fail("Choose at least one team.");
-  const cur = db.trainees.find((t) => t.userId === userId);
-  const settingsErr = assessmentSettingsError(input);
-  if (settingsErr) return fail(settingsErr);
-  if (cur?.archivedAt && (!input.periodEnd || input.periodEnd <= todayISO())) return fail("Set a new departure date after today to move this user back to All Users.");
-  if (!input.periodEnd) {
-    if (cur?.periodEnd) return fail("Choose a departure date.");
-  } else {
-    if (input.periodEnd <= input.onboardDate) return fail("The departure date must be after the onboarding date.");
-    if (cur && cur.periodEnd !== input.periodEnd && input.periodEnd <= todayISO()) return fail("The departure date has already passed. Choose a date after today.");
-  }
-  if (db.trainees.some((t) => t.userId !== userId && t.traineeId.toLowerCase() === input.traineeId.trim().toLowerCase())) return fail("A user with this ID already exists.");
-  if (db.users.some((u) => u.id !== userId && u.email.toLowerCase() === input.email.trim().toLowerCase())) return fail("An account with this email already exists.");
+/**
+ * Copies an edit the API has ALREADY accepted into the mock store, so the lists and profiles that are still mock show
+ * it. There are no rules here: the API checked everything (see `updateTrainee` in ./api). Teams are not copied: the
+ * mock team IDs are not the real ones. `userId` is the mock user's id; `input.userId` is the real user ID.
+ */
+export function applyTraineeEdit(userId: string, input: TraineeInput, reactivated: boolean) {
   mutate((d) => {
-    const u = d.users.find((x) => x.id === userId)!;
-    const t = d.trainees.find((x) => x.userId === userId)!;
-    const wasArchived = !!t.archivedAt;
+    const u = d.users.find((x) => x.id === userId);
+    const t = d.trainees.find((x) => x.userId === userId);
+    if (!u || !t) return;
     u.name = input.name.trim();
     u.email = input.email.trim();
-    if (input.tempPassword) {
-      u.password = input.tempPassword;
-      u.mustChangePassword = true;
-    }
-    Object.assign(t, { traineeId: input.traineeId.trim().toUpperCase(), position: input.position, attendanceMode: input.attendanceMode, resource: input.resource, onboardDate: input.onboardDate, periodEnd: input.periodEnd, skillAssessmentMinutes: input.skillAssessmentMinutes, skillAssessmentMarks: input.skillAssessmentMarks, teamIds: input.teamIds });
-    if (wasArchived) {
-      t.archivedAt = undefined; // a new departure date reactivates the user
-    }
+    Object.assign(t, { position: input.position, attendanceMode: input.attendanceMode, resource: input.resource, onboardDate: input.onboardDate, periodEnd: input.departureDate, skillAssessmentMinutes: input.skillAssessmentMinutes, skillAssessmentMarks: input.skillAssessmentMarks });
+    if (reactivated) t.archivedAt = undefined; // a new departure date brought the user back
   });
-  return ok();
 }
 
 /** Moves every active trainee whose period has ended to the Archive. Returns how many were archived. */
@@ -123,12 +106,12 @@ export function archiveExpiredTrainees(): number {
   return n;
 }
 
-export function createPM(creatorId: string, input: { name: string; email: string; pmCode: string; password: string }): Result<AccountCredentials> {
+export function createPM(creatorId: string, input: { name: string; email: string; pmId: string; password: string }): Result<AccountCredentials> {
   const db = getDB();
-  if (!input.name.trim() || !input.pmCode.trim()) return fail("Fill in every required field.");
+  if (!input.name.trim() || !input.pmId.trim()) return fail("Fill in every required field.");
   if (!isEmail(input.email)) return fail("Enter a valid email address.");
   if (input.password.length < 8) return fail("Password must be at least 8 characters.");
-  const code = input.pmCode.trim().toUpperCase();
+  const code = input.pmId.trim().toUpperCase();
   if (db.users.some((u) => u.email.toLowerCase() === input.email.trim().toLowerCase())) return fail("An account with this email already exists.");
   if (db.users.some((u) => u.pmCode?.toLowerCase() === code.toLowerCase()) || db.trainees.some((t) => t.traineeId.toLowerCase() === code.toLowerCase())) return fail("This ID is already in use.");
   let mail = { id: "", status: "FAILED" as "ACCEPTED" | "FAILED" };
@@ -138,7 +121,7 @@ export function createPM(creatorId: string, input: { name: string; email: string
     d.users.push({ id, name: input.name.trim(), email: input.email.trim(), role: "PM", pmCode: code, password: input.password, mustChangePassword: true, emailVerified: true, createdAt: nowIso() });
     d.notificationPrefs.push(...d.notificationPrefs.filter((p) => p.userId === "pm1").map((p) => ({ ...p, userId: id, showInBell: true })));
   });
-  return ok({ name: input.name.trim(), accountId: code, email: input.email.trim(), tempPassword: input.password, deliveryId: mail.id, mailStatus: mail.status });
+  return ok({ name: input.name.trim(), accountId: code, email: input.email.trim(), temporaryPassword: input.password, deliveryId: mail.id, mailStatus: mail.status });
 }
 
 export function createTeam(pmId: string, name: string): Result {

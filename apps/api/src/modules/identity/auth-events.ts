@@ -16,9 +16,6 @@ import { ownerData, type AuthRole } from './account.js';
  *   auth.account_created            Add PM / Add Trainee      (+ notification)
  *   auth.password_changed           signed-in password change (+ notification)
  *   auth.password_reset_completed   reset by emailed link     (+ notification)
- *   auth.email_verified             PM email verified
- *   auth.invitation_created         trainee invited / re-invited (pending approval)
- *   auth.invitation_accepted        trainee activated by link   (pending approval)
  *
  * Payloads hold identifiers only (role, account ID, acting PM ID, plus the
  * envelope fields version / aggregate / actor): never an
@@ -29,12 +26,7 @@ import { ownerData, type AuthRole } from './account.js';
 export type AuthEventType =
     | 'auth.account_created'
     | 'auth.password_changed'
-    | 'auth.password_reset_completed'
-    | 'auth.email_verified'
-    // E01 SRS FR-09 / FR-10. Written only by the invitation flow, which is
-    // waiting for schema approval (see pending-invitation/README.md).
-    | 'auth.invitation_created'
-    | 'auth.invitation_accepted';
+    | 'auth.password_reset_completed';
 
 export type AuthEvent = {
     type: AuthEventType;

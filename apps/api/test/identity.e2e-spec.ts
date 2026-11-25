@@ -157,7 +157,7 @@ suite('identity against real PostgreSQL', () => {
         const token = await prisma.authToken.findFirstOrThrow({ where: { userId, type: 'PASSWORD_RESET' } });
         expect(token).toMatchObject({ pmId: null, usedAt: null });
 
-        await service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD });
+        await service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
         const credential = await prisma.credential.findUniqueOrThrow({ where: { userId } });
         expect(credential.passwordChangedAt).not.toBeNull();
         // Put the original password back for the other tests.
@@ -224,15 +224,14 @@ suite('identity against real PostgreSQL', () => {
         const email = `added-${run}@example.test`;
 
         const created = await provisioning.createPm(actor, { pmId: newId, name: 'Added PM', email, password: PASSWORD });
-        expect(created).toMatchObject({ pmId: newId, workspaceId, emailVerified: false, mustChangePassword: true });
+        expect(created).toMatchObject({ pmId: newId, workspaceId, mustChangePassword: true });
         // Real tables: Notification (recipient = the new PM) and OutboxEvent were written in the same transaction.
         expect(await prisma.notification.findFirstOrThrow({ where: { pmId: newId } })).toMatchObject({ workspaceId, userId: null });
         const outbox = await prisma.outboxEvent.findFirstOrThrow({ where: { workspaceId, type: 'auth.account_created' } });
         expect(outbox).toMatchObject({ status: 'PENDING', attempts: 0 });
         expect(JSON.stringify(outbox.payload)).not.toContain(email);
 
-        await expect(service.login({ identifier: email, password: PASSWORD })).rejects.toThrow('Verify your email');
-        await service.verifyEmail({ token: created.verificationToken as string });
+        // No email verification: the new PM can sign in at once.
         expect((await service.login({ identifier: email, password: PASSWORD })).user.mustChangePassword).toBe(true);
 
         await expect(
@@ -272,6 +271,87 @@ suite('identity against real PostgreSQL', () => {
             provisioning.createTrainee(actor, { ...base, userId: `BS239${number()}`, name: 'x', email: userEmail }),
         ).rejects.toThrow('Email is already in use.');
         expect(await prisma.user.count({ where: { workspaceId } })).toBe(before);
+    }, 60_000);
+
+    it('an email is unique in the whole system: the real triggers refuse it across workspaces, tables and letter case', async () => {
+        const newPm = (id: string, ws: string, email: string) =>
+            prisma.pm.create({ data: { pmId: id, workspaceId: ws, name: 'x', email, emailVerified: true } });
+        const newUser = (id: string, ws: string, owner: string, email: string) =>
+            prisma.user.create({
+                data: {
+                    userId: id, workspaceId: ws, name: 'x', email, resource: 'TRAINEE', pmId: owner,
+                    position: 'BACKEND', attendanceMode: 'ONLINE', onboardDate: new Date('2026-01-01T00:00:00Z'),
+                },
+            });
+        const refused = async (action: Promise<unknown>) => {
+            let error: unknown;
+            try {
+                await action;
+            } catch (e) {
+                error = e;
+            }
+            expect(isEmailTriggerError(error)).toBe(true);
+        };
+
+        // Another workspace, any table, any letter case: all refused (they were allowed before the migration).
+        await refused(newPm(`PM9${number()}`, otherWorkspaceId, pmEmail.toUpperCase())); // PM, same email as a PM
+        await refused(newUser(`BS239${number()}`, otherWorkspaceId, otherPmId, pmEmail)); // User takes a PM's email
+        await refused(newPm(`PM9${number()}`, otherWorkspaceId, userEmail)); // PM takes a User's email
+        await refused(newUser(`BS239${number()}`, otherWorkspaceId, otherPmId, userEmail.toUpperCase())); // User, same email as a User
+        // An UPDATE of the email is guarded too, and keeping the own email is fine.
+        await refused(prisma.pm.update({ where: { pmId: otherPmId }, data: { email: userEmail } }));
+        await refused(prisma.user.update({ where: { userId: otherUserId }, data: { email: pmEmail } }));
+        await prisma.pm.update({ where: { pmId: pmId }, data: { email: pmEmail } });
+
+        // Through the service, the same rule is a clean 409.
+        const actor = { sub: pmId, role: 'PM' as const, workspaceId };
+        await expect(
+            provisioning.createPm(actor, { pmId: `PM9${number()}`, name: 'x', email: `other-user-${run}@example.test`, password: PASSWORD }),
+        ).rejects.toThrow('Email is already in use.');
+        // The IDs are primary keys: a second PM or User with an existing ID is refused whatever the workspace.
+        await expect(newPm(pmId, otherWorkspaceId, `fresh-${run}@example.test`)).rejects.toSatisfy(isUniqueViolation);
+        await expect(newUser(userId, otherWorkspaceId, otherPmId, `fresh2-${run}@example.test`)).rejects.toSatisfy(isUniqueViolation);
+    }, 60_000);
+
+    it('Edit User against the real database: fields, memberships, email rule, password reset, PM scope', async () => {
+        const actor = { sub: pmId, role: 'PM' as const, workspaceId };
+        const alpha = await prisma.team.create({ data: { workspaceId, name: `EditA ${run}`, pmId } });
+        const beta = await prisma.team.create({ data: { workspaceId, name: `EditB ${run}`, pmId } });
+        const id = `BS239${number()}`;
+        await provisioning.createTrainee(actor, {
+            userId: id, name: 'Before', email: `before-${run}@example.test`, temporaryPassword: PASSWORD,
+            position: 'QA', attendanceMode: 'PHYSICAL', onboardDate: '2026-02-01', departureDate: '2099-01-01',
+            skillAssessmentMinutes: 60, skillAssessmentMarks: 100, teamIds: [alpha.id],
+        });
+        const form = (teamIds: string[], o: Record<string, unknown> = {}) => ({
+            name: 'After', email: `after-${run}@example.test`, position: 'BACKEND', attendanceMode: 'ONLINE', resource: 'SBU',
+            onboardDate: '2026-02-01', departureDate: '2099-06-01', skillAssessmentMinutes: 20, skillAssessmentMarks: 40, teamIds, ...o,
+        });
+
+        expect(await provisioning.getTrainee(actor, id)).toMatchObject({ name: 'Before', departureDate: '2099-01-01', teamIds: [alpha.id], archived: false });
+
+        // Email rule (a PM of another workspace owns it) and PM scope: nothing changes.
+        await expect(provisioning.updateTrainee(actor, id, form([beta.id], { email: `other-${run}@example.test` }))).rejects.toThrow('Email is already in use.');
+        await expect(
+            provisioning.updateTrainee({ sub: otherPmId, role: 'PM', workspaceId: otherWorkspaceId }, id, form([beta.id])),
+        ).rejects.toThrow('User not found.');
+        expect(await prisma.user.findUniqueOrThrow({ where: { userId: id } })).toMatchObject({ name: 'Before', email: `before-${run}@example.test` });
+
+        // A real edit with a password reset, in one transaction.
+        await service.login({ identifier: id, password: PASSWORD });
+        const result = await provisioning.updateTrainee(actor, id, form([beta.id], { temporaryPassword: NEW_PASSWORD }));
+
+        expect(result).toMatchObject({ userId: id, resource: 'SBU', teamIds: [beta.id], passwordReset: true, reactivated: false });
+        expect(await prisma.user.findUniqueOrThrow({ where: { userId: id } })).toMatchObject({
+            pmId, name: 'After', email: `after-${run}@example.test`, resource: 'SBU', position: 'BACKEND', mustChangePassword: true,
+            skillAssessmentMinutes: 20, skillAssessmentMarks: 40,
+        });
+        const memberships = await prisma.membership.findMany({ where: { userId: id } });
+        expect(memberships.find((m) => m.teamId === alpha.id)?.leftAt).not.toBeNull();
+        expect(memberships.find((m) => m.teamId === beta.id)?.leftAt).toBeNull();
+        expect(await prisma.session.count({ where: { userId: id, endedAt: null } })).toBe(0);
+        await expect(service.login({ identifier: id, password: PASSWORD })).rejects.toThrow('Invalid credentials.');
+        expect((await service.login({ identifier: id, password: NEW_PASSWORD })).user).toMatchObject({ id, role: 'SBU', mustChangePassword: true });
     }, 60_000);
 
     it('PM scope: a PM cannot use another PM\'s team in the SAME workspace', async () => {
@@ -315,7 +395,7 @@ suite('identity against real PostgreSQL', () => {
         const session = await prisma.session.findFirstOrThrow({ where: { userId, workspaceId }, orderBy: { createdAt: 'desc' } });
         const before = await prisma.outboxEvent.count({ where: { workspaceId, type: 'auth.password_changed' } });
 
-        await service.changePassword('TRAINEE', userId, workspaceId, session.id, { currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
+        await service.changePassword('TRAINEE', userId, workspaceId, session.id, { currentPassword: PASSWORD, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
 
         expect(trainee.user.id).toBe(userId);
         expect(await prisma.outboxEvent.count({ where: { workspaceId, type: 'auth.password_changed' } })).toBe(before + 1);
@@ -362,8 +442,8 @@ suite('identity against real PostgreSQL', () => {
     it('a reset token can be used once even when used twice at the same moment', async () => {
         const forgot = await service.forgotPassword({ workEmail: pmEmail });
         const results = await Promise.allSettled([
-            service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD }),
-            service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD }),
+            service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD }),
+            service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD }),
         ]);
 
         expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);

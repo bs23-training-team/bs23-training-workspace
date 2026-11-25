@@ -15,6 +15,7 @@ import {
     seedAccounts,
     type Harness,
 } from '../../../test/support/identity-harness.js';
+import { USER_ROLES, type AuthRole } from './account.js';
 import { normalizeEmail } from './email.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { RolesGuard } from './guards/roles.guard.js';
@@ -97,7 +98,7 @@ describe('IdentityService.login: PM (email + password, Pm model)', () => {
         expect(h.db.rows('session')).toHaveLength(0);
     });
 
-    it('refuses an unverified PM only after the correct password (FR-AUTH-04)', async () => {
+    it('a PM can sign in whatever its (unused) emailVerified flag: there is no email verification', async () => {
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
         h.db.addPm(h.passwordHash, {
@@ -110,16 +111,16 @@ describe('IdentityService.login: PM (email + password, Pm model)', () => {
         await expect(
             h.service.login({ identifier: 'new.pm@bs23.test', password: 'WrongPass123' }),
         ).rejects.toThrow('Invalid credentials.');
-        await expect(
-            h.service.login({ identifier: 'new.pm@bs23.test', password: PASSWORD }),
-        ).rejects.toThrow('Verify your email before signing in.');
-        expect(h.db.rows('session')).toHaveLength(0);
+        const result = await h.service.login({ identifier: 'new.pm@bs23.test', password: PASSWORD });
+        expect(result.user).toMatchObject({ id: 'PM002', role: 'PM' });
+        expect(h.db.rows('session')).toHaveLength(1);
     });
 
-    it('fails closed when one email belongs to PMs in two workspaces (open E10/E11 decision)', async () => {
+    it('fails closed on old data where one email belongs to PMs in two workspaces (new data cannot: the email is unique everywhere)', async () => {
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
         const other = h.db.addWorkspace({ slug: 'second' });
+        h.db.enforceEmailTriggers = false; // rows from before the global-unique-email migration
         h.db.addPm(h.passwordHash, { pmId: 'PM002', workspaceId: other.id, email: 'pm001@bs23.test' });
         expect(workspace.id).not.toBe(other.id);
 
@@ -150,7 +151,7 @@ describe('IdentityService.login: user (Trainee ID + password, User.userId)', () 
         expect(result.user.id).toBe('BS23001');
     });
 
-    it('signs in every resource type as the login role TRAINEE (PRD: role "user")', async () => {
+    it('signs in every resource type with that resource as the role', async () => {
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
 
@@ -169,7 +170,32 @@ describe('IdentityService.login: user (Trainee ID + password, User.userId)', () 
                 identifier: `BS23${100 + index}`,
                 password: PASSWORD,
             });
-            expect(result.user).toMatchObject({ role: 'TRAINEE', resource });
+            expect(result.user).toMatchObject({ role: resource, resource });
+            expect(decodePayload(result.accessToken)).toMatchObject({ sub: `BS23${100 + index}` });
+        }
+    });
+
+    it('puts the resource role on req.user for each of the four resource types', async () => {
+        const h = await makeHarness();
+        const { workspace } = await seedAccounts(h);
+
+        const resources = ['TRAINEE', 'CENTRAL_LND', 'INDUSTRIAL_ATTACHMENT', 'SBU'];
+        for (const [index, resource] of resources.entries()) {
+            h.db.addUser(h.passwordHash, {
+                userId: `BS23${200 + index}`,
+                workspaceId: workspace.id,
+                email: `guard${index}@bs23.test`,
+                resource,
+            });
+        }
+
+        for (const [index, resource] of resources.entries()) {
+            const login = await h.service.login({
+                identifier: `BS23${200 + index}`,
+                password: PASSWORD,
+            });
+            const request = await makeGuard(h)(login.accessToken);
+            expect(request.user).toMatchObject({ sub: `BS23${200 + index}`, role: resource });
         }
     });
 
@@ -218,7 +244,7 @@ describe('IdentityService.login: user (Trainee ID + password, User.userId)', () 
         expect(future.user.id).toBe('BS23004');
     });
 
-    it('does not require a verified email for users', async () => {
+    it('does not look at the emailVerified flag of users either', async () => {
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
         h.db.addUser(h.passwordHash, {
@@ -475,7 +501,8 @@ describe('IdentityService logout, sessions and me', () => {
         const pm = await h.service.me('PM', 'PM001');
         const user = await h.service.me('TRAINEE', 'BS23001');
 
-        expect(pm.user).toMatchObject({ id: 'PM001', role: 'PM', emailVerified: true });
+        expect(pm.user).toMatchObject({ id: 'PM001', role: 'PM', bio: '', hasPhoto: false });
+        expect(pm.user).not.toHaveProperty('emailVerified');
         expect(user.user).toMatchObject({
             id: 'BS23001',
             role: 'TRAINEE',
@@ -505,7 +532,7 @@ describe('IdentityService.changePassword (FR-AUTH-03)', () => {
             'BS23010',
             workspace.id as string,
             decodePayload(current.accessToken).sid as string,
-            { currentPassword: PASSWORD, newPassword: NEW_PASSWORD },
+            { currentPassword: PASSWORD, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD },
         );
 
         expect(h.db.rows('user').find((u) => u.userId === 'BS23010')?.mustChangePassword).toBe(false);
@@ -528,7 +555,7 @@ describe('IdentityService.changePassword (FR-AUTH-03)', () => {
 
         await h.service.changePassword('PM', 'PM001', workspace.id as string, 'no-session', {
             currentPassword: PASSWORD,
-            newPassword: NEW_PASSWORD,
+            newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD,
         });
 
         expect(h.db.rows('pm')[0].mustChangePassword).toBe(false);
@@ -544,6 +571,7 @@ describe('IdentityService.changePassword (FR-AUTH-03)', () => {
             h.service.changePassword('TRAINEE', 'BS23001', workspace.id as string, 's', {
                 currentPassword,
                 newPassword,
+                confirmPassword: newPassword,
             });
 
         await expect(call('WrongPass123', NEW_PASSWORD)).rejects.toThrow('Current password is incorrect.');
@@ -674,18 +702,18 @@ describe('JwtAuthGuard (protected routes)', () => {
         expect((await makeGuard(h, true)(login.accessToken)).user.sub).toBe('BS23011');
     });
 
-    it('rejects an unverified PM even with a live session', async () => {
+    it('accepts a PM with a live session whatever its (unused) emailVerified flag', async () => {
         const h = await makeHarness();
         await seedAccounts(h);
         const login = await h.service.login({ identifier: 'pm001@bs23.test', password: PASSWORD });
         h.db.rows('pm')[0].emailVerified = false;
 
-        await expect(makeGuard(h)(login.accessToken)).rejects.toThrow(UnauthorizedException);
+        expect((await makeGuard(h)(login.accessToken)).user).toMatchObject({ sub: 'PM001', role: 'PM' });
     });
 });
 
 describe('RolesGuard (backend role enforcement)', () => {
-    const run = (allowed: Array<'PM' | 'TRAINEE'> | undefined, userRole?: 'PM' | 'TRAINEE') => {
+    const run = (allowed: AuthRole[] | undefined, userRole?: AuthRole) => {
         const guard = new RolesGuard({ getAllAndOverride: () => allowed } as never);
         const context = {
             getHandler: () => undefined,
@@ -703,6 +731,14 @@ describe('RolesGuard (backend role enforcement)', () => {
     it('lets a Trainee into Trainee-only routes and blocks a PM', () => {
         expect(run(['TRAINEE'], 'TRAINEE')()).toBe(true);
         expect(run(['TRAINEE'], 'PM')).toThrow(ForbiddenException);
+    });
+
+    it('lets all four User roles into a route that lists USER_ROLES, and blocks a PM', () => {
+        for (const role of USER_ROLES) {
+            expect(run([...USER_ROLES], role)()).toBe(true);
+            expect(run(['PM'], role)).toThrow(ForbiddenException);
+        }
+        expect(run([...USER_ROLES], 'PM')).toThrow(ForbiddenException);
     });
 
     it('blocks a request with no authenticated user', () => {

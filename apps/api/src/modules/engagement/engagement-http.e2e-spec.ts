@@ -122,7 +122,7 @@ describe('engagement HTTP routes (database, req.user set by the test)', () => {
     });
 
     it('treats an incomplete or unknown req.user as nobody: 401 (no sub, no workspace, a role E01 never sets, the old userId shape)', async () => {
-      for (const incomplete of [{ role: 'USER', workspaceId }, { role: 'USER', sub: U1 }, { sub: U1, workspaceId }, { role: 'USER', sub: U1, workspaceId }, { role: 'ADMIN', sub: U1, workspaceId }, { role: 'USER', sub: '', workspaceId }, { role: 'USER', userId: U1, workspaceId }]) {
+      for (const incomplete of [{ role: 'USER', workspaceId }, { role: 'USER', sub: U1 }, { sub: U1, workspaceId }, { role: 'TRAINEE', sub: U1, workspaceId }, { role: 'ADMIN', sub: U1, workspaceId }, { role: 'USER', sub: '', workspaceId }, { role: 'USER', userId: U1, workspaceId }]) {
         const res = await as(incomplete).get('/quests');
         expect([res.status, errorCode(res)]).toEqual([401, 'UNAUTHENTICATED']);
       }

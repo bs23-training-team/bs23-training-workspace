@@ -140,7 +140,7 @@ describe('growth-core HTTP routes (database, req.user set by the test)', () => {
     });
 
     it('treats an incomplete or unknown req.user as nobody: 401 (no sub, no workspace, a role E01 never sets, the old pmId shape)', async () => {
-      for (const incomplete of [{ role: 'PM', workspaceId }, { role: 'PM', sub: 'PM001' }, { sub: 'PM001', workspaceId }, { role: 'USER', sub: U1, workspaceId }, { role: 'ADMIN', sub: 'PM001', workspaceId }, { role: 'PM', sub: '', workspaceId }, { role: 'PM', pmId: 'PM001', workspaceId }]) {
+      for (const incomplete of [{ role: 'PM', workspaceId }, { role: 'PM', sub: 'PM001' }, { sub: 'PM001', workspaceId }, { role: 'TRAINEE', sub: U1, workspaceId }, { role: 'ADMIN', sub: 'PM001', workspaceId }, { role: 'PM', sub: '', workspaceId }, { role: 'PM', pmId: 'PM001', workspaceId }]) {
         const res = await as(incomplete).get('/pm/xp-rules');
         expect([res.status, errorCode(res)]).toEqual([401, 'UNAUTHENTICATED']);
       }

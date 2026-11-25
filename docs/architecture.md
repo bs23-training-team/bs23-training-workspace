@@ -326,6 +326,9 @@ The upgrade test (from the previous release's database) is added once the first 
 
 Locally both point to the same Docker database on port 5433.
 
+The shared Neon development database and how migrations reach it (only through the `Migrate Neon dev`
+workflow, after a merge and an approval by E11) are described in [neon-dev-database.md](neon-dev-database.md).
+
 ### 5.4 Seeds
 
 - `apps/api/prisma/seed/seed.ts` (`pnpm db:seed`) creates the demo workspace `bs23`, PMs `PM001` and
@@ -347,6 +350,7 @@ Locally both point to the same Docker database on port 5433.
 |---|---|---|---|---|
 | **local** | Postgres 18 in Docker Compose (host port **5433**) | Redis 8 in Docker Compose (6379) | developer machine | daily development |
 | **ci/test** | Postgres 18 service container, fresh per run | added with the first Redis feature | GitHub Actions | automated checks on real PostgreSQL |
+| **shared dev** | Neon `development` branch | none | `Migrate Neon dev` workflow after a merge to `develop`, approved by E11 | team integration (see [neon-dev-database.md](neon-dev-database.md)) |
 | **staging** | Neon (separate project or branch) | hosted Redis (TBD) | auto-deploy on merge to `develop` (planned) | integration, smoke tests, restore drills |
 | **production** | Neon (separate, protected) | hosted Redis (TBD) | `develop` → `main` with manual approval (planned) | real users |
 
@@ -509,3 +513,4 @@ Recommended extras (not in the SRS): secret scanning, dependency audit, SonarQub
 | 2026-11-24 | Web connection started: step 0 renamed each web module's `api.ts` to `mock-api.ts` (PR #41); API now allows the web origin with CORS (`WEB_ORIGIN`, PR #49); guide `docs/web-api-integration.md` added. The unused `// DB:` marker for TECHNICAL badges removed from `schema.prisma`. |
 | 2026-11-24 | Decisions recorded in 4.3: every PM reads every user, only the managing PM changes a user; `Pm` and `User` stay two tables in v1. |
 | 2026-11-25 | The login role of a user is `USER` (was `TRAINEE`): `req.user.role` is `'PM'` or `'USER'`. `TRAINEE` stays only as a resource type. |
+| 2026-11-25 | Shared Neon development database: `Migrate Neon dev` workflow applies merged migrations after E11 approves the `neon-dev` environment; guide `docs/neon-dev-database.md`. |

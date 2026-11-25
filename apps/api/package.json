@@ -22,7 +22,6 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "dev": "nest start --watch",
     "db:generate": "prisma generate --no-hints",
-    "db:seed:sprint": "tsx prisma/seed/seed.sprint.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

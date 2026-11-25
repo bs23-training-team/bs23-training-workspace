@@ -30,9 +30,9 @@ describe('engagement HTTP routes (database, req.user set by the test)', () => {
   let prisma: PrismaService;
   let workspaceId: string;
 
-  // req.user as E01's JwtAuthGuard sets it: sub is the Pm.pmId or User.userId, every User has the role TRAINEE.
+  // req.user as E01's JwtAuthGuard sets it: sub is the Pm.pmId or User.userId, every User has the role USER.
   const pm = (pmId = 'PM001'): RequestUser => ({ sub: pmId, sid: 'test-session', workspaceId, role: 'PM' });
-  const user = (userId: string): RequestUser => ({ sub: userId, sid: 'test-session', workspaceId, role: 'TRAINEE' });
+  const user = (userId: string): RequestUser => ({ sub: userId, sid: 'test-session', workspaceId, role: 'USER' });
   // Test-only: the request reaches the app with req.user already set (no header, no shared state). null = nobody signed in.
   const target = (user: RequestUser | null): RequestListener | Server => {
     if (!user) return app.getHttpServer() as Server;
@@ -122,7 +122,7 @@ describe('engagement HTTP routes (database, req.user set by the test)', () => {
     });
 
     it('treats an incomplete or unknown req.user as nobody: 401 (no sub, no workspace, a role E01 never sets, the old userId shape)', async () => {
-      for (const incomplete of [{ role: 'TRAINEE', workspaceId }, { role: 'TRAINEE', sub: U1 }, { sub: U1, workspaceId }, { role: 'USER', sub: U1, workspaceId }, { role: 'ADMIN', sub: U1, workspaceId }, { role: 'TRAINEE', sub: '', workspaceId }, { role: 'TRAINEE', userId: U1, workspaceId }]) {
+      for (const incomplete of [{ role: 'USER', workspaceId }, { role: 'USER', sub: U1 }, { sub: U1, workspaceId }, { role: 'TRAINEE', sub: U1, workspaceId }, { role: 'ADMIN', sub: U1, workspaceId }, { role: 'USER', sub: '', workspaceId }, { role: 'USER', userId: U1, workspaceId }]) {
         const res = await as(incomplete).get('/quests');
         expect([res.status, errorCode(res)]).toEqual([401, 'UNAUTHENTICATED']);
       }

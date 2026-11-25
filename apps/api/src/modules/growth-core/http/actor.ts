@@ -5,8 +5,8 @@
  *
  * `req.user` is set by E01's `JwtAuthGuard` after it has checked the access token and the live
  * session (apps/api/src/modules/identity/README.md): `{ sub, sid, workspaceId, role }`, where `sub`
- * is the account id (`Pm.pmId` for a PM, `User.userId` for a user) and `role` is 'PM' or 'TRAINEE'
- * (every `User`, whatever their resource type, signs in as 'TRAINEE'). Our routes run that guard
+ * is the account id (`Pm.pmId` for a PM, `User.userId` for a user) and `role` is 'PM' or 'USER'
+ * (every `User`, whatever their resource type, signs in as 'USER'). Our routes run that guard
  * first, then `ActorGuard`, which turns `req.user` into an `Actor`. Without a usable `req.user` the
  * answer is 401. Tests set `req.user` themselves; no header is ever trusted.
  */
@@ -29,7 +29,7 @@ export interface RequestUser {
   /** Id of the live session the access token belongs to. */
   sid?: string;
   workspaceId?: string;
-  /** 'PM' or 'TRAINEE'. */
+  /** 'PM' or 'USER'. */
   role?: string;
 }
 
@@ -44,13 +44,13 @@ const present = (value: unknown): value is string => typeof value === 'string' &
 /**
  * Turns `req.user` into the signed-in person, or null when there is nobody (the caller answers 401).
  *
- * - role 'PM' with a `sub` is the PM `sub`; role 'TRAINEE' with a `sub` is the user `sub`.
+ * - role 'PM' with a `sub` is the PM `sub`; role 'USER' with a `sub` is the user `sub`.
  * - Both need a `workspaceId`. A missing role, an unknown role or an empty id is nobody.
  */
 export function actorFromRequestUser(user: RequestUser | null | undefined): Actor | null {
   if (!user || typeof user !== 'object' || !present(user.sub) || !present(user.workspaceId)) return null;
   if (user.role === 'PM') return { role: 'PM', pmId: user.sub, workspaceId: user.workspaceId };
-  if (user.role === 'TRAINEE') return { role: 'USER', userId: user.sub, workspaceId: user.workspaceId };
+  if (user.role === 'USER') return { role: 'USER', userId: user.sub, workspaceId: user.workspaceId };
   return null;
 }
 

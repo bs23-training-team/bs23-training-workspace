@@ -34,9 +34,9 @@ describe('actorFromRequestUser (E01 req.user -> the signed-in person)', () => {
     expect(actorFromRequestUser({ role: 'USER', sub: 'BS23001', workspaceId: '' })).toBeNull();
   });
 
-  it('is nobody without a role, or with a role E01 never sets (including our own USER)', () => {
+  it('is nobody without a role, or with a role E01 never sets (including the old name TRAINEE)', () => {
     expect(actorFromRequestUser({ sub: 'PM001', workspaceId: 'w1' })).toBeNull();
-    expect(actorFromRequestUser({ role: 'USER', sub: 'BS23001', workspaceId: 'w1' })).toBeNull();
+    expect(actorFromRequestUser({ role: 'TRAINEE', sub: 'BS23001', workspaceId: 'w1' })).toBeNull();
     expect(actorFromRequestUser({ role: 'ADMIN', sub: 'PM001', workspaceId: 'w1' })).toBeNull();
     expect(actorFromRequestUser({ role: 'pm', sub: 'PM001', workspaceId: 'w1' })).toBeNull();
   });

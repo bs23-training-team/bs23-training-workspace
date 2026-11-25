@@ -12,5 +12,5 @@ export const AllowMustChangePassword = () =>
     SetMetadata(ALLOW_MUST_CHANGE_PASSWORD_KEY, true);
 
 /** Restrict a route to the listed roles (enforced by RolesGuard). */
-export const Roles = (...roles: Array<'PM' | 'TRAINEE'>) =>
+export const Roles = (...roles: Array<'PM' | 'USER'>) =>
     SetMetadata(ROLES_KEY, roles);

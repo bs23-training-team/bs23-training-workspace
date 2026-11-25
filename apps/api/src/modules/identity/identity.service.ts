@@ -174,7 +174,7 @@ export class IdentityService {
                 workspaceId: record.workspaceId,
                 account: record.pmId
                     ? { role: 'PM', id: record.pmId }
-                    : { role: 'TRAINEE', id: record.userId as string },
+                    : { role: 'USER', id: record.userId as string },
             });
         });
 
@@ -899,7 +899,7 @@ export class IdentityService {
         const owner = record.pmId
             ? { role: 'PM' as const, id: record.pmId }
             : record.userId
-              ? { role: 'TRAINEE' as const, id: record.userId }
+              ? { role: 'USER' as const, id: record.userId }
               : null;
 
         if (!owner) {

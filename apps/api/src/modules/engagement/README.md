@@ -54,7 +54,7 @@ engagement/
 - Use growth-core only through its public index (`../growth-core/index.js`): the ledger (IF-01), levels
   (IF-02), rules (IF-03). Do not write `XpEvent`, `Level` or `XpRule` directly (a test enforces this).
 - Every route runs E01's `JwtAuthGuard` (through growth-core's `GamificationHttp`) and then growth-core's `ActorGuard`: no valid
-  token is 401. The caller is read from `req.user` only (`{ sub, sid, workspaceId, role }`, role `PM` or `TRAINEE`), never from a
+  token is 401. The caller is read from `req.user` only (`{ sub, sid, workspaceId, role }`, role `PM` or `USER`), never from a
   header, query or body (architecture.md section 3.3, rule 7). Tests set `req.user` themselves or log in for real.
 - Imports between our own files end in `.js` (ESM).
 

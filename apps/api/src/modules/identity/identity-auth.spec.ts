@@ -131,14 +131,14 @@ describe('IdentityService.login: PM (email + password, Pm model)', () => {
 });
 
 describe('IdentityService.login: user (Trainee ID + password, User.userId)', () => {
-    it('signs a user in with their Trainee ID and derives the TRAINEE role', async () => {
+    it('signs a user in with their Trainee ID and derives the USER role', async () => {
         const h = await makeHarness();
         await seedAccounts(h);
 
         const result = await h.service.login({ identifier: 'BS23001', password: PASSWORD });
 
-        expect(result.user).toMatchObject({ id: 'BS23001', role: 'TRAINEE', resource: 'TRAINEE' });
-        expect(decodePayload(result.accessToken)).toMatchObject({ sub: 'BS23001', role: 'TRAINEE' });
+        expect(result.user).toMatchObject({ id: 'BS23001', role: 'USER', resource: 'TRAINEE' });
+        expect(decodePayload(result.accessToken)).toMatchObject({ sub: 'BS23001', role: 'USER' });
         expect(h.db.rows('session')[0]).toMatchObject({ userId: 'BS23001', pmId: null });
     });
 
@@ -150,7 +150,7 @@ describe('IdentityService.login: user (Trainee ID + password, User.userId)', () 
         expect(result.user.id).toBe('BS23001');
     });
 
-    it('signs in every resource type as the login role TRAINEE (PRD: role "user")', async () => {
+    it('signs in every resource type as the login role USER (PRD: role "user")', async () => {
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
 
@@ -169,7 +169,7 @@ describe('IdentityService.login: user (Trainee ID + password, User.userId)', () 
                 identifier: `BS23${100 + index}`,
                 password: PASSWORD,
             });
-            expect(result.user).toMatchObject({ role: 'TRAINEE', resource });
+            expect(result.user).toMatchObject({ role: 'USER', resource });
         }
     });
 
@@ -229,7 +229,7 @@ describe('IdentityService.login: user (Trainee ID + password, User.userId)', () 
         });
 
         const result = await h.service.login({ identifier: 'BS23005', password: PASSWORD });
-        expect(result.user.role).toBe('TRAINEE');
+        expect(result.user.role).toBe('USER');
     });
 
     it('returns mustChangePassword for a temporary password (FR-AUTH-03)', async () => {
@@ -346,7 +346,7 @@ describe('IdentityService.refresh', () => {
         const second = await h.service.refresh(first.refreshToken);
 
         expect(second.refreshToken).not.toBe(first.refreshToken);
-        expect(second.user).toMatchObject({ id: 'BS23001', role: 'TRAINEE' });
+        expect(second.user).toMatchObject({ id: 'BS23001', role: 'USER' });
         expect(second.session.expiresAt).toEqual(first.session.expiresAt);
         expect(h.db.rows('session')).toHaveLength(1);
         expect(h.db.rows('session')[0].tokenHash).toBe(sha256(second.refreshToken));
@@ -441,7 +441,7 @@ describe('IdentityService logout, sessions and me', () => {
         await h.service.logout(decodePayload(b.accessToken).sid as string);
 
         const { sessions } = await h.service.listSessions(
-            'TRAINEE',
+            'USER',
             'BS23001',
             decodePayload(a.accessToken).sid as string,
         );
@@ -460,11 +460,11 @@ describe('IdentityService logout, sessions and me', () => {
         const pmSid = decodePayload(pm.accessToken).sid as string;
 
         await expect(
-            h.service.revokeSession('TRAINEE', 'BS23001', user.workspaceId as string, pmSid),
+            h.service.revokeSession('USER', 'BS23001', user.workspaceId as string, pmSid),
         ).rejects.toThrow(NotFoundException);
         expect(h.db.rows('session').find((s) => s.id === pmSid)?.endedAt).toBe(null);
 
-        await h.service.revokeSession('TRAINEE', 'BS23001', user.workspaceId as string, mySid);
+        await h.service.revokeSession('USER', 'BS23001', user.workspaceId as string, mySid);
         expect(h.db.rows('session').find((s) => s.id === mySid)?.endedAt).toBeTruthy();
     });
 
@@ -473,12 +473,12 @@ describe('IdentityService logout, sessions and me', () => {
         await seedAccounts(h);
 
         const pm = await h.service.me('PM', 'PM001');
-        const user = await h.service.me('TRAINEE', 'BS23001');
+        const user = await h.service.me('USER', 'BS23001');
 
         expect(pm.user).toMatchObject({ id: 'PM001', role: 'PM', emailVerified: true });
         expect(user.user).toMatchObject({
             id: 'BS23001',
-            role: 'TRAINEE',
+            role: 'USER',
             resource: 'TRAINEE',
             pmId: 'PM001',
         });
@@ -501,7 +501,7 @@ describe('IdentityService.changePassword (FR-AUTH-03)', () => {
         await h.service.login({ identifier: 'BS23010', password: PASSWORD });
 
         await h.service.changePassword(
-            'TRAINEE',
+            'USER',
             'BS23010',
             workspace.id as string,
             decodePayload(current.accessToken).sid as string,
@@ -541,7 +541,7 @@ describe('IdentityService.changePassword (FR-AUTH-03)', () => {
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
         const call = (currentPassword: string, newPassword: string) =>
-            h.service.changePassword('TRAINEE', 'BS23001', workspace.id as string, 's', {
+            h.service.changePassword('USER', 'BS23001', workspace.id as string, 's', {
                 currentPassword,
                 newPassword,
             });
@@ -577,7 +577,7 @@ describe('JwtAuthGuard (protected routes)', () => {
 
         const request = await makeGuard(h)(login.accessToken);
 
-        expect(request.user).toMatchObject({ sub: 'BS23001', role: 'TRAINEE', workspaceId: expect.any(String) });
+        expect(request.user).toMatchObject({ sub: 'BS23001', role: 'USER', workspaceId: expect.any(String) });
     });
 
     it('lets a signed-in PM through with the PM role', async () => {
@@ -656,7 +656,7 @@ describe('JwtAuthGuard (protected routes)', () => {
             { secret: 'a'.repeat(40), expiresIn: 60 },
         );
 
-        expect((await makeGuard(h)(claimsPm)).user.role).toBe('TRAINEE');
+        expect((await makeGuard(h)(claimsPm)).user.role).toBe('USER');
     });
 
     it('blocks every route except the opted-out ones while mustChangePassword is set', async () => {
@@ -685,7 +685,7 @@ describe('JwtAuthGuard (protected routes)', () => {
 });
 
 describe('RolesGuard (backend role enforcement)', () => {
-    const run = (allowed: Array<'PM' | 'TRAINEE'> | undefined, userRole?: 'PM' | 'TRAINEE') => {
+    const run = (allowed: Array<'PM' | 'USER'> | undefined, userRole?: 'PM' | 'USER') => {
         const guard = new RolesGuard({ getAllAndOverride: () => allowed } as never);
         const context = {
             getHandler: () => undefined,
@@ -697,12 +697,12 @@ describe('RolesGuard (backend role enforcement)', () => {
 
     it('lets a PM into PM-only routes and blocks a Trainee', () => {
         expect(run(['PM'], 'PM')()).toBe(true);
-        expect(run(['PM'], 'TRAINEE')).toThrow(ForbiddenException);
+        expect(run(['PM'], 'USER')).toThrow(ForbiddenException);
     });
 
     it('lets a Trainee into Trainee-only routes and blocks a PM', () => {
-        expect(run(['TRAINEE'], 'TRAINEE')()).toBe(true);
-        expect(run(['TRAINEE'], 'PM')).toThrow(ForbiddenException);
+        expect(run(['USER'], 'USER')()).toBe(true);
+        expect(run(['USER'], 'PM')).toThrow(ForbiddenException);
     });
 
     it('blocks a request with no authenticated user', () => {
@@ -710,6 +710,6 @@ describe('RolesGuard (backend role enforcement)', () => {
     });
 
     it('allows routes that list no roles', () => {
-        expect(run(undefined, 'TRAINEE')()).toBe(true);
+        expect(run(undefined, 'USER')()).toBe(true);
     });
 });

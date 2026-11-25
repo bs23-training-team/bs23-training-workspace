@@ -2,7 +2,7 @@ import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { forbiddenScope, requirePm, requireTrainee } from './directory.actor.js';
 
 const pmReq = { user: { sub: 'PM001', sid: 's1', workspaceId: 'ws1', role: 'PM' } };
-const traineeReq = { user: { sub: 'BS23001', sid: 's2', workspaceId: 'ws1', role: 'TRAINEE' } };
+const traineeReq = { user: { sub: 'BS23001', sid: 's2', workspaceId: 'ws1', role: 'USER' } };
 
 describe('requirePm', () => {
   it('returns the PM and workspace from req.user', () => {

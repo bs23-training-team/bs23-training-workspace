@@ -141,7 +141,7 @@ suite('identity against real PostgreSQL', () => {
         const trainee = await service.login({ identifier: userId.toLowerCase(), password: PASSWORD });
 
         expect(pm.user).toMatchObject({ id: pmId, role: 'PM' });
-        expect(trainee.user).toMatchObject({ id: userId, role: 'TRAINEE' });
+        expect(trainee.user).toMatchObject({ id: userId, role: 'USER' });
         await expect(service.login({ identifier: userEmail, password: PASSWORD })).rejects.toThrow('Invalid credentials.');
         await expect(service.login({ identifier: pmId, password: PASSWORD })).rejects.toThrow('Invalid credentials.');
         await expect(service.login({ identifier: pmEmail, password: 'WrongPass123' })).rejects.toThrow('Invalid credentials.');
@@ -261,7 +261,7 @@ suite('identity against real PostgreSQL', () => {
         const row = await prisma.user.findUniqueOrThrow({ where: { userId: tempId } });
         expect(row).toMatchObject({ pmId, workspaceId, skillAssessmentMinutes: 60, skillAssessmentMarks: 100, mustChangePassword: true });
         expect(row.departureDate?.toISOString().slice(0, 10)).toBe('2099-01-01');
-        expect((await service.login({ identifier: tempId.toLowerCase(), password: PASSWORD })).user).toMatchObject({ role: 'TRAINEE', mustChangePassword: true });
+        expect((await service.login({ identifier: tempId.toLowerCase(), password: PASSWORD })).user).toMatchObject({ role: 'USER', mustChangePassword: true });
 
         // Isolation and rollback: a team of another workspace is refused, and a duplicate email creates nothing.
         const before = await prisma.user.count({ where: { workspaceId } });
@@ -301,7 +301,7 @@ suite('identity against real PostgreSQL', () => {
             skillAssessmentMinutes: 30, skillAssessmentMarks: 50, teamIds: [team.id],
         };
 
-        await expect(provisioning.createTrainee({ sub: userId, role: 'TRAINEE', workspaceId }, input)).rejects.toThrow('Only a PM of this workspace');
+        await expect(provisioning.createTrainee({ sub: userId, role: 'USER', workspaceId }, input)).rejects.toThrow('Only a PM of this workspace');
         // The other workspace's PM claims our workspace: the database says it belongs elsewhere.
         await expect(provisioning.createTrainee({ sub: otherPmId, role: 'PM', workspaceId }, input)).rejects.toThrow('Only a PM of this workspace');
         // And acting in its own workspace, it cannot use our team.
@@ -315,7 +315,7 @@ suite('identity against real PostgreSQL', () => {
         const session = await prisma.session.findFirstOrThrow({ where: { userId, workspaceId }, orderBy: { createdAt: 'desc' } });
         const before = await prisma.outboxEvent.count({ where: { workspaceId, type: 'auth.password_changed' } });
 
-        await service.changePassword('TRAINEE', userId, workspaceId, session.id, { currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
+        await service.changePassword('USER', userId, workspaceId, session.id, { currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
 
         expect(trainee.user.id).toBe(userId);
         expect(await prisma.outboxEvent.count({ where: { workspaceId, type: 'auth.password_changed' } })).toBe(before + 1);

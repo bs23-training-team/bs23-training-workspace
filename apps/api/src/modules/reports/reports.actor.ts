@@ -7,7 +7,7 @@ export interface PmActor {
 }
 
 export interface UserActor {
-  role: 'TRAINEE';
+  role: 'USER';
   userId: string;
   workspaceId: string;
 }
@@ -16,16 +16,16 @@ export type ReportActor = PmActor | UserActor;
 
 /**
  * Shape of `req.user` populated by E01's `JwtAuthGuard` (docs/architecture.md §3.3 rule 7).
- * - `sub`: authenticated account ID (`Pm.pmId` for PM, `User.userId` for TRAINEE)
+ * - `sub`: authenticated account ID (`Pm.pmId` for PM, `User.userId` for USER)
  * - `sid`: ID of the current Session
  * - `workspaceId`: the account's workspace
- * - `role`: `'PM' | 'TRAINEE'`
+ * - `role`: `'PM' | 'USER'`
  */
 export interface AuthUserPayload {
   sub?: string;
   sid?: string;
   workspaceId?: string;
-  role?: 'PM' | 'TRAINEE';
+  role?: 'PM' | 'USER';
 }
 
 export interface RequestWithActor {
@@ -63,12 +63,12 @@ export function requireUserActor(req: RequestWithActor): UserActor {
     throw new UnauthorizedException('User authentication is required.');
   }
 
-  if (user.role !== 'TRAINEE') {
+  if (user.role !== 'USER') {
     throw new ForbiddenException('Trainee role is required.');
   }
 
   return {
-    role: 'TRAINEE',
+    role: 'USER',
     userId: user.sub,
     workspaceId: user.workspaceId,
   };

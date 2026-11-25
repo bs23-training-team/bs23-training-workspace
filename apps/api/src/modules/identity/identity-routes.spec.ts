@@ -50,7 +50,7 @@ class GuardProbeController {
 
     @Get('trainee-only')
     @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles('TRAINEE')
+    @Roles('USER')
     traineeOnly() {
         return { ok: true };
     }
@@ -124,7 +124,7 @@ describe('auth routes through the real controller and guards', () => {
         expect(pm.status).toBe(200);
         expect(pm.body.user).toMatchObject({ id: 'PM001', role: 'PM' });
         expect(trainee.status).toBe(200);
-        expect(trainee.body.user).toMatchObject({ id: 'BS23001', role: 'TRAINEE' });
+        expect(trainee.body.user).toMatchObject({ id: 'BS23001', role: 'USER' });
         expect(JSON.stringify(pm.body)).not.toMatch(/passwordHash|tokenHash/);
 
         for (const body of [
@@ -165,7 +165,7 @@ describe('auth routes through the real controller and guards', () => {
 
         const me = await send('get', '/auth/me', { token: session.accessToken });
         expect(me.status).toBe(200);
-        expect(me.body.user).toMatchObject({ id: 'BS23001', role: 'TRAINEE' });
+        expect(me.body.user).toMatchObject({ id: 'BS23001', role: 'USER' });
 
         expect((await send('post', '/auth/logout', { token: session.accessToken })).status).toBe(200);
         expect((await send('get', '/auth/me', { token: session.accessToken })).status).toBe(401);
@@ -225,7 +225,7 @@ describe('auth routes through the real controller and guards', () => {
 
         const created = await send('post', '/auth/accounts/pms', {
             token: pm.accessToken,
-            body: { pmId: 'PM800002', name: 'Added PM', email: 'Added.PM@Example.test', password: TEMP, workspaceId: other.id, role: 'TRAINEE' },
+            body: { pmId: 'PM800002', name: 'Added PM', email: 'Added.PM@Example.test', password: TEMP, workspaceId: other.id, role: 'USER' },
         });
         expect(created.status).toBe(201);
         expect(created.body).toMatchObject({ pmId: 'PM800002', workspaceId: workspace.id, emailVerified: false, mustChangePassword: true });
@@ -271,7 +271,7 @@ describe('auth routes through the real controller and guards', () => {
         // First login: signs in with the Trainee ID and the temporary password ...
         const signedIn = await send('post', '/auth/login', { body: { identifier: 'BS238010', password: TEMP } });
         expect(signedIn.status).toBe(200);
-        expect(signedIn.body.user).toMatchObject({ role: 'TRAINEE', mustChangePassword: true });
+        expect(signedIn.body.user).toMatchObject({ role: 'USER', mustChangePassword: true });
         expect((await send('post', '/auth/login', { body: { identifier: 'new.trainee@example.test', password: TEMP } })).status).toBe(401);
 
         // ... every route except the first-login ones is blocked until the password is changed ...

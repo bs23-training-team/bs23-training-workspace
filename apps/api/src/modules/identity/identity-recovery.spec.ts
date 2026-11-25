@@ -160,7 +160,7 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
 
         await h.service.resetPassword({ token: result.resetToken as string, newPassword: NEW_PASSWORD });
         const login = await h.service.login({ identifier: 'BS23001', password: NEW_PASSWORD });
-        expect(login.user.role).toBe('TRAINEE');
+        expect(login.user.role).toBe('USER');
     });
 
     it('does not send a reset to an unverified PM or an archived user', async () => {
@@ -329,7 +329,7 @@ describe('notifications and outbox events for authentication (FR-14, FR-15)', ()
         const login = await h.service.login({ identifier: 'BS23001', password: PASSWORD });
         const [session] = h.db.rows('session');
 
-        await h.service.changePassword('TRAINEE', 'BS23001', workspace.id, session.id as string, {
+        await h.service.changePassword('USER', 'BS23001', workspace.id, session.id as string, {
             currentPassword: PASSWORD,
             newPassword: NEW_PASSWORD,
         });
@@ -343,7 +343,7 @@ describe('notifications and outbox events for authentication (FR-14, FR-15)', ()
                 workspaceId: workspace.id,
                 type: 'auth.password_changed',
                 status: 'PENDING',
-                payload: { accountRole: 'TRAINEE', accountId: 'BS23001' },
+                payload: { accountRole: 'USER', accountId: 'BS23001' },
             },
         ]);
 
@@ -353,7 +353,7 @@ describe('notifications and outbox events for authentication (FR-14, FR-15)', ()
             throw new Error('boom');
         };
         await expect(
-            h.service.changePassword('TRAINEE', 'BS23001', workspace.id, session.id as string, {
+            h.service.changePassword('USER', 'BS23001', workspace.id, session.id as string, {
                 currentPassword: NEW_PASSWORD,
                 newPassword: 'Third-Passw0rd!z',
             }),

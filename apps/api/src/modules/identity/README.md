@@ -32,17 +32,17 @@ query or body; no `req.user` means 401).
 
 ```ts
 {
-  sub: string;                  // authenticated account ID: Pm.pmId (PM) or User.userId (TRAINEE)
+  sub: string;                  // authenticated account ID: Pm.pmId (PM) or User.userId (USER)
   sid: string;                  // ID of the current Session (the one this access token belongs to)
   workspaceId: string;          // the account's workspace
-  role: 'PM' | 'TRAINEE';       // PM = the Pm table; TRAINEE = any User (all four resource types)
+  role: 'PM' | 'USER';         // PM = the Pm table; USER = any User (all four resource types)
 }
 ```
 
 - The type is `AuthUserPayload` in `types.ts`; routes receive it as `AuthenticatedRequest`.
 - All four fields are loaded from the database on every request (session, then its owner). The
   `role` and `workspaceId` claims inside the token are never used for authorisation.
-- The role is not a column: it is the table the account lives in. `TRAINEE` is the login role of
-  every `User`; the resource type (TRAINEE, CENTRAL_LND, INDUSTRIAL_ATTACHMENT, SBU) stays in
+- The role is not a column: it is the table the account lives in. `USER` is the login role of
+  every `User` (it was called TRAINEE before 2026-11-25); the resource type (TRAINEE, CENTRAL_LND, INDUSTRIAL_ATTACHMENT, SBU) stays in
   `User.resource`.
-- Protect a route with `@UseGuards(JwtAuthGuard, RolesGuard)` and `@Roles('PM')` or `@Roles('TRAINEE')`.
+- Protect a route with `@UseGuards(JwtAuthGuard, RolesGuard)` and `@Roles('PM')` or `@Roles('USER')`.

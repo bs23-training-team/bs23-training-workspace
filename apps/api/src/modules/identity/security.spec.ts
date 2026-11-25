@@ -87,7 +87,7 @@ describe('security events and secrets (SEC-09)', () => {
             const traineeLogin = await h.service.login({ identifier: 'BS23010', password: 'Tr@inee-temp-pw1' });
             secrets.push(traineeLogin.accessToken, traineeLogin.refreshToken);
             await h.service.changePassword(
-                'TRAINEE', 'BS23010', actor.workspaceId, h.db.rows('session').at(-1)!.id as string,
+                'USER', 'BS23010', actor.workspaceId, h.db.rows('session').at(-1)!.id as string,
                 { currentPassword: 'Tr@inee-temp-pw1', newPassword: NEW_PASSWORD },
             );
         });
@@ -116,8 +116,8 @@ describe('security events and secrets (SEC-09)', () => {
 
         const bodies = [
             login,
-            await h.service.me('TRAINEE', 'BS23001'),
-            await h.service.listSessions('TRAINEE', 'BS23001', 'x'),
+            await h.service.me('USER', 'BS23001'),
+            await h.service.listSessions('USER', 'BS23001', 'x'),
             await h.service.forgotPassword({ workEmail: 'bs23001@bs23.test' }),
         ];
         const text = JSON.stringify(bodies);
@@ -200,7 +200,7 @@ describe('JWT hardening', () => {
         }
     });
 
-    it('a Trainee token carrying a forged role: "PM" claim still resolves to TRAINEE', async () => {
+    it('a Trainee token carrying a forged role: "PM" claim still resolves to USER', async () => {
         const h = await makeHarness();
         await seedAccounts(h);
         const login = await h.service.login({ identifier: 'BS23001', password: PASSWORD });
@@ -219,7 +219,7 @@ describe('JWT hardening', () => {
             switchToHttp: () => ({ getRequest: () => request }),
         } as never);
 
-        expect(request.user.role).toBe('TRAINEE');
+        expect(request.user.role).toBe('USER');
         expect(request.user.workspaceId).toBe(h.db.rows('user')[0].workspaceId);
     });
 });

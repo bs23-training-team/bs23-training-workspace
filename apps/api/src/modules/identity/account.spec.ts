@@ -48,10 +48,10 @@ describe('roles come from the table, not a role column', () => {
         });
     });
 
-    it('every User row is a TRAINEE keyed by userId, whatever its resource', () => {
+    it('every User row is a USER keyed by userId, whatever its resource', () => {
         for (const resource of ['TRAINEE', 'CENTRAL_LND', 'INDUSTRIAL_ATTACHMENT', 'SBU']) {
             const account = accountFromUser({ ...user, resource });
-            expect(account.role).toBe('TRAINEE');
+            expect(account.role).toBe('USER');
             expect(account.id).toBe('BS23001');
             expect(account.resource).toBe(resource);
         }
@@ -112,12 +112,12 @@ describe('sign-in blocks', () => {
 describe('ownerData / resolveSessionOwner', () => {
     it('points a row at exactly one owner column', () => {
         expect(ownerData('PM', 'PM002')).toEqual({ pmId: 'PM002' });
-        expect(ownerData('TRAINEE', 'BS23001')).toEqual({ userId: 'BS23001' });
+        expect(ownerData('USER', 'BS23001')).toEqual({ userId: 'BS23001' });
     });
 
     it('resolves the owner and role of a session from its relation', () => {
         expect(resolveSessionOwner({ pm, user: null }, NOW)?.account.role).toBe('PM');
-        expect(resolveSessionOwner({ pm: null, user }, NOW)?.account.role).toBe('TRAINEE');
+        expect(resolveSessionOwner({ pm: null, user }, NOW)?.account.role).toBe('USER');
         expect(resolveSessionOwner({ pm: null, user: null }, NOW)).toBe(null);
     });
 

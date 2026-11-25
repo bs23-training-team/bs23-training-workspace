@@ -130,7 +130,7 @@ export class ReportsController {
  */
 @Controller('me/reports')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('TRAINEE')
+@Roles('USER')
 export class MyReportsController {
   constructor(private readonly reports: ReportsService) {}
 

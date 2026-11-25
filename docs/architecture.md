@@ -167,10 +167,10 @@ web view ──HTTP──▶ controller ──▶ service ──▶ repository /
    | `sub` | The login ID: `Pm.pmId` for a PM, `User.userId` for a user (for example `PM001`, `BS23001`). Not a UUID. |
    | `sid` | `Session.id` of the current session. |
    | `workspaceId` | The account's workspace, read from the database (not from the token). |
-   | `role` | `'PM'` or `'TRAINEE'` (see §4.2). |
+   | `role` | `'PM'` or `'USER'` (see §4.2). |
 
    Protect a route with `@UseGuards(JwtAuthGuard, RolesGuard)` and `@Roles('PM')` or
-   `@Roles('TRAINEE')`; import `IdentityModule`. Do not define your own copy of this type or read
+   `@Roles('USER')`; import `IdentityModule`. Do not define your own copy of this type or read
    `pmId` / `userId` from `req.user`: use `sub` and `role`. Every query must still filter on
    `req.user.workspaceId`.
 
@@ -241,7 +241,7 @@ stop ID reuse (rule 2); only code review can.
 - No `TECHNICAL` badge kind. `BadgeAward.attemptId`, `projectUrl` and `projectReviewed` stay in the
   table, unused, for a later version. There is no CHECK for them: the old `// DB:` marker for it was removed
   from `schema.prisma` because no migration ever created it.
-- Two different things are both called `TRAINEE`: `User.resource = TRAINEE` is one of the 4 resource types, while the login role `TRAINEE` (in `req.user.role`) means any `User` account, whatever its resource type. A PM has the login role `PM`. There is no role column: the role is the table the account was found in.
+- The login role is `USER` (renamed from `TRAINEE` on 2026-11-25, to match the PRD and the team's wording "PM and user"): it is in `req.user.role` and means any `User` account, whatever its resource type. `TRAINEE` is now only one of the 4 resource types (`User.resource`). A PM has the login role `PM`. There is no role column: the role is the table the account was found in.
 - Every relation uses `onDelete: Restrict`. History is kept with `archivedAt` / status columns
   instead of deleting rows.
 - Rules Prisma cannot express are hand-written SQL at the end of the migration that introduces them
@@ -508,3 +508,4 @@ Recommended extras (not in the SRS): secret scanning, dependency audit, SonarQub
 | 2026-11-24 | `schema.prisma` keeps only section titles and `// DB:` markers; its header rules moved to 4.2. |
 | 2026-11-24 | Web connection started: step 0 renamed each web module's `api.ts` to `mock-api.ts` (PR #41); API now allows the web origin with CORS (`WEB_ORIGIN`, PR #49); guide `docs/web-api-integration.md` added. The unused `// DB:` marker for TECHNICAL badges removed from `schema.prisma`. |
 | 2026-11-24 | Decisions recorded in 4.3: every PM reads every user, only the managing PM changes a user; `Pm` and `User` stay two tables in v1. |
+| 2026-11-25 | The login role of a user is `USER` (was `TRAINEE`): `req.user.role` is `'PM'` or `'USER'`. `TRAINEE` stays only as a resource type. |

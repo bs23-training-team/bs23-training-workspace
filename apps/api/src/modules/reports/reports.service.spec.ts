@@ -17,7 +17,7 @@ function makeSections(pmNote = ''): ReportSectionData[] {
 
 describe('ReportsService', () => {
   const pmActor: PmActor = { role: 'PM', pmId: 'PM001', workspaceId: 'ws-1' };
-  const userActor: UserActor = { role: 'TRAINEE', userId: 'BS23001', workspaceId: 'ws-1' };
+  const userActor: UserActor = { role: 'USER', userId: 'BS23001', workspaceId: 'ws-1' };
 
   const repo = {
     findScopedUser: vi.fn(),

@@ -30,9 +30,9 @@ describe('growth-core HTTP routes (database, req.user set by the test)', () => {
   let ledger: XpLedgerService;
   let workspaceId: string;
 
-  // req.user as E01's JwtAuthGuard sets it: sub is the Pm.pmId or User.userId, every User has the role TRAINEE.
+  // req.user as E01's JwtAuthGuard sets it: sub is the Pm.pmId or User.userId, every User has the role USER.
   const pm = (pmId = 'PM001'): RequestUser => ({ sub: pmId, sid: 'test-session', workspaceId, role: 'PM' });
-  const user = (userId: string): RequestUser => ({ sub: userId, sid: 'test-session', workspaceId, role: 'TRAINEE' });
+  const user = (userId: string): RequestUser => ({ sub: userId, sid: 'test-session', workspaceId, role: 'USER' });
   // Test-only: the request reaches the app with req.user already set (no header, no shared state). null = nobody signed in.
   const target = (user: RequestUser | null): RequestListener | Server => {
     if (!user) return app.getHttpServer() as Server;

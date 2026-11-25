@@ -69,7 +69,7 @@ const identityConfigCheck = {
         identityConfigCheck,
     ],
     // Other modules protect their routes with
-    // `@UseGuards(JwtAuthGuard, RolesGuard)` + `@Roles('PM' | 'TRAINEE')`.
+    // `@UseGuards(JwtAuthGuard, RolesGuard)` + `@Roles('PM' | 'USER')`.
     // JwtModule is re-exported because JwtAuthGuard injects JwtService, so a
     // module that imports IdentityModule can instantiate the guard.
     // E02 calls AccountProvisioningService to create PM / user logins.

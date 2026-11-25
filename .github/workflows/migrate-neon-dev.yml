@@ -1,0 +1,122 @@
+# Applies merged Prisma migrations to the shared Neon DEVELOPMENT database.
+# Runs only after a merge to develop (never on a pull request), and only after the owner approves
+# the "neon-dev" environment in GitHub. See docs/neon-dev-database.md.
+name: Migrate Neon dev
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - "apps/api/prisma/migrations/**"
+  # Manual run, for example to retry after a failed migration has been fixed.
+  workflow_dispatch:
+
+# One migration run at a time, in order. A queued run waits; it is never cancelled half way.
+concurrency:
+  group: neon-dev-migrate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Runs without secrets. Shows the approver which migrations are new and flags risky SQL.
+  review:
+    name: List new migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (full history for the diff)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Show new migrations and risky statements
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          {
+            echo "## Migrations in this run"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              echo "Manual or first run: every migration not yet applied on Neon will be applied."
+              exit 0
+            fi
+            files=$(git diff --name-only --diff-filter=A "$BEFORE" "$AFTER" -- 'apps/api/prisma/migrations/*/migration.sql' || true)
+            if [ -z "$files" ]; then
+              echo "No new migration.sql in this push."
+              exit 0
+            fi
+            echo "$files" | sed 's/^/- /'
+            echo
+            risky=$(git diff --diff-filter=A "$BEFORE" "$AFTER" -- 'apps/api/prisma/migrations/*/migration.sql' \
+              | grep -E '^\+' | grep -iE 'DROP (TABLE|COLUMN)|RENAME|TRUNCATE|DELETE FROM|ALTER COLUMN .* TYPE' || true)
+            if [ -n "$risky" ]; then
+              echo "### Risky statements found. Read them before you approve:"
+              echo '```sql'
+              echo "$risky"
+              echo '```'
+            else
+              echo "No DROP, RENAME, TRUNCATE, DELETE or column type change found."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  migrate:
+    name: Apply migrations to Neon dev
+    needs: review
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The approval gate: this environment requires the migration owner to approve, and it only
+    # allows the develop branch. NEON_DIRECT_URL exists only inside this environment.
+    environment: neon-dev
+    env:
+      # The owner's DIRECT (non-pooled) connection to the Neon development branch.
+      # prisma.config.ts reads DIRECT_URL for every Prisma CLI command.
+      DIRECT_URL: ${{ secrets.NEON_DIRECT_URL }}
+      # Non-secret: the host of the Neon development branch endpoint (settings > environment variables).
+      EXPECTED_HOST: ${{ vars.NEON_DEV_HOST }}
+      TURBO_TELEMETRY_DISABLED: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Logs of a public repository are public, so this step never prints the connection string or host.
+      - name: Check the target is the Neon development branch
+        run: |
+          if [ -z "$DIRECT_URL" ] || [ -z "$EXPECTED_HOST" ]; then
+            echo "::error::NEON_DIRECT_URL or NEON_DEV_HOST is not set in the neon-dev environment."
+            exit 1
+          fi
+          host=$(printf '%s' "$DIRECT_URL" | sed -E 's#^[a-z]+://[^@]*@([^/:?]+).*#\1#')
+          case "$host" in
+            *-pooler*) echo "::error::NEON_DIRECT_URL is a pooled connection. Use the direct one."; exit 1 ;;
+          esac
+          if [ "$host" != "$EXPECTED_HOST" ]; then
+            echo "::error::NEON_DIRECT_URL does not point to the expected development endpoint. Nothing was applied."
+            exit 1
+          fi
+          echo "Target check passed."
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install dependencies (locked)
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply pending migrations (prisma migrate deploy)
+        run: pnpm db:deploy
+
+      - name: Verify nothing is pending or failed
+        run: pnpm db:status
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "Neon dev is up to date. Developers: git pull, pnpm install, pnpm db:generate." >> "$GITHUB_STEP_SUMMARY"

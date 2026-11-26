@@ -336,6 +336,7 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
         await h.service.changePassword('USER', 'BS23002', first.user.workspaceId, current.id as string, {
             currentPassword: TEMP,
             newPassword: NEW_PASSWORD,
+            confirmPassword: NEW_PASSWORD,
         });
 
         expect(h.db.rows('user')[1].mustChangePassword).toBe(false);

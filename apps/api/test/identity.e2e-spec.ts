@@ -157,7 +157,7 @@ suite('identity against real PostgreSQL', () => {
         const token = await prisma.authToken.findFirstOrThrow({ where: { userId, type: 'PASSWORD_RESET' } });
         expect(token).toMatchObject({ pmId: null, usedAt: null });
 
-        await service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD });
+        await service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
         const credential = await prisma.credential.findUniqueOrThrow({ where: { userId } });
         expect(credential.passwordChangedAt).not.toBeNull();
         // Put the original password back for the other tests.
@@ -355,7 +355,7 @@ suite('identity against real PostgreSQL', () => {
         const session = await prisma.session.findFirstOrThrow({ where: { userId, workspaceId }, orderBy: { createdAt: 'desc' } });
         const before = await prisma.outboxEvent.count({ where: { workspaceId, type: 'auth.password_changed' } });
 
-        await service.changePassword('USER', userId, workspaceId, session.id, { currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
+        await service.changePassword('USER', userId, workspaceId, session.id, { currentPassword: PASSWORD, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
 
         expect(trainee.user.id).toBe(userId);
         expect(await prisma.outboxEvent.count({ where: { workspaceId, type: 'auth.password_changed' } })).toBe(before + 1);
@@ -402,8 +402,8 @@ suite('identity against real PostgreSQL', () => {
     it('a reset token can be used once even when used twice at the same moment', async () => {
         const forgot = await service.forgotPassword({ workEmail: pmEmail });
         const results = await Promise.allSettled([
-            service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD }),
-            service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD }),
+            service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD }),
+            service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD }),
         ]);
 
         expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);

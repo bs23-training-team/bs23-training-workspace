@@ -282,7 +282,7 @@ describe('auth routes through the real controller and guards', () => {
         expect((await send('get', '/auth/me', { token })).status).toBe(200);
 
         // ... and the change unlocks it, with the temporary password no longer valid.
-        const changed = await send('post', '/auth/password/change', { token, body: { currentPassword: TEMP, newPassword: NEW_PASSWORD } });
+        const changed = await send('post', '/auth/password/change', { token, body: { currentPassword: TEMP, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } });
         expect(changed.status).toBe(200);
         expect((await send('get', '/guard-probe/trainee-only', { token })).status).toBe(200);
         expect((await send('post', '/auth/login', { body: { identifier: 'BS238010', password: TEMP } })).status).toBe(401);
@@ -339,7 +339,7 @@ describe('auth routes through the real controller and guards', () => {
         const pm = await login('pm001@bs23.test');
 
         expect((await send('post', '/auth/invitations', { token: pm.accessToken, body: { userId: 'BS23001' } })).status).toBe(404);
-        expect((await send('post', '/auth/invitations/activate', { body: { token: 'f'.repeat(64), newPassword: NEW_PASSWORD } })).status).toBe(404);
+        expect((await send('post', '/auth/invitations/activate', { body: { token: 'f'.repeat(64), newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } })).status).toBe(404);
     });
 
     it('verification link request over HTTP: the same answer for any email; an unverified PM gets a fresh link', async () => {
@@ -375,11 +375,28 @@ describe('auth routes through the real controller and guards', () => {
         h.db.addUser(h.passwordHash, { userId: 'BS23099', workspaceId: workspace.id, email: 'purpose.user@bs23.test' });
         const forgot = await send('post', '/auth/password/forgot', { body: { workEmail: 'purpose.user@bs23.test' } });
 
-        expect((await send('post', '/auth/password/reset', { body: { token: created.body.verificationToken, newPassword: NEW_PASSWORD } })).status).toBe(400);
+        expect((await send('post', '/auth/password/reset', { body: { token: created.body.verificationToken, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } })).status).toBe(400);
         expect((await send('post', '/auth/email/verify', { body: { token: forgot.body.resetToken } })).status).toBe(400);
         // Both tokens are still usable for their own purpose afterwards.
         expect((await send('post', '/auth/email/verify', { body: { token: created.body.verificationToken } })).status).toBe(200);
-        expect((await send('post', '/auth/password/reset', { body: { token: forgot.body.resetToken, newPassword: NEW_PASSWORD } })).status).toBe(200);
+        expect((await send('post', '/auth/password/reset', { body: { token: forgot.body.resetToken, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } })).status).toBe(200);
+    });
+
+    it('a mismatching confirmPassword is 400 over HTTP, and a missing one is 400 too', async () => {
+        const { send, login } = ctx;
+        const trainee = await login('BS23001');
+
+        const mismatch = await send('post', '/auth/password/change', {
+            token: trainee.accessToken,
+            body: { currentPassword: PASSWORD, newPassword: NEW_PASSWORD, confirmPassword: 'Different-Passw0rd!' },
+        });
+        expect(mismatch.status).toBe(400);
+        expect(mismatch.body.message).toBe('Passwords do not match.');
+        const missing = await send('post', '/auth/password/change', {
+            token: trainee.accessToken,
+            body: { currentPassword: PASSWORD, newPassword: NEW_PASSWORD },
+        });
+        expect(missing.status).toBe(400);
     });
 
     it('password reset over HTTP: the same answer for any email, single use, expired is 400', async () => {
@@ -391,13 +408,13 @@ describe('auth routes through the real controller and guards', () => {
         expect(unknown.status).toBe(200);
         expect(known.body.message).toBe(unknown.body.message);
 
-        const reset = await send('post', '/auth/password/reset', { body: { token: known.body.resetToken, newPassword: NEW_PASSWORD } });
+        const reset = await send('post', '/auth/password/reset', { body: { token: known.body.resetToken, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } });
         expect(reset.status).toBe(200);
-        expect((await send('post', '/auth/password/reset', { body: { token: known.body.resetToken, newPassword: NEW_PASSWORD } })).status).toBe(400);
+        expect((await send('post', '/auth/password/reset', { body: { token: known.body.resetToken, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } })).status).toBe(400);
 
         const again = await send('post', '/auth/password/forgot', { body: { workEmail: 'pm001@bs23.test' } });
         h.db.rows('authToken').find((row) => row.pmId === 'PM001' && row.usedAt === null)!.expiresAt = new Date(Date.now() - 1000);
-        expect((await send('post', '/auth/password/reset', { body: { token: again.body.resetToken, newPassword: NEW_PASSWORD } })).status).toBe(400);
+        expect((await send('post', '/auth/password/reset', { body: { token: again.body.resetToken, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } })).status).toBe(400);
     });
 
     it('PM self-registration and the old /identity routes do not exist (404)', async () => {
@@ -445,7 +462,7 @@ describe('rate limiting through the real RateLimitGuard', () => {
 
         for (const [path, body] of [
             ['/auth/email/verify/request', { email: 'nobody@example.test' }],
-            ['/auth/password/reset', { token: 'f'.repeat(64), newPassword: NEW_PASSWORD }],
+            ['/auth/password/reset', { token: 'f'.repeat(64), newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD }],
             ['/auth/password/forgot', { workEmail: 'nobody@example.test' }],
         ] as const) {
             const statuses: number[] = [];

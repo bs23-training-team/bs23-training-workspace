@@ -37,6 +37,6 @@ export function forbiddenScope(what: string): ForbiddenException {
 export function requireTrainee(req: RequestWithUser): TraineeActor {
   const user = req.user;
   if (!user?.sub || !user.workspaceId) throw new UnauthorizedException('Authentication is required.');
-  if (user.role !== 'TRAINEE') throw new ForbiddenException('Trainee role is required.');
+  if (user.role !== 'USER') throw new ForbiddenException('Trainee role is required.');
   return { userId: user.sub, workspaceId: user.workspaceId };
 }

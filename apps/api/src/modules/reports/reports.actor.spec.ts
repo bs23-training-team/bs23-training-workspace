@@ -42,30 +42,30 @@ describe('reports.actor', () => {
       );
     });
 
-    it('throws ForbiddenException when role is TRAINEE instead of PM', () => {
+    it('throws ForbiddenException when role is USER instead of PM', () => {
       expect(() =>
         requirePmActor({
-          user: { sub: 'BS23001', sid: 'sess-2', workspaceId: 'ws-1', role: 'TRAINEE' },
+          user: { sub: 'BS23001', sid: 'sess-2', workspaceId: 'ws-1', role: 'USER' },
         }),
       ).toThrow(ForbiddenException);
     });
   });
 
   describe('requireUserActor', () => {
-    it('accepts valid E01 TRAINEE req.user ({ sub, sid, workspaceId, role: "TRAINEE" })', () => {
+    it('accepts valid E01 USER req.user ({ sub, sid, workspaceId, role: "USER" })', () => {
       const actor = requireUserActor({
-        user: { sub: 'BS23001', sid: 'sess-2', workspaceId: 'ws-1', role: 'TRAINEE' },
+        user: { sub: 'BS23001', sid: 'sess-2', workspaceId: 'ws-1', role: 'USER' },
       });
-      expect(actor).toEqual({ role: 'TRAINEE', userId: 'BS23001', workspaceId: 'ws-1' });
+      expect(actor).toEqual({ role: 'USER', userId: 'BS23001', workspaceId: 'ws-1' });
     });
 
     it('throws UnauthorizedException when req.user or required fields are missing', () => {
       expect(() => requireUserActor({})).toThrow(UnauthorizedException);
       expect(() => requireUserActor({ user: undefined })).toThrow(UnauthorizedException);
-      expect(() => requireUserActor({ user: { role: 'TRAINEE', sub: 'BS23001' } })).toThrow(
+      expect(() => requireUserActor({ user: { role: 'USER', sub: 'BS23001' } })).toThrow(
         UnauthorizedException,
       );
-      expect(() => requireUserActor({ user: { role: 'TRAINEE', workspaceId: 'ws-1' } })).toThrow(
+      expect(() => requireUserActor({ user: { role: 'USER', workspaceId: 'ws-1' } })).toThrow(
         UnauthorizedException,
       );
       expect(() => requireUserActor({ user: { sub: 'BS23001', workspaceId: 'ws-1' } })).toThrow(
@@ -174,7 +174,7 @@ describe('reports.actor', () => {
         (req) => myController.listMyReports(req),
       );
       expect(mockReportsService.listMyPublishedReports).toHaveBeenCalledWith({
-        role: 'TRAINEE',
+        role: 'USER',
         userId: seeded.user.userId,
         workspaceId: seeded.workspace.id,
       });

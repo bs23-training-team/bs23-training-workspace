@@ -40,7 +40,7 @@ After successful authentication, E01 will provide authenticated user information
 | 1 | `userId` | Unique user identifier. |
 | 2 | `name` | User's full name. |
 | 3 | `email` | Registered email address. |
-| 4 | `role` | User role (`PM` / `TRAINEE`). |
+| 4 | `role` | User role (`PM` / `USER`). |
 | 5 | `workspaceId` | Associated workspace identifier. |
 | 6 | `mustChangePassword` | Indicates whether the user must change their password. |
 | 7 | `accountStatus` | Account activation status. |

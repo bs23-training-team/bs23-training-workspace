@@ -31,7 +31,7 @@ describe('read routes: badge catalogue and PM growth summary (database)', () => 
   let seq = 0;
 
   const pm = (pmId = 'PM001'): RequestUser => ({ sub: pmId, sid: 'test-session', workspaceId, role: 'PM' });
-  const trainee = (userId: string): RequestUser => ({ sub: userId, sid: 'test-session', workspaceId, role: 'TRAINEE' });
+  const trainee = (userId: string): RequestUser => ({ sub: userId, sid: 'test-session', workspaceId, role: 'USER' });
   const target = (user: RequestUser | null): RequestListener | Server => {
     if (!user) return app.getHttpServer() as Server;
     const handler = app.getHttpAdapter().getInstance() as RequestListener;

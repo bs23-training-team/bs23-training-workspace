@@ -19,7 +19,7 @@ import { IsDay, trim } from './base.dto.js';
  *
  * Every rule here is a business rule of the PRD, not a shape convention:
  * - a task's hours are >= 0 (the database checks it too),
- * - a category and an owner go together: a task for oneself has neither, a task for an L&D
+ * - a category and an owner go together: a task for oneself has neither, a task for an RND
  *   team or an SBU has both (DS-01.3, E-10),
  * - `workspaceId` and `userId` are never accepted from the client: the caller is the signed-in
  *   person, and every query is filtered by their workspace (SRS 5.2, PRD EP-14).

@@ -62,9 +62,9 @@ export const MOCK_PM_REPORT: PmReportResponse = {
       pmNote: '',
     },
     {
-      name: 'L&D feedback',
+      name: 'RND feedback',
       lines: [
-        { label: 'Reviewer', value: 'Central L&D Team', source: 'PM-entered' },
+        { label: 'Reviewer', value: 'Central RND Team', source: 'PM-entered' },
         { label: 'Mid-term Rating', value: 'Exceeding expectations', source: 'PM-entered' },
       ],
       pmNote: 'Very proactive in asking questions during office hours.',

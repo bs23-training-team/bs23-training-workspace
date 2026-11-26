@@ -3,7 +3,7 @@ import type { UserProfileResponse } from '@bs23/contracts';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { PmActor } from './directory.actor.js';
 
-/** Rules of the user profile page (personal information + L&D feedback history). */
+/** Rules of the user profile page (personal information + RND feedback history). */
 @Injectable()
 export class UserProfileService {
   constructor(private readonly prisma: PrismaService) {}

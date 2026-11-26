@@ -2,7 +2,7 @@
 
 **Owner:** E02
 
-All Users table, Add/Edit trainee, teams, full evaluation profile with ten cards, L&D feedback.
+All Users table, Add/Edit trainee, teams, full evaluation profile with ten cards, RND feedback.
 
 ## Suggested layout
 

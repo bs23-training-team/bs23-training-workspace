@@ -14,7 +14,7 @@ export * from './peers.js';
 export const POSITIONS = ['FRONTEND', 'BACKEND', 'FULLSTACK', 'QA'] as const;
 export type Position = (typeof POSITIONS)[number];
 
-export const USER_RESOURCES = ['TRAINEE', 'CENTRAL_LND', 'INDUSTRIAL_ATTACHMENT', 'SBU'] as const;
+export const USER_RESOURCES = ['TRAINEE', 'CENTRAL_RND', 'INDUSTRIAL_ATTACHMENT', 'SBU'] as const;
 export type UserResource = (typeof USER_RESOURCES)[number];
 
 /** Query of GET /directory/users (the All Users list). Every field is optional. */
@@ -43,7 +43,7 @@ export interface UserListItem {
   onboardDate: string;
   departureDate: string | null;
   /**
-   * Text of the newest L&D feedback version. null when there is none, and always null for a user
+   * Text of the newest RND feedback version. null when there is none, and always null for a user
    * managed by another PM (feedback is written by the managing PM).
    */
   latestFeedback: string | null;

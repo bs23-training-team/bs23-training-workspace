@@ -5,7 +5,7 @@ export const REPORT_SECTION_NAMES = [
   'Skill analysis result',
   'Courses result',
   'Proctoring result',
-  'L&D feedback',
+  'RND feedback',
   'Attendance',
   'Gamification',
   'Sprint',

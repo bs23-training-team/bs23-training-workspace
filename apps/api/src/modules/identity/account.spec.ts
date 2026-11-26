@@ -49,7 +49,7 @@ describe('roles come from the table, not a role column', () => {
     });
 
     it('every User row is a USER keyed by userId, whatever its resource', () => {
-        for (const resource of ['TRAINEE', 'CENTRAL_LND', 'INDUSTRIAL_ATTACHMENT', 'SBU']) {
+        for (const resource of ['TRAINEE', 'CENTRAL_RND', 'INDUSTRIAL_ATTACHMENT', 'SBU']) {
             const account = accountFromUser({ ...user, resource });
             expect(account.role).toBe('USER');
             expect(account.id).toBe('BS23001');

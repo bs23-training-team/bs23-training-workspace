@@ -127,7 +127,7 @@ const TABLES: Record<TableName, TableDef> = {
 };
 
 const AUTH_TOKEN_TYPES = ['EMAIL_VERIFICATION', 'PASSWORD_RESET'];
-const USER_RESOURCES = ['TRAINEE', 'CENTRAL_LND', 'INDUSTRIAL_ATTACHMENT', 'SBU'];
+const USER_RESOURCES = ['TRAINEE', 'CENTRAL_RND', 'INDUSTRIAL_ATTACHMENT', 'SBU'];
 
 function constraintError(message: string): Error & { code: string } {
     return Object.assign(new Error(message), { code: 'P2002' });

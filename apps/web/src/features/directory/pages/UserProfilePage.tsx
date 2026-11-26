@@ -223,7 +223,7 @@ export default function TraineeProfilePM() {
                 <tr key={x.id}>
                   <Td>{formatDay(x.date)}</Td>
                   <Td className="font-medium">{x.title}</Td>
-                  <Td>{x.category === "SBO" ? "SBU" : "L&D"}</Td>
+                  <Td>{x.category === "SBU" ? "SBU" : "RND"}</Td>
                   <Td className="whitespace-normal">
                     {(() => {
                       const owner = db.taskOwners.find((o) => o.id === x.ownerId);
@@ -293,8 +293,8 @@ export default function TraineeProfilePM() {
             </div>
           </Card>
         <div className="grid gap-6 lg:grid-cols-3">
-          <Card className="lg:col-span-2" title="L&D feedback" description="Kept separate from AI findings and report comments. Every save creates a new version.">
-            <Textarea aria-label="L&D feedback" rows={5} value={fbValue} onChange={(e) => setFbText(e.target.value)} />
+          <Card className="lg:col-span-2" title="RND feedback" description="Kept separate from AI findings and report comments. Every save creates a new version.">
+            <Textarea aria-label="RND feedback" rows={5} value={fbValue} onChange={(e) => setFbText(e.target.value)} />
             <div className="mt-3 flex justify-end">
               <Button
                 disabled={fbText == null || fbText === (feedback[0]?.text ?? "")}

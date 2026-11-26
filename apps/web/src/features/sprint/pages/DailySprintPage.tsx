@@ -51,7 +51,7 @@ export default function DailySprintPage() {
     if (!editing) return;
     const err = validateTask(editing);
     if (err) return setError(err);
-    if (!editing.id && !editing.ownerId) return setError(`Choose which ${editing.category === "SBO" ? "SBU" : "L&D"} this task is for.`);
+    if (!editing.id && !editing.ownerId) return setError(`Choose which ${editing.category === "SBU" ? "SBU" : "RND"} this task is for.`);
     const r = saveTask({ ...editing, id: editing.id || uid("st") });
     if (!r.ok) return setError(r.error);
     setEditing(null);
@@ -133,7 +133,7 @@ export default function DailySprintPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={x.done ? "text-muted line-through" : "font-medium"}>{x.title}</span>
-                          <Badge tone={x.category === "SBO" ? "purple" : "blue"}>{x.category === "SBO" ? "SBU" : "L&D"}</Badge>
+                          <Badge tone={x.category === "SBU" ? "purple" : "blue"}>{x.category === "SBU" ? "SBU" : "RND"}</Badge>
                           {x.ownerId && <Badge>{db.taskOwners.find((o) => o.id === x.ownerId)?.name}</Badge>}
                           {x.verification && <Badge tone={x.verification === "VERIFIED" ? "green" : x.verification === "NOT_CONFIRMED" ? "red" : "amber"}>{x.verification === "VERIFIED" ? "Approved" : x.verification === "NOT_CONFIRMED" ? "Declined" : "Awaiting approval"}</Badge>}
                           {x.carriedFrom && <Badge tone="amber">Carried forward</Badge>}
@@ -280,11 +280,11 @@ export default function DailySprintPage() {
             <div className="grid grid-cols-2 gap-3">
               <Field label="Category" htmlFor="tc">
                 <Select id="tc" value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value as SprintTask["category"], ownerId: undefined })}>
-                  <option value="LND">L&amp;D</option>
-                  <option value="SBO">SBU</option>
+                  <option value="LND">RND</option>
+                  <option value="SBU">SBU</option>
                 </Select>
               </Field>
-              <Field label={editing.category === "SBO" ? "Which SBU?" : "Which L&D?"} htmlFor="to" required={!editing.id} hint="They are emailed to verify this task.">
+              <Field label={editing.category === "SBU" ? "Which SBU?" : "Which RND?"} htmlFor="to" required={!editing.id} hint="They are emailed to verify this task.">
                 <Select id="to" value={editing.ownerId ?? ""} onChange={(e) => setEditing({ ...editing, ownerId: e.target.value || undefined })}>
                   <option value="">Choose…</option>
                   {db.taskOwners

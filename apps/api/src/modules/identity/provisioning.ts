@@ -29,7 +29,7 @@ export const POSITIONS = ['FRONTEND', 'BACKEND', 'FULLSTACK', 'QA'] as const;
 export const ATTENDANCE_MODES = ['PHYSICAL', 'ONLINE'] as const;
 export const USER_RESOURCE_VALUES = [
     'TRAINEE',
-    'CENTRAL_LND',
+    'CENTRAL_RND',
     'INDUSTRIAL_ATTACHMENT',
     'SBU',
 ] as const;

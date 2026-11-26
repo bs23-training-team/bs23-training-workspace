@@ -336,6 +336,7 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
         await h.service.changePassword('USER', 'BS23002', first.user.workspaceId, current.id as string, {
             currentPassword: TEMP,
             newPassword: NEW_PASSWORD,
+            confirmPassword: NEW_PASSWORD,
         });
 
         expect(h.db.rows('user')[1].mustChangePassword).toBe(false);
@@ -537,6 +538,25 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
             expect(h.db.rows('outboxEvent')).toHaveLength(0);
             h.db[table].create = original;
         }
+    });
+});
+
+describe('an email, a PM ID and a User ID are unique in the whole system', () => {
+    it('the database rule covers every workspace and both tables, in any letter case', async () => {
+        const { h, workspace } = await setup();
+        const other = h.db.addWorkspace({ slug: 'other' });
+
+        // Same email: another workspace, other table, other case. All refused by the trigger.
+        expect(() => h.db.addPm('hash', { pmId: 'PM050', workspaceId: other.id, email: 'PM001@bs23.test' })).toThrow(/already used by a PM/);
+        expect(() => h.db.addUser('hash', { userId: 'BS23050', workspaceId: other.id, pmId: 'PM001', email: 'PM001@BS23.test' })).toThrow(/already used by a PM/);
+        expect(() => h.db.addPm('hash', { pmId: 'PM051', workspaceId: other.id, email: 'bs23001@bs23.test' })).toThrow(/already used by a User/);
+        expect(() => h.db.addUser('hash', { userId: 'BS23051', workspaceId: other.id, pmId: 'PM001', email: 'BS23001@bs23.test' })).toThrow(/already used by a User/);
+        // The IDs are primary keys: a second PM001 or BS23001 cannot exist, in any workspace.
+        expect(() => h.db.addPm('hash', { pmId: 'PM001', workspaceId: other.id, email: 'x1@example.com' })).toThrow();
+        expect(() => h.db.addUser('hash', { userId: 'BS23001', workspaceId: other.id, pmId: 'PM001', email: 'x2@example.com' })).toThrow();
+        expect(h.db.rows('pm')).toHaveLength(1);
+        expect(h.db.rows('user')).toHaveLength(1);
+        expect(workspace.id).not.toBe(other.id);
     });
 });
 

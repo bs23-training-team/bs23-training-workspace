@@ -720,6 +720,10 @@ export class IdentityService {
             throw new UnauthorizedException('Current password is incorrect.');
         }
 
+        if (dto.newPassword !== dto.confirmPassword) {
+            throw new BadRequestException('Passwords do not match.');
+        }
+
         if (dto.currentPassword === dto.newPassword) {
             throw new BadRequestException(
                 'New password must be different from the current password.',
@@ -894,6 +898,11 @@ export class IdentityService {
 
         if (record.expiresAt <= new Date()) {
             throw new BadRequestException('Password reset token has expired.');
+        }
+
+        // Checked before the token is spent, so the link stays usable.
+        if (dto.newPassword !== dto.confirmPassword) {
+            throw new BadRequestException('Passwords do not match.');
         }
 
         const owner = record.pmId

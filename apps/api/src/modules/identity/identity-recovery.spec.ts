@@ -90,7 +90,7 @@ describe('email verification of a provisioned PM (FR-AUTH-04)', () => {
             (await responseOf(h.service.verifyEmail({ token: forgot.resetToken as string }))).code,
         ).toBe('VERIFICATION_LINK_INVALID');
         await expect(
-            h.service.resetPassword({ token: reg.verificationToken as string, newPassword: NEW_PASSWORD }),
+            h.service.resetPassword({ token: reg.verificationToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD }),
         ).rejects.toThrow('Invalid or already used reset token.');
     });
 
@@ -158,7 +158,7 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         const result = await h.service.forgotPassword({ workEmail: 'BS23001@bs23.test' });
         expect(h.db.rows('authToken')[0]).toMatchObject({ userId: 'BS23001', pmId: null });
 
-        await h.service.resetPassword({ token: result.resetToken as string, newPassword: NEW_PASSWORD });
+        await h.service.resetPassword({ token: result.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
         const login = await h.service.login({ identifier: 'BS23001', password: NEW_PASSWORD });
         expect(login.user.role).toBe('USER');
     });
@@ -186,10 +186,11 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         expect(h.db.rows('authToken')).toHaveLength(0);
     });
 
-    it('skips an email that matches more than one account (open E10/E11 decision)', async () => {
+    it('skips an email that matches more than one account (old data: new data cannot, the email is unique everywhere)', async () => {
         const h = await makeHarness();
         await seedAccounts(h);
         const other = h.db.addWorkspace({ slug: 'second' });
+        h.db.enforceEmailTriggers = false; // rows from before the global-unique-email migration
         h.db.addPm(h.passwordHash, { pmId: 'PM002', workspaceId: other.id, email: 'pm001@bs23.test' });
 
         const result = await h.service.forgotPassword({ workEmail: 'pm001@bs23.test' });
@@ -206,9 +207,9 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         const second = await h.service.forgotPassword({ workEmail: 'pm001@bs23.test' });
 
         await expect(
-            h.service.resetPassword({ token: first.resetToken as string, newPassword: NEW_PASSWORD }),
+            h.service.resetPassword({ token: first.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD }),
         ).rejects.toThrow('Invalid or already used reset token.');
-        await h.service.resetPassword({ token: second.resetToken as string, newPassword: NEW_PASSWORD });
+        await h.service.resetPassword({ token: second.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
     });
 
     it('reset sets the new password, clears mustChangePassword, ends all sessions and is single-use', async () => {
@@ -223,7 +224,7 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         await h.service.login({ identifier: 'BS23020', password: PASSWORD });
         const forgot = await h.service.forgotPassword({ workEmail: 'forgetful@bs23.test' });
 
-        await h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD });
+        await h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
 
         expect(h.db.rows('user').find((u) => u.userId === 'BS23020')?.mustChangePassword).toBe(false);
         expect(h.db.rows('session').every((s) => s.endedAt)).toBe(true);
@@ -234,7 +235,7 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         await h.service.login({ identifier: 'BS23020', password: NEW_PASSWORD });
 
         await expect(
-            h.service.resetPassword({ token: forgot.resetToken as string, newPassword: 'An0therPass!z3' }),
+            h.service.resetPassword({ token: forgot.resetToken as string, newPassword: 'An0therPass!z3', confirmPassword: 'An0therPass!z3' }),
         ).rejects.toThrow('Invalid or already used reset token.');
     });
 
@@ -244,13 +245,53 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         const forgot = await h.service.forgotPassword({ workEmail: 'pm001@bs23.test' });
 
         await expect(
-            h.service.resetPassword({ token: 'f'.repeat(64), newPassword: NEW_PASSWORD }),
+            h.service.resetPassword({ token: 'f'.repeat(64), newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD }),
         ).rejects.toThrow('Invalid or already used reset token.');
 
         h.db.rows('authToken')[h.db.rows('authToken').length - 1].expiresAt = new Date(Date.now() - 1000);
         await expect(
-            h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD }),
+            h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD }),
         ).rejects.toThrow('Password reset token has expired.');
+    });
+});
+
+describe('confirm password is checked by the API', () => {
+    it('reset-password refuses a confirmation that differs and keeps the token usable', async () => {
+        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
+        await seedAccounts(h);
+        const forgot = await h.service.forgotPassword({ workEmail: 'pm001@bs23.test' });
+
+        await expect(
+            h.service.resetPassword({
+                token: forgot.resetToken as string,
+                newPassword: NEW_PASSWORD,
+                confirmPassword: 'Different-Passw0rd!',
+            }),
+        ).rejects.toThrow('Passwords do not match.');
+
+        // The mismatch is checked before the token is spent.
+        await h.service.resetPassword({
+            token: forgot.resetToken as string,
+            newPassword: NEW_PASSWORD,
+            confirmPassword: NEW_PASSWORD,
+        });
+    });
+
+    it('change-password refuses a confirmation that differs', async () => {
+        const h = await makeHarness();
+        const { workspace } = await seedAccounts(h);
+        await h.service.login({ identifier: 'BS23001', password: PASSWORD });
+        const [session] = h.db.rows('session');
+
+        await expect(
+            h.service.changePassword('USER', 'BS23001', workspace.id as string, session.id as string, {
+                currentPassword: PASSWORD,
+                newPassword: NEW_PASSWORD,
+                confirmPassword: 'Different-Passw0rd!',
+            }),
+        ).rejects.toThrow('Passwords do not match.');
+        // The old password still works: nothing was changed.
+        await h.service.login({ identifier: 'BS23001', password: PASSWORD });
     });
 });
 
@@ -278,6 +319,7 @@ describe('requesting a new verification link by email (a PM who never got one)',
         const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
         const { workspace } = await seedAccounts(h);
         const other = h.db.addWorkspace({ slug: 'other' });
+        h.db.enforceEmailTriggers = false; // rows from before the global-unique-email migration
         h.db.addPm('hash', { pmId: 'PM050', workspaceId: other.id, email: 'dup@example.com', emailVerified: false });
         h.db.addPm('hash', { pmId: 'PM051', workspaceId: workspace.id, email: 'DUP@example.com', emailVerified: false });
         h.mail.send.mockClear();
@@ -318,7 +360,7 @@ describe('forgot-password is atomic', () => {
         h.db.authToken.create = create;
 
         expect(h.db.rows('authToken').filter((row) => !row.usedAt)).toHaveLength(1);
-        await h.service.resetPassword({ token: first.resetToken as string, newPassword: NEW_PASSWORD });
+        await h.service.resetPassword({ token: first.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
     });
 });
 
@@ -332,6 +374,7 @@ describe('notifications and outbox events for authentication (FR-14, FR-15)', ()
         await h.service.changePassword('USER', 'BS23001', workspace.id, session.id as string, {
             currentPassword: PASSWORD,
             newPassword: NEW_PASSWORD,
+            confirmPassword: NEW_PASSWORD,
         });
 
         expect(login.user.id).toBe('BS23001');
@@ -356,6 +399,7 @@ describe('notifications and outbox events for authentication (FR-14, FR-15)', ()
             h.service.changePassword('USER', 'BS23001', workspace.id, session.id as string, {
                 currentPassword: NEW_PASSWORD,
                 newPassword: 'Third-Passw0rd!z',
+                confirmPassword: 'Third-Passw0rd!z',
             }),
         ).rejects.toThrow('boom');
         h.db.outboxEvent.create = create;
@@ -367,7 +411,7 @@ describe('notifications and outbox events for authentication (FR-14, FR-15)', ()
         const { workspace } = await seedAccounts(h);
         const forgot = await h.service.forgotPassword({ workEmail: 'pm001@bs23.test' });
 
-        await h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD });
+        await h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
 
         expect(h.db.rows('notification')).toMatchObject([{ workspaceId: workspace.id, pmId: 'PM001', userId: null }]);
         expect(h.db.rows('outboxEvent')).toMatchObject([
@@ -396,7 +440,7 @@ describe('notifications and outbox events for authentication (FR-14, FR-15)', ()
         await seedAccounts(h);
 
         await expect(h.service.login({ identifier: 'BS23001', password: 'Wrong-Passw0rd!' })).rejects.toThrow();
-        await expect(h.service.resetPassword({ token: 'f'.repeat(64), newPassword: NEW_PASSWORD })).rejects.toThrow();
+        await expect(h.service.resetPassword({ token: 'f'.repeat(64), newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD })).rejects.toThrow();
 
         expect(h.db.rows('outboxEvent')).toHaveLength(0);
         expect(h.db.rows('notification')).toHaveLength(0);

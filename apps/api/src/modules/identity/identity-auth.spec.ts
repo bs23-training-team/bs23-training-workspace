@@ -116,10 +116,11 @@ describe('IdentityService.login: PM (email + password, Pm model)', () => {
         expect(h.db.rows('session')).toHaveLength(0);
     });
 
-    it('fails closed when one email belongs to PMs in two workspaces (open E10/E11 decision)', async () => {
+    it('fails closed on old data where one email belongs to PMs in two workspaces (new data cannot: the email is unique everywhere)', async () => {
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
         const other = h.db.addWorkspace({ slug: 'second' });
+        h.db.enforceEmailTriggers = false; // rows from before the global-unique-email migration
         h.db.addPm(h.passwordHash, { pmId: 'PM002', workspaceId: other.id, email: 'pm001@bs23.test' });
         expect(workspace.id).not.toBe(other.id);
 
@@ -505,7 +506,7 @@ describe('IdentityService.changePassword (FR-AUTH-03)', () => {
             'BS23010',
             workspace.id as string,
             decodePayload(current.accessToken).sid as string,
-            { currentPassword: PASSWORD, newPassword: NEW_PASSWORD },
+            { currentPassword: PASSWORD, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD },
         );
 
         expect(h.db.rows('user').find((u) => u.userId === 'BS23010')?.mustChangePassword).toBe(false);
@@ -529,6 +530,7 @@ describe('IdentityService.changePassword (FR-AUTH-03)', () => {
         await h.service.changePassword('PM', 'PM001', workspace.id as string, 'no-session', {
             currentPassword: PASSWORD,
             newPassword: NEW_PASSWORD,
+            confirmPassword: NEW_PASSWORD,
         });
 
         expect(h.db.rows('pm')[0].mustChangePassword).toBe(false);
@@ -544,6 +546,7 @@ describe('IdentityService.changePassword (FR-AUTH-03)', () => {
             h.service.changePassword('USER', 'BS23001', workspace.id as string, 's', {
                 currentPassword,
                 newPassword,
+                confirmPassword: newPassword,
             });
 
         await expect(call('WrongPass123', NEW_PASSWORD)).rejects.toThrow('Current password is incorrect.');

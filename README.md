@@ -39,6 +39,7 @@ docs/         setup guide, architecture decisions, folder guide
 - [Repository structure](docs/repo-structure.md): what every folder is for and where your code goes
 - [Architecture and decisions](docs/architecture.md): how the system is built and why
 - [Connecting the web UI to your API module](docs/web-api-integration.md): how each owner replaces the mock with the real API
+- [Shared Neon development database](docs/neon-dev-database.md): how migrations reach the shared database
 - [Contributing rules](CONTRIBUTING.md): branches, PRs, migrations, secrets
 
 The PRD and SRS are kept outside this repository; ask E11 for the current version.

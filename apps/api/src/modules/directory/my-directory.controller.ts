@@ -8,7 +8,7 @@ import { requireTrainee, type RequestWithUser } from './directory.actor.js';
 
 /** HTTP only: read the request, call the service. The rules are in MyDirectoryService. */
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('TRAINEE')
+@Roles('USER')
 @Controller('directory/me')
 export class MyDirectoryController {
   constructor(private readonly mine: MyDirectoryService) {}

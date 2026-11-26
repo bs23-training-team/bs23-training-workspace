@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../identity/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../identity/guards/roles.guard.js';
 import { PeersController } from './peers.controller.js';
 
-const traineeReq = { user: { sub: 'BS23001', sid: 's2', workspaceId: 'ws1', role: 'TRAINEE' } };
+const traineeReq = { user: { sub: 'BS23001', sid: 's2', workspaceId: 'ws1', role: 'USER' } };
 const pmReq = { user: { sub: 'PM001', sid: 's1', workspaceId: 'ws1', role: 'PM' } };
 
 describe('PeersController', () => {
@@ -15,7 +15,7 @@ describe('PeersController', () => {
 
   it('is behind the login guard and limited to trainees', () => {
     expect(Reflect.getMetadata('__guards__', PeersController)).toEqual([JwtAuthGuard, RolesGuard]);
-    expect(Reflect.getMetadata(ROLES_KEY, PeersController)).toEqual(['TRAINEE']);
+    expect(Reflect.getMetadata(ROLES_KEY, PeersController)).toEqual(['USER']);
   });
 
   it('takes the caller only from req.user', async () => {

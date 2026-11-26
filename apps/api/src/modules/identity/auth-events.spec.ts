@@ -19,7 +19,7 @@ function recorder() {
 const base: AuthEvent = {
     type: 'auth.account_created',
     workspaceId: 'ws-1',
-    account: { role: 'TRAINEE', id: 'BS23001' },
+    account: { role: 'USER', id: 'BS23001' },
     actorPmId: 'PM001',
 };
 
@@ -33,7 +33,7 @@ describe('auth outbox event envelope (FR-15)', () => {
             workspaceId: 'ws-1',
             type: 'auth.account_created',
             payload: {
-                accountRole: 'TRAINEE',
+                accountRole: 'USER',
                 accountId: 'BS23001',
                 actorPmId: 'PM001',
                 version: AUTH_EVENT_VERSION,

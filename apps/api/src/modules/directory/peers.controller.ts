@@ -10,7 +10,7 @@ const MAX_CURSOR_LENGTH = 64;
 
 /** HTTP only: read the request, call the service. The rules are in PeersService. */
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('TRAINEE')
+@Roles('USER')
 @Controller('directory/peers')
 export class PeersController {
   constructor(private readonly peers: PeersService) {}

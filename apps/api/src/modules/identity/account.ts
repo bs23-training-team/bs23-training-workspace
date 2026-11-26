@@ -3,10 +3,10 @@
  *
  * The schema has two login tables (ADR 0003, docs/adr/0003-login-ids-as-primary-keys.md):
  *   - `Pm`   primary key `pmId`   (e.g. "PM002")   -> login role PM
- *   - `User` primary key `userId` (e.g. "BS23001") -> login role TRAINEE
+ *   - `User` primary key `userId` (e.g. "BS23001") -> login role USER
  * There is NO role column. The role is the table the person was found in.
  * Per the PRD every non-PM account (Trainee, Central L&D, Industrial
- * Attachment, SBU) has the login role "user", stored as TRAINEE, and lands on
+ * Attachment, SBU) has the login role USER, and lands on
  * /trainee/dashboard; the Resources value is only informational here.
  *
  * Credential, AuthToken and Session each point at exactly one of the two
@@ -16,7 +16,7 @@
  * unit test.
  */
 
-export type AuthRole = 'PM' | 'TRAINEE';
+export type AuthRole = 'PM' | 'USER';
 
 /** The signed-in person as the API and the web app see them. */
 export type Account = {
@@ -90,7 +90,7 @@ export function accountFromPm(pm: PmRow): Account {
 
 export function accountFromUser(user: UserRow): Account {
     return {
-        role: 'TRAINEE',
+        role: 'USER',
         id: user.userId,
         workspaceId: user.workspaceId,
         name: user.name,

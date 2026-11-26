@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../identity/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../identity/guards/roles.guard.js';
 import { MyDirectoryController } from './my-directory.controller.js';
 
-const traineeReq = { user: { sub: 'BS23001', sid: 's2', workspaceId: 'ws1', role: 'TRAINEE' } };
+const traineeReq = { user: { sub: 'BS23001', sid: 's2', workspaceId: 'ws1', role: 'USER' } };
 
 describe('MyDirectoryController', () => {
   const mine = { getMine: vi.fn(), updateMine: vi.fn() };
@@ -14,7 +14,7 @@ describe('MyDirectoryController', () => {
 
   it('is behind the login guard and limited to trainees', () => {
     expect(Reflect.getMetadata('__guards__', MyDirectoryController)).toEqual([JwtAuthGuard, RolesGuard]);
-    expect(Reflect.getMetadata(ROLES_KEY, MyDirectoryController)).toEqual(['TRAINEE']);
+    expect(Reflect.getMetadata(ROLES_KEY, MyDirectoryController)).toEqual(['USER']);
   });
 
   it('takes the caller only from req.user', async () => {

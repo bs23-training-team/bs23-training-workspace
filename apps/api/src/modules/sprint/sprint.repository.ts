@@ -294,7 +294,7 @@ export class SprintRepository {
         ownerRequestedAt: Date | null;
       };
     },
-  ): Promise<unknown | null> {
+  ): Promise<unknown> {
     const copy = data.source;
     try {
       return await tx.$transaction(

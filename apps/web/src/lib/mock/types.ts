@@ -282,7 +282,7 @@ export interface SprintTask {
   traineeUserId: string;
   title: string;
   description: string;
-  category: "SBU" | "RND";
+  category: "SBU" | "LND";
   plannedHours: number;
   plannedStart: string; // HH:mm
   plannedEnd: string; // HH:mm
@@ -302,11 +302,11 @@ export interface SprintTask {
 
 export type TaskVerification = "PENDING" | "VERIFIED" | "NOT_CONFIRMED";
 
-/** A specific RND team ("RND") or SBU ("SBU") that a trainee can do tasks for. */
+/** A specific RND team ("LND") or SBU ("SBU") that a trainee can do tasks for. */
 export interface TaskOwner {
   id: string;
   name: string;
-  kind: "RND" | "SBU";
+  kind: "LND" | "SBU";
   email: string;
 }
 

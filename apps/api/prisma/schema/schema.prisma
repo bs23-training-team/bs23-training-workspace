@@ -1208,7 +1208,7 @@ model CompletionEvent {
 
 enum TaskCategory {
   SBU 
-  RND 
+  LND 
 }
 
 enum TaskVerification {

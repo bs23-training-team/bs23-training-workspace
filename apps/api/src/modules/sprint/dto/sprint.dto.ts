@@ -71,7 +71,7 @@ export class CreateTaskDto {
   blocker?: string;
 
   /**
-   * 'RND' or 'SBU'. Empty for a task done for oneself — and then there is no owner either
+   * 'LND' or 'SBU'. Empty for a task done for oneself — and then there is no owner either
    * (the rule "category and owner go together" is checked here and by the database).
    */
   @IsOptional()
@@ -156,7 +156,7 @@ export class BoardQueryDto {
 
 /** `GET /sprint/task-owners` — the owners to pick (U1, SRS 5.3). */
 export class TaskOwnerQueryDto {
-  /** 'RND' or 'SBU'. */
+  /** 'LND' or 'SBU'. */
   @IsIn(TASK_CATEGORIES)
   kind: TaskCategoryValue;
 }

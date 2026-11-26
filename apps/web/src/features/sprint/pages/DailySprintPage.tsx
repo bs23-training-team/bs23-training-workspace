@@ -13,7 +13,7 @@ import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { addDays, formatDay, isWeekend, nowHHMM, todayISO, uid, weekStartOf } from "@/lib/utils";
 
-const blank = (traineeUserId: string): SprintTask => ({ id: "", traineeUserId, title: "", description: "", category: "RND", plannedHours: 1, plannedStart: "", plannedEnd: "", actualHours: 0, blocker: "", done: false, date: todayISO() });
+const blank = (traineeUserId: string): SprintTask => ({ id: "", traineeUserId, title: "", description: "", category: "LND", plannedHours: 1, plannedStart: "", plannedEnd: "", actualHours: 0, blocker: "", done: false, date: todayISO() });
 
 export default function DailySprintPage() {
   const { db, user } = useMe();
@@ -280,7 +280,7 @@ export default function DailySprintPage() {
             <div className="grid grid-cols-2 gap-3">
               <Field label="Category" htmlFor="tc">
                 <Select id="tc" value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value as SprintTask["category"], ownerId: undefined })}>
-                  <option value="RND">RND</option>
+                  <option value="LND">RND</option>
                   <option value="SBU">SBU</option>
                 </Select>
               </Field>

@@ -322,12 +322,12 @@ export function buildSeed(): DB {
   const meetingAttendance: MeetingAttendance[] = [];
   const active = trainees.filter((t) => t.pmId === "pm1" && !t.archivedAt && t.onboardDate <= today && t.userId !== "u2");
   const taskTitles = [
-    ["Read lesson: Closures", "RND"],
+    ["Read lesson: Closures", "LND"],
     ["Fix login form validation", "SBU"],
-    ["Practice SQL joins", "RND"],
+    ["Practice SQL joins", "LND"],
     ["Write unit tests for utils", "SBU"],
     ["Review PR feedback", "SBU"],
-    ["Complete Git rebasing lesson", "RND"],
+    ["Complete Git rebasing lesson", "LND"],
   ] as const;
   for (let d = -14; d <= 0; d++) {
     const date = addDays(today, d);
@@ -420,7 +420,7 @@ export function buildSeed(): DB {
 
   // today's tasks for u1 (not yet submitted)
   sprintTasks.push(
-    { id: "st-u1-today-1", traineeUserId: "u1", title: "SQL: Aggregation lesson", description: "Finish GROUP BY exercises", category: "RND", plannedHours: 3, plannedStart: "10:00", plannedEnd: "13:00", actualHours: 0, blocker: "", done: false, date: today },
+    { id: "st-u1-today-1", traineeUserId: "u1", title: "SQL: Aggregation lesson", description: "Finish GROUP BY exercises", category: "LND", plannedHours: 3, plannedStart: "10:00", plannedEnd: "13:00", actualHours: 0, blocker: "", done: false, date: today },
     { id: "st-u1-today-2", traineeUserId: "u1", title: "Build user card component", description: "", category: "SBU", plannedHours: 4, plannedStart: "14:00", plannedEnd: "18:00", actualHours: 0, blocker: "", done: false, date: today },
   );
 
@@ -513,8 +513,8 @@ export function buildSeed(): DB {
     sprintWeeks,
     dsCells,
     taskOwners: [
-      { id: "own-rnd-1", name: "Farhana Islam", kind: "RND", email: "farhana.islam@bs23.example" },
-      { id: "own-rnd-2", name: "Tahmid Rahman", kind: "RND", email: "tahmid.rahman@bs23.example" },
+      { id: "own-lnd-1", name: "Farhana Islam", kind: "LND", email: "farhana.islam@bs23.example" },
+      { id: "own-lnd-2", name: "Tahmid Rahman", kind: "LND", email: "tahmid.rahman@bs23.example" },
       { id: "own-sbu-1", name: "Rafiq Ahmed", kind: "SBU", email: "rafiq.ahmed@bs23.example" },
       { id: "own-sbu-2", name: "Nadia Karim", kind: "SBU", email: "nadia.karim@bs23.example" },
       { id: "own-sbu-3", name: "Imran Hossain", kind: "SBU", email: "imran.hossain@bs23.example" },

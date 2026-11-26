@@ -104,7 +104,7 @@ rejected because it would duplicate modules, the Prisma client and config.
 | Owner | API module (`apps/api/src/modules/`) | Web feature (`apps/web/src/features/`) | Section in `schema.prisma` |
 |---|---|---|---|
 | E01 | `identity`, `notifications`, `outbox`, `dashboard` | `shell`, `auth`, `dashboard`, `notifications` | `E01: identity` |
-| E02 | `directory` (trainees, teams, L&D feedback) | `directory` | `E02: directory` |
+| E02 | `directory` (trainees, teams, RND feedback) | `directory` | `E02: directory` |
 | E03 | `assessment` (expertise, attempts, evaluation, AI adapter) | `assessment` | `E03: assessment` |
 | E04 | `catalog` (courses, assignments, requests) | `catalog` | `E04: catalog` |
 | E05 | `learning` (roadmap, topic state, progress) | `learning` | `E05: learning` |
@@ -210,7 +210,7 @@ controller, service with the check, a spec for each). Copy its shape when starti
 There are two separate login tables and no role enum: which table a person is in decides their role.
 
 - `Pm` for PMs (admins), primary key `pmId`, e.g. `PM002`
-- `User` for the 4 resource types (TRAINEE, CENTRAL_LND, INDUSTRIAL_ATTACHMENT, SBU), primary key
+- `User` for the 4 resource types (TRAINEE, CENTRAL_RND, INDUSTRIAL_ATTACHMENT, SBU), primary key
   `userId`, e.g. `BS23001`
 
 These IDs are foreign keys in more than 30 tables. The usual alternative (a hidden uuid key plus a

@@ -43,6 +43,6 @@ query or body; no `req.user` means 401).
 - All four fields are loaded from the database on every request (session, then its owner). The
   `role` and `workspaceId` claims inside the token are never used for authorisation.
 - The role is not a column: it is the table the account lives in. `USER` is the login role of
-  every `User` (it was called TRAINEE before 2026-11-25); the resource type (TRAINEE, CENTRAL_LND, INDUSTRIAL_ATTACHMENT, SBU) stays in
+  every `User` (it was called TRAINEE before 2026-11-25); the resource type (TRAINEE, CENTRAL_RND, INDUSTRIAL_ATTACHMENT, SBU) stays in
   `User.resource`.
 - Protect a route with `@UseGuards(JwtAuthGuard, RolesGuard)` and `@Roles('PM')` or `@Roles('USER')`.

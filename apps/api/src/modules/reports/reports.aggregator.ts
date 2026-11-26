@@ -306,12 +306,12 @@ export class ReportsAggregator {
           },
         ];
 
-    // 4. L&D feedback
+    // 4. RND feedback
     const latestFeedback = feedbackVersions[0] ?? null;
     const feedbackLines: ReportEvidenceLine[] = latestFeedback
       ? [
           {
-            label: `Latest L&D feedback (v${latestFeedback.version})`,
+            label: `Latest RND feedback (v${latestFeedback.version})`,
             value: latestFeedback.text,
             source: 'PM-entered',
             note: `By ${latestFeedback.author.name}`,
@@ -319,7 +319,7 @@ export class ReportsAggregator {
         ]
       : [
           {
-            label: 'L&D feedback',
+            label: 'RND feedback',
             value: UNAVAILABLE_TEXT,
             source: 'unavailable',
           },
@@ -426,7 +426,7 @@ export class ReportsAggregator {
       { name: 'Skill analysis result', lines: skillLines, pmNote: '' },
       { name: 'Courses result', lines: courseLines, pmNote: '' },
       { name: 'Proctoring result', lines: proctoringLines, pmNote: '' },
-      { name: 'L&D feedback', lines: feedbackLines, pmNote: '' },
+      { name: 'RND feedback', lines: feedbackLines, pmNote: '' },
       { name: 'Attendance', lines: attendanceLines, pmNote: '' },
       { name: 'Gamification', lines: gamificationLines, pmNote: '' },
       { name: 'Sprint', lines: sprintLines, pmNote: '' },

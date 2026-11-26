@@ -104,7 +104,7 @@ export const POSITION_LABEL: Record<Position, string> = {
 
 export const RESOURCE_LABEL: Record<Resource, string> = {
   TRAINEE: "Trainee",
-  CENTRAL_LND: "Central L&D",
+  CENTRAL_RND: "Central RND",
   INDUSTRIAL_ATTACHMENT: "Industrial Attachment",
   SBU: "SBU",
 };

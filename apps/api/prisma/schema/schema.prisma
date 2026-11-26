@@ -319,7 +319,7 @@ model NotificationPreference {
   pmId         String?
   userId       String?
   category     String
-  emailEnabled Boolean  @default(false)
+  enabled      Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

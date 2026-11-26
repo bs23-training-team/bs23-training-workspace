@@ -266,7 +266,10 @@ describe('auth routes through the real controller and guards', () => {
         expect(created.status).toBe(201);
         expect(created.body).toMatchObject({ userId: 'BS238010', workspaceId: workspace.id, pmId: pm.pmId, active: true, mustChangePassword: true, teamIds: [team.id] });
         expect(JSON.stringify(created.body)).not.toContain(TEMP);
-        expect(h.mail.send).not.toHaveBeenCalled();
+        // The credentials email goes out (best effort); the HTTP answer itself never carries the password.
+        expect(created.body.emailSent).toBe(false);
+        expect(h.mail.send).toHaveBeenCalledTimes(1);
+        expect(h.mail.send.mock.calls[0][0].text).toContain(TEMP);
 
         // First login: signs in with the Trainee ID and the temporary password ...
         const signedIn = await send('post', '/auth/login', { body: { identifier: 'BS238010', password: TEMP } });

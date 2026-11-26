@@ -15,6 +15,7 @@ import type {
     UserResource,
 } from '../../generated/prisma/enums.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { sendAccountCreatedMail } from './account-created-mail.js';
 import { orgToday, type AuthRole } from './account.js';
 import { recordAuthEvent, SECURITY_CATEGORY } from './auth-events.js';
 import { normalizeEmail } from './email.js';
@@ -109,9 +110,11 @@ export type CreatedTrainee = {
     skillAssessmentMinutes: number;
     skillAssessmentMarks: number;
     teamIds: string[];
-    /** The account is active immediately; no email step is involved. */
+    /** The account is active immediately; nothing depends on the email. */
     active: true;
     mustChangePassword: true;
+    /** True only when a mail provider really delivered the credentials email (it carries the temporary password). */
+    emailSent: boolean;
 };
 
 /**
@@ -317,7 +320,9 @@ export class AccountProvisioningService {
      * Add Trainee (PRD FR-DIR-04, journey J1). The account is ACTIVE as soon
      * as this returns: the acting PM's temporary password is stored and
      * `mustChangePassword = true`, so the first login is sent to the password
-     * change. Nothing depends on email delivery and no email is sent.
+     * change. After the transaction the credentials (ID, temporary password,
+     * sign-in link) are mailed best effort; nothing depends on delivery and
+     * `emailSent` says whether it went out.
      *
      * Scope: the trainee is managed by the ACTING PM (`User.pmId`), and every
      * team must be one of that PM's own teams in the same workspace and not
@@ -464,6 +469,14 @@ export class AccountProvisioningService {
             `security_event=trainee_provisioned user=${userId} by=${actorPm.pmId} workspace=${workspaceId}`,
         );
 
+        const { emailSent } = await sendAccountCreatedMail(this.mail, webAppUrl(this.config), {
+            name,
+            email,
+            accountId: userId,
+            createdByPmId: actorPm.pmId,
+            temporaryPassword: input.temporaryPassword,
+        });
+
         return {
             userId,
             workspaceId,
@@ -480,6 +493,7 @@ export class AccountProvisioningService {
             teamIds,
             active: true,
             mustChangePassword: true,
+            emailSent,
         };
     }
 }

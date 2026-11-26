@@ -2,7 +2,7 @@
 
 **Owner:** E01
 
-Login, PM signup, password/recovery screens, first-login redirect to the expertise survey.
+Login, password/recovery screens, first-login redirect to the expertise survey.
 
 ## Suggested layout
 

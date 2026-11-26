@@ -61,12 +61,7 @@ export default function LoginPage() {
           Sign in
         </Button>
       </form>
-      <p className="mt-6 text-center text-sm text-muted">
-        PM without an account?{" "}
-        <Link href="/register" className="font-medium text-brand-600 hover:underline">
-          PM registration only
-        </Link>
-      </p>
+      <p className="mt-6 text-center text-sm text-muted">New PM accounts are created by an existing PM from the PM dashboard.</p>
       <div className="mt-8">
         <Alert tone="blue" title="Demo accounts (mock data)">
           <ul className="mt-1 space-y-0.5 text-xs">

@@ -45,7 +45,7 @@ const validation = (expectedType: new () => object) =>
  * E01 authentication API (routes follow the E01 SRS section 5).
  *
  * There is NO public PM sign-up. Accounts are created only by a signed-in,
- * verified PM through the PM Dashboard's Add PM / Add Trainee workflows
+ * PM through the PM Dashboard's Add PM / Add Trainee workflows
  * (POST /auth/accounts/*), which are guarded by JwtAuthGuard + RolesGuard and
  * re-checked in AccountProvisioningService. The very first PM is created by an
  * operator command (cli/provision-initial-pm.ts).

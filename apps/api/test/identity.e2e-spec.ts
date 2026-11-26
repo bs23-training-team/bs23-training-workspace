@@ -264,15 +264,14 @@ suite('identity against real PostgreSQL', () => {
         const email = `added-${run}@example.test`;
 
         const created = await provisioning.createPm(actor, { pmId: newId, name: 'Added PM', email, password: PASSWORD });
-        expect(created).toMatchObject({ pmId: newId, workspaceId, emailVerified: false, mustChangePassword: true });
+        expect(created).toMatchObject({ pmId: newId, workspaceId, mustChangePassword: true });
+        expect((await prisma.pm.findUniqueOrThrow({ where: { pmId: newId } })).emailVerified).toBe(true);
         // Real tables: Notification (recipient = the new PM) and OutboxEvent were written in the same transaction.
         expect(await prisma.notification.findFirstOrThrow({ where: { pmId: newId } })).toMatchObject({ workspaceId, userId: null });
         const outbox = await prisma.outboxEvent.findFirstOrThrow({ where: { workspaceId, type: 'auth.account_created' } });
         expect(outbox).toMatchObject({ status: 'PENDING', attempts: 0 });
         expect(JSON.stringify(outbox.payload)).not.toContain(email);
 
-        await expect(service.login({ identifier: email, password: PASSWORD })).rejects.toThrow('Verify your email');
-        await service.verifyEmail({ token: created.verificationToken as string });
         expect((await service.login({ identifier: email, password: PASSWORD })).user.mustChangePassword).toBe(true);
 
         await expect(

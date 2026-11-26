@@ -63,7 +63,7 @@ export default function TraineeProfilePage() {
             </Link>
           </div>
         </Card>
-        <PasswordCard userId={user.id} />
+        <PasswordCard />
       </div>
     </div>
   );

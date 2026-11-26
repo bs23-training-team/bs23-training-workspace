@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { requestPasswordReset } from "../mock-api";
+import { requestPasswordReset } from "../api";
 import { isEmail } from "@/lib/utils";
 import { Alert, Button, Field, Input } from "@/components/ui/ui";
 
@@ -11,12 +11,13 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState("");
   const [sent, setSent] = useState<{ token?: string } | null>(null);
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!isEmail(email)) return setError("Enter your registered email.");
     setError("");
-    const r = requestPasswordReset(email);
+    const r = await requestPasswordReset(email);
     if (r.ok) setSent(r.data ?? {});
+    else setError(r.error);
   };
 
   return (
@@ -26,16 +27,14 @@ export default function ForgotPasswordPage() {
       {sent ? (
         <div className="mt-6 space-y-4">
           <Alert tone="green">If an account exists for {email}, a reset link has been sent. The link expires in 30 minutes.</Alert>
-          <Alert tone="amber" title="Preview">
-            Email is not connected.{" "}
-            {sent.token ? (
+          {sent.token && (
+            <Alert tone="amber" title="Preview">
+              This development API returns the reset token.{" "}
               <Link className="font-medium underline" href={`/reset-password?token=${encodeURIComponent(sent.token)}`}>
                 Open the reset link
               </Link>
-            ) : (
-              "No account matched, so no link was created."
-            )}
-          </Alert>
+            </Alert>
+          )}
         </div>
       ) : (
         <form onSubmit={submit} className="mt-6 space-y-4" noValidate>

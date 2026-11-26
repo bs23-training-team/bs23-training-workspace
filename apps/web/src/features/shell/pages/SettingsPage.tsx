@@ -46,7 +46,7 @@ export default function PMSettingsPage() {
               </Button>
             </div>
           </Card>
-          <PasswordCard userId={user.id} />
+          <PasswordCard />
         </div>
       )}
 

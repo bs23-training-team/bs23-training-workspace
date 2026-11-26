@@ -4,6 +4,18 @@
 
 Login, password/recovery screens, first-login redirect to the expertise survey.
 
+## Connected to the API
+
+Sign-in, sign-out, the session check and the passwords call the API (`api.ts`). Profile, photo and the session
+list are still mock (`mock-api.ts`).
+
+- The API decides who is signed in (`useApiSession`, `GET /auth/me`). Tokens are handled only by
+  `lib/api-client.ts`.
+- Until the other modules are connected, `api.ts` copies the signed-in account into the mock store (a user's
+  position, attendance mode and teams come from `GET /directory/me`). Mock screens show mock data for it.
+- Run the API (`NEXT_PUBLIC_API_URL`, default `http://localhost:4000`) and sign in with an API account: a PM
+  with the email, a user with the user ID. The mock demo accounts no longer sign in.
+
 ## Suggested layout
 
 ```

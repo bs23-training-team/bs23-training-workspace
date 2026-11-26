@@ -186,10 +186,11 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         expect(h.db.rows('authToken')).toHaveLength(0);
     });
 
-    it('skips an email that matches more than one account (open E10/E11 decision)', async () => {
+    it('skips an email that matches more than one account (old data: new data cannot, the email is unique everywhere)', async () => {
         const h = await makeHarness();
         await seedAccounts(h);
         const other = h.db.addWorkspace({ slug: 'second' });
+        h.db.enforceEmailTriggers = false; // rows from before the global-unique-email migration
         h.db.addPm(h.passwordHash, { pmId: 'PM002', workspaceId: other.id, email: 'pm001@bs23.test' });
 
         const result = await h.service.forgotPassword({ workEmail: 'pm001@bs23.test' });
@@ -278,6 +279,7 @@ describe('requesting a new verification link by email (a PM who never got one)',
         const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
         const { workspace } = await seedAccounts(h);
         const other = h.db.addWorkspace({ slug: 'other' });
+        h.db.enforceEmailTriggers = false; // rows from before the global-unique-email migration
         h.db.addPm('hash', { pmId: 'PM050', workspaceId: other.id, email: 'dup@example.com', emailVerified: false });
         h.db.addPm('hash', { pmId: 'PM051', workspaceId: workspace.id, email: 'DUP@example.com', emailVerified: false });
         h.mail.send.mockClear();

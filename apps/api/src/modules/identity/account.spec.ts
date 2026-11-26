@@ -19,7 +19,6 @@ const pm = {
     name: 'Pat PM',
     email: 'pat@bs23.test',
     mustChangePassword: false,
-    emailVerified: true,
 };
 
 const user = {
@@ -28,7 +27,6 @@ const user = {
     name: 'Tina Trainee',
     email: 'tina@bs23.test',
     mustChangePassword: true,
-    emailVerified: true,
     resource: 'SBU',
     pmId: 'PM002',
     archivedAt: null as Date | null,
@@ -67,11 +65,6 @@ describe('roles come from the table, not a role column', () => {
 });
 
 describe('sign-in blocks', () => {
-    it('a PM is never blocked: there is no email verification', () => {
-        expect(resolveSessionOwner({ pm: { ...pm, emailVerified: false } }, NOW)?.block).toBe(null);
-        expect(resolveSessionOwner({ pm }, NOW)?.block).toBe(null);
-    });
-
     it('an active user is not blocked', () => {
         expect(userSignInBlock(user, NOW)).toBe(null);
     });
@@ -100,11 +93,6 @@ describe('sign-in blocks', () => {
         expect(orgToday(beforeDhakaMidnight).toISOString()).toBe('2026-06-15T00:00:00.000Z');
         expect(isUserInactive({ archivedAt: null, departureDate: departure }, beforeDhakaMidnight)).toBe(false);
         expect(isUserInactive({ archivedAt: null, departureDate: departure }, justPastDhakaMidnight)).toBe(true);
-    });
-
-    it('email verification is not required of users', () => {
-        const unverified = { ...user, emailVerified: false };
-        expect(userSignInBlock(unverified, NOW)).toBe(null);
     });
 });
 

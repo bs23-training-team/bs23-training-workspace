@@ -26,8 +26,6 @@ import { RefreshDto } from './dto/refresh.dto.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { ResetPasswordDto } from './dto/reset-password.dto.js';
-import { VerifyEmailDto } from './dto/verify-email.dto.js';
-import { RequestVerificationDto } from './dto/request-verification.dto.js';
 import { CreatePmDto } from './dto/create-pm.dto.js';
 import { CreateTraineeDto } from './dto/create-trainee.dto.js';
 
@@ -78,34 +76,6 @@ export class IdentityController {
     @RateLimit('refresh')
     refresh(@Body(validation(RefreshDto)) dto: RefreshDto) {
         return this.identityService.refresh(dto.refreshToken);
-    }
-
-    // ----- Email verification (public, the emailed token is the credential) --
-
-    @Post('email/verify')
-    @HttpCode(200)
-    @UseGuards(RateLimitGuard)
-    @RateLimit('email-verify')
-    verifyEmail(@Body(validation(VerifyEmailDto)) dto: VerifyEmailDto) {
-        return this.identityService.verifyEmail(dto);
-    }
-
-    // A PM who never received the link asks for a new one by email address.
-    // The answer is always the same (no account enumeration).
-    @Post('email/verify/request')
-    @HttpCode(200)
-    @UseGuards(RateLimitGuard)
-    @RateLimit('email-verify-request')
-    requestVerification(@Body(validation(RequestVerificationDto)) dto: RequestVerificationDto) {
-        return this.identityService.requestVerification(dto);
-    }
-
-    @Post('email/verify/resend')
-    @HttpCode(200)
-    @UseGuards(RateLimitGuard)
-    @RateLimit('email-verify')
-    resendVerification(@Body(validation(VerifyEmailDto)) dto: VerifyEmailDto) {
-        return this.identityService.resendVerification(dto);
     }
 
     // ----- Password recovery (public) ---------------------------------

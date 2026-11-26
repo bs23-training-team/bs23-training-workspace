@@ -97,24 +97,6 @@ describe('IdentityService.login: PM (email + password, Pm model)', () => {
         expect(h.db.rows('session')).toHaveLength(0);
     });
 
-    it('signs in a PM whose old row is still unverified (no verification step)', async () => {
-        const h = await makeHarness();
-        const { workspace } = await seedAccounts(h);
-        h.db.addPm(h.passwordHash, {
-            pmId: 'PM002',
-            workspaceId: workspace.id,
-            email: 'new.pm@bs23.test',
-            emailVerified: false,
-        });
-
-        await expect(
-            h.service.login({ identifier: 'new.pm@bs23.test', password: 'WrongPass123' }),
-        ).rejects.toThrow('Invalid credentials.');
-        expect(h.db.rows('session')).toHaveLength(0);
-        const result = await h.service.login({ identifier: 'new.pm@bs23.test', password: PASSWORD });
-        expect(result.user).toMatchObject({ id: 'PM002', role: 'PM' });
-    });
-
     it('fails closed on old data where one email belongs to PMs in two workspaces (new data cannot: the email is unique everywhere)', async () => {
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
@@ -216,20 +198,6 @@ describe('IdentityService.login: user (Trainee ID + password, User.userId)', () 
 
         const future = await h.service.login({ identifier: 'BS23004', password: PASSWORD });
         expect(future.user.id).toBe('BS23004');
-    });
-
-    it('does not require a verified email for users', async () => {
-        const h = await makeHarness();
-        const { workspace } = await seedAccounts(h);
-        h.db.addUser(h.passwordHash, {
-            userId: 'BS23005',
-            workspaceId: workspace.id,
-            email: 'unverified.user@bs23.test',
-            emailVerified: false,
-        });
-
-        const result = await h.service.login({ identifier: 'BS23005', password: PASSWORD });
-        expect(result.user.role).toBe('USER');
     });
 
     it('returns mustChangePassword for a temporary password (FR-AUTH-03)', async () => {
@@ -475,7 +443,7 @@ describe('IdentityService logout, sessions and me', () => {
         const pm = await h.service.me('PM', 'PM001');
         const user = await h.service.me('USER', 'BS23001');
 
-        expect(pm.user).toMatchObject({ id: 'PM001', role: 'PM', emailVerified: true });
+        expect(pm.user).toMatchObject({ id: 'PM001', role: 'PM' });
         expect(user.user).toMatchObject({
             id: 'BS23001',
             role: 'USER',
@@ -674,15 +642,6 @@ describe('JwtAuthGuard (protected routes)', () => {
 
         await expect(makeGuard(h, false)(login.accessToken)).rejects.toThrow(ForbiddenException);
         expect((await makeGuard(h, true)(login.accessToken)).user.sub).toBe('BS23011');
-    });
-
-    it('accepts a PM with a live session whatever the old emailVerified value says', async () => {
-        const h = await makeHarness();
-        await seedAccounts(h);
-        const login = await h.service.login({ identifier: 'pm001@bs23.test', password: PASSWORD });
-        h.db.rows('pm')[0].emailVerified = false;
-
-        expect((await makeGuard(h)(login.accessToken)).user.sub).toBe('PM001');
     });
 });
 

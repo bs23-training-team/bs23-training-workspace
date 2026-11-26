@@ -379,8 +379,8 @@ Secrets:
 Checklist (every item must be done or consciously decided; some items need E01's auth on `develop`):
 
 1. **Seed:** a strong `SEED_PASSWORD` (the seed enforces this on non-local databases).
-2. **Dev tokens:** `IDENTITY_EXPOSE_DEV_TOKENS` is unset or `false`. It returns reset and verification
-   tokens in API responses, and it is ignored only when `NODE_ENV=production`.
+2. **Dev tokens:** `IDENTITY_EXPOSE_DEV_TOKENS` is unset or `false`. It returns the password-reset
+   token in API responses, and it is ignored only when `NODE_ENV=production`.
 3. **JWT secrets:** `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` are two different random values of at
    least 32 characters, kept in the host's secret store, never in the repository.
 4. **Mail:** `MAIL_PROVIDER=console` is refused in production; a real provider (and sender address)

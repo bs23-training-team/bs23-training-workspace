@@ -78,7 +78,7 @@ export async function archiveDepartedUsers(
                 data: { endedAt: now },
             });
 
-            // Unused reset/verification links stop working too.
+            // Unused reset links stop working too.
             await tx.authToken.updateMany({
                 where: { userId: { in: ids }, usedAt: null },
                 data: { usedAt: now },

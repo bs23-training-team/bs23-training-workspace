@@ -116,8 +116,7 @@ export type InitialPmInput = {
  *
  * - Refuses to run when ANY PM already exists, so it cannot be used to create
  *   extra workspaces or accounts later.
- * - The PM is email-verified (the operator vouches for it) and must change the
- *   password at first sign-in (mustChangePassword = true).
+ * - The PM must change the password at first sign-in (mustChangePassword = true).
  */
 export async function provisionInitialPm(
     prisma: Pick<PrismaService, 'pm' | 'user' | 'workspace' | 'credential' | '$transaction'>,

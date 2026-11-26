@@ -87,9 +87,13 @@ Facts from the code on `develop` (verified by reading it, not by running it):
 `apps/web/src/lib/api-client.ts`:
 
 - `request<T>(path, options)` adds the `Authorization` header, retries once after a refresh on `401`,
-  and throws an error whose message is the API's `message`. `requestBlob(path)` does the same for a
-  protected file.
-- The session ends (tokens cleared, `onSessionEnded` listeners called) only when the refresh fails too.
+  and throws an `ApiError` with the API's `message`, `status`, `code` and `details` (read from the top
+  level or from `error`). An answer with no body gives `undefined`. `requestBlob(path)` is the same
+  call for a protected file.
+- The session ends (tokens cleared, `onSessionEnded` listeners called) only when the API refuses the
+  refresh token (400, 401 or 403). On a network or server failure the tokens are kept.
+- Tabs refresh one at a time (Web Locks, available on `https` and `localhost`), because a refresh
+  token used twice ends every session of the account.
 - For local development the access and refresh tokens are kept in `localStorage`; before staging they
   move to `httpOnly` cookies (`docs/architecture.md` 6.1). Module owners must not store tokens
   themselves.

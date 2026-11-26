@@ -116,10 +116,11 @@ describe('IdentityService.login: PM (email + password, Pm model)', () => {
         expect(h.db.rows('session')).toHaveLength(0);
     });
 
-    it('fails closed when one email belongs to PMs in two workspaces (open E10/E11 decision)', async () => {
+    it('fails closed on old data where one email belongs to PMs in two workspaces (new data cannot: the email is unique everywhere)', async () => {
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
         const other = h.db.addWorkspace({ slug: 'second' });
+        h.db.enforceEmailTriggers = false; // rows from before the global-unique-email migration
         h.db.addPm(h.passwordHash, { pmId: 'PM002', workspaceId: other.id, email: 'pm001@bs23.test' });
         expect(workspace.id).not.toBe(other.id);
 

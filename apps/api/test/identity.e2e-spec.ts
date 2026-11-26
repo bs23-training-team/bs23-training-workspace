@@ -205,6 +205,46 @@ suite('identity against real PostgreSQL', () => {
         expect(isEmailTriggerError(trigger)).toBe(true);
     });
 
+    it('an email is unique in the whole system: the real triggers refuse it across workspaces, tables and letter case', async () => {
+        const newPm = (id: string, ws: string, email: string) =>
+            prisma.pm.create({ data: { pmId: id, workspaceId: ws, name: 'x', email, emailVerified: true } });
+        const newUser = (id: string, ws: string, owner: string, email: string) =>
+            prisma.user.create({
+                data: {
+                    userId: id, workspaceId: ws, name: 'x', email, resource: 'TRAINEE', pmId: owner,
+                    position: 'BACKEND', attendanceMode: 'ONLINE', onboardDate: new Date('2026-01-01T00:00:00Z'),
+                },
+            });
+        const refused = async (action: Promise<unknown>) => {
+            let error: unknown;
+            try {
+                await action;
+            } catch (e) {
+                error = e;
+            }
+            expect(isEmailTriggerError(error)).toBe(true);
+        };
+
+        // Another workspace, any table, any letter case: all refused (they were allowed before the migration).
+        await refused(newPm(`PM9${number()}`, otherWorkspaceId, pmEmail.toUpperCase())); // PM, same email as a PM
+        await refused(newUser(`BS239${number()}`, otherWorkspaceId, otherPmId, pmEmail)); // User takes a PM's email
+        await refused(newPm(`PM9${number()}`, otherWorkspaceId, userEmail)); // PM takes a User's email
+        await refused(newUser(`BS239${number()}`, otherWorkspaceId, otherPmId, userEmail.toUpperCase())); // User, same email as a User
+        // An UPDATE of the email is guarded too, and keeping the own email is fine.
+        await refused(prisma.pm.update({ where: { pmId: otherPmId }, data: { email: userEmail } }));
+        await refused(prisma.user.update({ where: { userId: otherUserId }, data: { email: pmEmail } }));
+        await prisma.pm.update({ where: { pmId: pmId }, data: { email: pmEmail } });
+
+        // Through the service, the same rule is a clean 409.
+        const actor = { sub: pmId, role: 'PM' as const, workspaceId };
+        await expect(
+            provisioning.createPm(actor, { pmId: `PM9${number()}`, name: 'x', email: `other-user-${run}@example.test`, password: PASSWORD }),
+        ).rejects.toThrow('Email is already in use.');
+        // The IDs are primary keys: a second PM or User with an existing ID is refused whatever the workspace.
+        await expect(newPm(pmId, otherWorkspaceId, `fresh-${run}@example.test`)).rejects.toSatisfy(isUniqueViolation);
+        await expect(newUser(userId, otherWorkspaceId, otherPmId, `fresh2-${run}@example.test`)).rejects.toSatisfy(isUniqueViolation);
+    }, 60_000);
+
     it('a failed transaction leaves no rows behind', async () => {
         const ghost = `PM9${number()}`;
 

@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
+import { vi } from 'vitest';
 
 import { resolveMailProvider } from './mail-config.js';
 import {
@@ -42,19 +43,18 @@ describe('mail providers', () => {
 
     function capture(run: () => Promise<unknown>) {
         const lines: string[] = [];
-        const saved = { log: Logger.prototype.log, warn: Logger.prototype.warn };
-        Logger.prototype.log = function (m: unknown) {
+        const record = (m: unknown) => {
             lines.push(String(m));
-        } as never;
-        Logger.prototype.warn = function (m: unknown) {
-            lines.push(String(m));
-        } as never;
+        };
+        const spies = [
+            vi.spyOn(Logger.prototype, 'log').mockImplementation(record),
+            vi.spyOn(Logger.prototype, 'warn').mockImplementation(record),
+        ];
 
         return run()
             .then(() => lines.join('\n'))
             .finally(() => {
-                Logger.prototype.log = saved.log;
-                Logger.prototype.warn = saved.warn;
+                for (const spy of spies) spy.mockRestore();
             });
     }
 

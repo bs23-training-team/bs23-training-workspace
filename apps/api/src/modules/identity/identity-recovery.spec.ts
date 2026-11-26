@@ -1,142 +1,13 @@
-import { createHash, randomBytes } from 'node:crypto';
-
-import { BadRequestException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 
 import {
     NEW_PASSWORD,
     PASSWORD,
     makeHarness,
     seedAccounts,
-    type Harness,
 } from '../../../test/support/identity-harness.js';
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
-
-// The body a client would receive from the HttpException the call throws.
-async function responseOf(call: Promise<unknown>) {
-    try {
-        await call;
-    } catch (error) {
-        return (error as BadRequestException).getResponse() as Record<string, unknown>;
-    }
-    throw new Error('expected the call to throw');
-}
-
-// A PM row from before verification was dropped: unverified, holding a live
-// verification link. New accounts never look like this; the verification routes
-// still serve such rows. The seeded PM is PM001, this one is PM002.
-const register = async (h: Harness) => {
-    const actorPm = h.db.rows('pm')[0] ?? (await seedAccounts(h)).pm;
-    const verificationToken = randomBytes(32).toString('hex');
-
-    h.db.addPm(h.passwordHash, {
-        pmId: 'PM002',
-        workspaceId: actorPm.workspaceId,
-        email: 'reg.pm@example.com',
-        emailVerified: false,
-        mustChangePassword: true,
-    });
-    await h.db.authToken.create({
-        data: {
-            workspaceId: actorPm.workspaceId,
-            pmId: 'PM002',
-            type: 'EMAIL_VERIFICATION',
-            tokenHash: sha256(verificationToken),
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        },
-    });
-
-    return { verificationToken };
-};
-
-const newPm = (h: Harness) => h.db.rows('pm').find((row) => row.pmId === 'PM002');
-
-describe('verification links of old unverified PM rows', () => {
-    it('sign-in works before the link is used, and the link still marks the email verified', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const reg = await register(h);
-
-        await expect(
-            h.service.login({ identifier: 'reg.pm@example.com', password: 'WrongPass123' }),
-        ).rejects.toThrow('Invalid credentials.');
-        await h.service.login({ identifier: 'reg.pm@example.com', password: PASSWORD });
-
-        const verified = await h.service.verifyEmail({ token: reg.verificationToken as string });
-        expect(verified.message).toContain('verified');
-        expect(newPm(h)?.emailVerified).toBe(true);
-
-        const login = await h.service.login({ identifier: 'REG.PM@example.com', password: PASSWORD });
-        expect(login.user).toMatchObject({ id: 'PM002', role: 'PM', mustChangePassword: true });
-    });
-
-    it('the link works once', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const reg = await register(h);
-        await h.service.verifyEmail({ token: reg.verificationToken as string });
-
-        const body = await responseOf(h.service.verifyEmail({ token: reg.verificationToken as string }));
-        expect(body.code).toBe('VERIFICATION_LINK_INVALID');
-    });
-
-    it('an unknown token is "invalid", an expired one is "expired" (distinct errors)', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const reg = await register(h);
-
-        expect((await responseOf(h.service.verifyEmail({ token: 'f'.repeat(64) }))).code).toBe(
-            'VERIFICATION_LINK_INVALID',
-        );
-
-        h.db.rows('authToken')[h.db.rows('authToken').length - 1].expiresAt = new Date(Date.now() - 1000);
-        const expired = await responseOf(h.service.verifyEmail({ token: reg.verificationToken as string }));
-        expect(expired.code).toBe('VERIFICATION_LINK_EXPIRED');
-        expect(newPm(h)?.emailVerified).toBe(false);
-    });
-
-    it('a password-reset token cannot verify an email, and the other way round', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        await seedAccounts(h);
-        const forgot = await h.service.forgotPassword({ workEmail: 'pm001@bs23.test' });
-        const reg = await register(h);
-        // seedAccounts ran once above; register reuses that workspace and PM.
-
-        expect(
-            (await responseOf(h.service.verifyEmail({ token: forgot.resetToken as string }))).code,
-        ).toBe('VERIFICATION_LINK_INVALID');
-        await expect(
-            h.service.resetPassword({ token: reg.verificationToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD }),
-        ).rejects.toThrow('Invalid or already used reset token.');
-    });
-
-    it('an expired link can be replaced, and the old link then stops working', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const reg = await register(h);
-        h.db.rows('authToken')[h.db.rows('authToken').length - 1].expiresAt = new Date(Date.now() - 1000);
-
-        const resent = await h.service.resendVerification({ token: reg.verificationToken as string });
-
-        expect(resent.verificationToken).not.toBe(reg.verificationToken);
-        expect(h.mail.send).toHaveBeenCalledTimes(1);
-        expect((await responseOf(h.service.verifyEmail({ token: reg.verificationToken as string }))).code).toBe(
-            'VERIFICATION_LINK_INVALID',
-        );
-        await h.service.verifyEmail({ token: resent.verificationToken as string });
-        expect(newPm(h)?.emailVerified).toBe(true);
-    });
-
-    it('refuses to resend while the link is still valid, and after verification', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const reg = await register(h);
-
-        await expect(
-            h.service.resendVerification({ token: reg.verificationToken as string }),
-        ).rejects.toThrow('This verification link is still valid.');
-
-        await h.service.verifyEmail({ token: reg.verificationToken as string });
-        expect(
-            (await responseOf(h.service.resendVerification({ token: reg.verificationToken as string }))).code,
-        ).toBe('VERIFICATION_LINK_INVALID');
-    });
-});
 
 describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
     it('answers the same for a known and an unknown email, and sends mail only for the known one', async () => {
@@ -176,15 +47,9 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         expect(login.user.role).toBe('USER');
     });
 
-    it('sends a reset to an unverified PM, who may sign in, but not to an archived user', async () => {
+    it('does not send a reset to an archived user', async () => {
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
-        h.db.addPm(h.passwordHash, {
-            pmId: 'PM002',
-            workspaceId: workspace.id,
-            email: 'unverified@bs23.test',
-            emailVerified: false,
-        });
         h.db.addUser(h.passwordHash, {
             userId: 'BS23002',
             workspaceId: workspace.id,
@@ -192,12 +57,10 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
             archivedAt: new Date(),
         });
 
-        await h.service.forgotPassword({ workEmail: 'unverified@bs23.test' });
         await h.service.forgotPassword({ workEmail: 'archived@bs23.test' });
 
-        expect(h.mail.send).toHaveBeenCalledTimes(1);
-        expect(h.mail.send.mock.calls[0][0].to).toBe('unverified@bs23.test');
-        expect(h.db.rows('authToken')).toMatchObject([{ pmId: 'PM002', type: 'PASSWORD_RESET' }]);
+        expect(h.mail.send).toHaveBeenCalledTimes(0);
+        expect(h.db.rows('authToken')).toHaveLength(0);
     });
 
     it('skips an email that matches more than one account (old data: new data cannot, the email is unique everywhere)', async () => {
@@ -309,57 +172,6 @@ describe('confirm password is checked by the API', () => {
     });
 });
 
-describe('requesting a new verification link by email (a PM who never got one)', () => {
-    it('sends a fresh link to an unverified PM, invalidates the old one, and the new link verifies', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const reg = await register(h);
-        h.mail.send.mockClear();
-
-        const requested = await h.service.requestVerification({ email: 'REG.pm@example.com' });
-
-        expect(h.mail.send).toHaveBeenCalledTimes(1);
-        expect(h.mail.send.mock.calls[0][0].to).toBe('reg.pm@example.com');
-        expect(requested.verificationToken).toBeDefined();
-        expect(requested.verificationToken).not.toBe(reg.verificationToken);
-
-        // The first link no longer works, the new one does.
-        const old = await responseOf(h.service.verifyEmail({ token: reg.verificationToken as string }));
-        expect(old.code).toBe('VERIFICATION_LINK_INVALID');
-        await h.service.verifyEmail({ token: requested.verificationToken as string });
-        expect(newPm(h)?.emailVerified).toBe(true);
-    });
-
-    it('answers identically for an unknown email, a verified PM, a trainee and an ambiguous email, and sends nothing', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const { workspace } = await seedAccounts(h);
-        const other = h.db.addWorkspace({ slug: 'other' });
-        h.db.enforceEmailTriggers = false; // rows from before the global-unique-email migration
-        h.db.addPm('hash', { pmId: 'PM050', workspaceId: other.id, email: 'dup@example.com', emailVerified: false });
-        h.db.addPm('hash', { pmId: 'PM051', workspaceId: workspace.id, email: 'DUP@example.com', emailVerified: false });
-        h.mail.send.mockClear();
-
-        const answers = [];
-        for (const email of ['nobody@example.com', 'pm001@bs23.test', 'bs23001@bs23.test', 'dup@example.com']) {
-            answers.push(await h.service.requestVerification({ email }));
-        }
-
-        expect(new Set(answers.map((a) => JSON.stringify(a))).size).toBe(1);
-        expect(h.mail.send).not.toHaveBeenCalled();
-        expect(h.db.rows('authToken')).toHaveLength(0);
-    });
-
-    it('never returns the token outside the dev flag, and only the hash is stored', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'false' });
-        await register(h);
-
-        const requested = await h.service.requestVerification({ email: 'reg.pm@example.com' });
-
-        expect(Object.keys(requested)).toEqual(['message']);
-        const mailed = /token=([0-9a-f]{64})/.exec(h.mail.send.mock.calls.at(-1)![0].text)![1];
-        expect(JSON.stringify(h.db.rows('authToken'))).not.toContain(mailed);
-    });
-});
-
 describe('forgot-password is atomic', () => {
     it('keeps the previous link when storing the new one fails', async () => {
         const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
@@ -431,22 +243,6 @@ describe('notifications and outbox events for authentication (FR-14, FR-15)', ()
         expect(h.db.rows('outboxEvent')).toMatchObject([
             { type: 'auth.password_reset_completed', payload: { accountRole: 'PM', accountId: 'PM001' } },
         ]);
-    });
-
-    it('email verification writes auth.email_verified and no secret or address reaches the payloads', async () => {
-        const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
-        const reg = await register(h);
-        h.db.rows('notification').length = 0;
-        h.db.rows('outboxEvent').length = 0;
-
-        await h.service.verifyEmail({ token: reg.verificationToken as string });
-
-        expect(h.db.rows('outboxEvent')).toMatchObject([
-            { type: 'auth.email_verified', payload: { accountRole: 'PM', accountId: 'PM002' } },
-        ]);
-        const stored = JSON.stringify(h.db.rows('outboxEvent'));
-        expect(stored).not.toContain(reg.verificationToken as string);
-        expect(stored).not.toContain('reg.pm@example.com');
     });
 
     it('a failed login, an unsuccessful reset and a rejected token write no event', async () => {

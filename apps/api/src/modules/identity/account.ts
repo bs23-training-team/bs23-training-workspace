@@ -38,7 +38,6 @@ export const PM_FIELDS = {
     name: true,
     email: true,
     mustChangePassword: true,
-    emailVerified: true,
 } as const;
 
 /** Columns read from `User` (use as a Prisma `select`). */
@@ -48,7 +47,6 @@ export const USER_FIELDS = {
     name: true,
     email: true,
     mustChangePassword: true,
-    emailVerified: true,
     resource: true,
     pmId: true,
     archivedAt: true,
@@ -61,7 +59,6 @@ export type PmRow = {
     name: string;
     email: string;
     mustChangePassword: boolean;
-    emailVerified: boolean;
 };
 
 export type UserRow = {
@@ -70,7 +67,6 @@ export type UserRow = {
     name: string;
     email: string;
     mustChangePassword: boolean;
-    emailVerified: boolean;
     resource: string;
     pmId: string;
     archivedAt: Date | null;

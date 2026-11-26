@@ -6,7 +6,7 @@ export type Position = "FRONTEND" | "BACKEND" | "FULLSTACK" | "QA";
 /** Dashboard sector derived from a trainee's Position (Frontend, Backend, Full-Stack, SQA). */
 export type Sector = "frontend" | "backend" | "fullstack" | "sqa";
 export type AttendanceMode = "PHYSICAL" | "ONLINE";
-export type Resource = "TRAINEE" | "CENTRAL_LND" | "INDUSTRIAL_ATTACHMENT" | "SBU";
+export type Resource = "TRAINEE" | "CENTRAL_RND" | "INDUSTRIAL_ATTACHMENT" | "SBU";
 export type SourceStatus = "connected" | "sample" | "unavailable" | "PM-entered";
 
 export interface User {
@@ -282,7 +282,7 @@ export interface SprintTask {
   traineeUserId: string;
   title: string;
   description: string;
-  category: "SBO" | "LND";
+  category: "SBU" | "RND";
   plannedHours: number;
   plannedStart: string; // HH:mm
   plannedEnd: string; // HH:mm
@@ -291,7 +291,7 @@ export interface SprintTask {
   done: boolean;
   date: string;
   carriedFrom?: string;
-  /** L&D team or SBU the task is done for; they are emailed to verify it. */
+  /** RND team or SBU the task is done for; they are emailed to verify it. */
   ownerId?: string;
   verification?: TaskVerification;
   /** When the approval-request email was queued; used to flag a missing reply after a day. */
@@ -302,11 +302,11 @@ export interface SprintTask {
 
 export type TaskVerification = "PENDING" | "VERIFIED" | "NOT_CONFIRMED";
 
-/** A specific L&D team ("LND") or SBU ("SBO") that a trainee can do tasks for. */
+/** A specific RND team ("RND") or SBU ("SBU") that a trainee can do tasks for. */
 export interface TaskOwner {
   id: string;
   name: string;
-  kind: "LND" | "SBO";
+  kind: "RND" | "SBU";
   email: string;
 }
 

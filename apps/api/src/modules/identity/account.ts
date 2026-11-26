@@ -5,7 +5,7 @@
  *   - `Pm`   primary key `pmId`   (e.g. "PM002")   -> login role PM
  *   - `User` primary key `userId` (e.g. "BS23001") -> login role USER
  * There is NO role column. The role is the table the person was found in.
- * Per the PRD every non-PM account (Trainee, Central L&D, Industrial
+ * Per the PRD every non-PM account (Trainee, Central RND, Industrial
  * Attachment, SBU) has the login role USER, and lands on
  * /trainee/dashboard; the Resources value is only informational here.
  *
@@ -27,7 +27,7 @@ export type Account = {
     name: string;
     email: string;
     mustChangePassword: boolean;
-    /** Users only: TRAINEE | CENTRAL_LND | INDUSTRIAL_ATTACHMENT | SBU. */
+    /** Users only: TRAINEE | CENTRAL_RND | INDUSTRIAL_ATTACHMENT | SBU. */
     resource?: string;
 };
 

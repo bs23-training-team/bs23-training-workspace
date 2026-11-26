@@ -19,7 +19,7 @@ export default function AttendancePage() {
   const trainees = pmPeople(db, user.id);
   const ids = trainees.map((t) => t.userId);
   const [tab, setTab] = useState<"erp" | "teams" | "leave">("erp");
-  // Four user pickers (Trainee, Central L&D, Industrial attachment, SBU) list the same people; the one used last applies.
+  // Four user pickers (Trainee, Central RND, Industrial attachment, SBU) list the same people; the one used last applies.
   const [pick, setPick] = useState<{ trainee: string; central: string; industrial: string; sbu: string }>({ trainee: "", central: "", industrial: "", sbu: "" });
   const who = pick.trainee || pick.central || pick.industrial || pick.sbu;
   const choose = (key: keyof typeof pick, value: string) => setPick({ trainee: "", central: "", industrial: "", sbu: "", [key]: value });
@@ -56,9 +56,9 @@ export default function AttendancePage() {
             ))}
           </Select>
         </Field>
-        <Field label="Central L&D" htmlFor="awc">
+        <Field label="Central RND" htmlFor="awc">
           <Select id="awc" value={pick.central} onChange={(e) => choose("central", e.target.value)} className="w-56">
-            <option value="">All Central L&D</option>
+            <option value="">All Central RND</option>
             {trainees.map((t) => (
               <option key={t.userId} value={t.userId}>
                 {nameOf(db, t.userId)}{t.archivedAt ? " (archived)" : ""}

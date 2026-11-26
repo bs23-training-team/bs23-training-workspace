@@ -155,7 +155,7 @@ describe('IdentityService.login: user (Trainee ID + password, User.userId)', () 
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
 
-        const resources = ['CENTRAL_LND', 'INDUSTRIAL_ATTACHMENT', 'SBU'];
+        const resources = ['CENTRAL_RND', 'INDUSTRIAL_ATTACHMENT', 'SBU'];
         for (const [index, resource] of resources.entries()) {
             h.db.addUser(h.passwordHash, {
                 userId: `BS23${100 + index}`,

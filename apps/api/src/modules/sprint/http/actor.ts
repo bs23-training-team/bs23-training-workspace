@@ -15,7 +15,7 @@
  * ```
  *
  * `role` is the **login role**, not the resource type: E01 uses `'USER'` for non-PM accounts,
- * regardless of resource type (Trainee, Central L&D, Industrial Attachment, SBU).
+ * regardless of resource type (Trainee, Central RND, Industrial Attachment, SBU).
  * They all have the same sprint features (PRD 4), so one user actor covers all four. See
  * ASSUMPTIONS section 3.
  *

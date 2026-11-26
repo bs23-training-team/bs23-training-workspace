@@ -67,7 +67,7 @@ export class CreateTraineeDto {
 
     /** Default TRAINEE. */
     @IsOptional()
-    @IsIn(['TRAINEE', 'CENTRAL_LND', 'INDUSTRIAL_ATTACHMENT', 'SBU'])
+    @IsIn(['TRAINEE', 'CENTRAL_RND', 'INDUSTRIAL_ATTACHMENT', 'SBU'])
     resource?: string;
 
     /** One or more of the acting PM's own teams. */

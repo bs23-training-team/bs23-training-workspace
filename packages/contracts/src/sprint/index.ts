@@ -49,7 +49,7 @@ export interface SprintFigure {
 // -----------------------------------------------------------------------------
 
 /** The kind of owner a task can be sent to. The same words as the `TaskCategory` enum. */
-export const SPRINT_TASK_CATEGORIES = ['LND', 'SBU'] as const;
+export const SPRINT_TASK_CATEGORIES = ['RND', 'SBU'] as const;
 export type SprintTaskCategory = (typeof SPRINT_TASK_CATEGORIES)[number];
 
 /** Where a task stands with its owner. Null when the task needs no verification. */
@@ -66,7 +66,7 @@ export interface SprintTaskView {
   actualHours: number;
   blocker: string;
   done: boolean;
-  /** 'LND' or 'SBU' for a task done for someone else; null for a task done for oneself. */
+  /** 'RND' or 'SBU' for a task done for someone else; null for a task done for oneself. */
   category: SprintTaskCategory | null;
   /** The owner who has to verify the task; null for a task done for oneself. */
   ownerId: string | null;

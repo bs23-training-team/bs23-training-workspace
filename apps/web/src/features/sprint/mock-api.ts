@@ -23,7 +23,7 @@ export function validateTask(t: Pick<SprintTask, "title" | "plannedStart" | "pla
   return null;
 }
 
-/** Queues the approval-request email to the L&D team / SBU a task was logged for. */
+/** Queues the approval-request email to the RND team / SBU a task was logged for. */
 function requestOwnerApproval(d: DB, task: SprintTask, owner: { name: string; email: string }) {
   d.emailDeliveries.unshift({
     id: uid("em"),
@@ -38,7 +38,7 @@ function requestOwnerApproval(d: DB, task: SprintTask, owner: { name: string; em
 }
 
 /**
- * Saves a sprint task. A task created for an L&D team or SBU is added to the sprint at once with status
+ * Saves a sprint task. A task created for an RND team or SBU is added to the sprint at once with status
  * PENDING and an approval-request email goes to that owner; the PM hears back when the owner replies
  * (or, if there is no reply after a day, via `alertStaleOwnerApprovals`). Changing the task's title,
  * description, category or owner sends a new request.
@@ -62,7 +62,7 @@ export function saveTask(task: SprintTask): Result {
   return ok();
 }
 
-/** Stand-in for the owner's reply to the approval email (the real reply arrives through the L&D/SBU API). */
+/** Stand-in for the owner's reply to the approval email (the real reply arrives through the RND/SBU API). */
 export function verifyTaskOwner(pmId: string, taskId: string, status: Exclude<TaskVerification, "PENDING">): Result {
   const task = getDB().sprintTasks.find((x) => x.id === taskId);
   if (!task || !task.ownerId) return fail("This task has no owner to approve it.");

@@ -18,7 +18,7 @@ export interface MyDirectoryResponse {
   attendanceMode: AttendanceMode;
   /** Teams the user is in now. */
   teams: ProfileTeam[];
-  /** The "L&D onboarding date". */
+  /** The "RND onboarding date". */
   onboardDate: string;
 }
 

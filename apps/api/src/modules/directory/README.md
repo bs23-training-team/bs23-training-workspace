@@ -2,7 +2,7 @@
 
 **Owner:** E02 · **Requirements:** SRS DIR-01–05 · PRD US04–US06
 
-Trainees, teams, memberships, full name-click evaluation profile (ten cards), onboarding Day count, L&D feedback versions.
+Trainees, teams, memberships, full name-click evaluation profile (ten cards), onboarding Day count, RND feedback versions.
 
 ## Suggested layout
 

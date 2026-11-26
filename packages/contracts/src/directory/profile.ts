@@ -10,7 +10,7 @@ export interface ProfileTeam {
   name: string;
 }
 
-/** One saved version of the L&D feedback. Newest first in the response. */
+/** One saved version of the RND feedback. Newest first in the response. */
 export interface FeedbackVersionItem {
   version: number;
   text: string;
@@ -25,7 +25,7 @@ export interface SaveFeedbackRequest {
   text: string;
 }
 
-/** Personal information + L&D feedback history of one user. Dates are "YYYY-MM-DD" unless noted. */
+/** Personal information + RND feedback history of one user. Dates are "YYYY-MM-DD" unless noted. */
 export interface UserProfileResponse {
   userId: string;
   name: string;

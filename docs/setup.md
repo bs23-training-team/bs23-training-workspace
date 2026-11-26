@@ -200,7 +200,7 @@ All demo accounts use the password `Password123!`. Never use it anywhere real.
 |---|---|---|
 | PM001, PM002 | `pm001@bs23.test`, `pm002@bs23.test` | PM |
 | BS23001 | `BS23001` | TRAINEE |
-| BS23002 | `BS23002` | CENTRAL_LND |
+| BS23002 | `BS23002` | CENTRAL_RND |
 | BS23003 | `BS23003` | INDUSTRIAL_ATTACHMENT |
 | BS23004 | `BS23004` | SBU |
 

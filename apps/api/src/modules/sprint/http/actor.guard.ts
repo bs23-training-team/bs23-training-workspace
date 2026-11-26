@@ -25,7 +25,7 @@ import { actorFromRequestUser, type RequestWithActor, type SprintActor } from '.
  * **never a header, never the query, never the body** (docs/architecture.md section 3.3,
  * rule 7). Without a usable `req.user` the answer is 401.
  *
- * The role check itself is E01's `RolesGuard`, which reads `@Roles('PM' | 'TRAINEE')` — the
+ * The role check itself is E01's `RolesGuard`, which reads `@Roles('PM' | 'USER')` — the
  * login role. That is the role vocabulary of the whole API, so the sprint module uses it too
  * and keeps its own actor role as an internal detail.
  */

@@ -1,6 +1,7 @@
 import {
   Catch,
   HttpException,
+  Logger,
   type ArgumentsHost,
   type ExceptionFilter,
 } from '@nestjs/common';
@@ -129,7 +130,7 @@ function codeForStatus(status: number): string {
     case 429:
       return 'RATE_LIMITED';
     default:
-      return 'INTERNAL';
+      return status >= 400 && status < 500 ? 'BAD_REQUEST' : 'INTERNAL';
   }
 }
 
@@ -144,10 +145,12 @@ function codeForStatus(status: number): string {
  */
 @Catch()
 export class SprintUnexpectedErrorFilter implements ExceptionFilter {
+  private readonly logger = new Logger(SprintUnexpectedErrorFilter.name);
+
   catch(error: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
     // The cause stays in the server's log, never in the answer.
-    console.error('sprint: an unexpected error reached the HTTP layer', error);
+    this.logger.error('sprint: an unexpected error reached the HTTP layer', error);
     response.status(500).json({
       error: {
         code: 'INTERNAL',

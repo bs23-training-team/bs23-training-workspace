@@ -10,12 +10,12 @@
  *   sub: owner.account.id,      // Pm.pmId (e.g. "PM001") or User.userId (e.g. "BS23001")
  *   sid: session.id,
  *   workspaceId: owner.account.workspaceId,
- *   role: owner.account.role,   // 'PM' | 'TRAINEE'
+ *   role: owner.account.role,   // 'PM' | 'USER'
  * };
  * ```
  *
- * `role` is the **login role**, not the resource type: E01 stores every non-PM account as
- * `TRAINEE`, whatever their resource type (Trainee, Central L&D, Industrial Attachment, SBU).
+ * `role` is the **login role**, not the resource type: E01 uses `'USER'` for non-PM accounts,
+ * regardless of resource type (Trainee, Central L&D, Industrial Attachment, SBU).
  * They all have the same sprint features (PRD 4), so one user actor covers all four. See
  * ASSUMPTIONS section 3.
  *
@@ -35,7 +35,7 @@ export interface PmActor {
 
 /** The signed-in user, whatever their resource type. */
 export interface UserActor {
-  role: 'TRAINEE';
+  role: 'USER';
   /** `User.userId`, e.g. "BS23001". */
   userId: string;
   workspaceId: string;
@@ -53,7 +53,7 @@ export interface RequestUser {
   /** Id of the live session the access token belongs to. */
   sid?: string;
   workspaceId?: string;
-  /** 'PM' or 'TRAINEE'. */
+  /** 'PM' or 'USER'. */
   role?: string;
 }
 
@@ -68,14 +68,14 @@ const present = (value: unknown): value is string => typeof value === 'string' &
 /**
  * Turns `req.user` into the signed-in person, or null when there is nobody.
  *
- * - role 'PM' with a `sub` is the PM `sub`; role 'TRAINEE' with a `sub` is the user `sub`.
+ * - role 'PM' with a `sub` is the PM `sub`; role 'USER' with a `sub` is the user `sub`.
  * - Both need a `workspaceId`. A missing role, an unknown role or an empty id is nobody.
  * - `sid` is not needed: the guard has already checked the session is live.
  */
 export function actorFromRequestUser(user: RequestUser | null | undefined): SprintActor | null {
   if (!user || typeof user !== 'object' || !present(user.sub) || !present(user.workspaceId)) return null;
   if (user.role === 'PM') return { role: 'PM', pmId: user.sub, workspaceId: user.workspaceId };
-  if (user.role === 'TRAINEE') return { role: 'TRAINEE', userId: user.sub, workspaceId: user.workspaceId };
+  if (user.role === 'USER') return { role: 'USER', userId: user.sub, workspaceId: user.workspaceId };
   return null;
 }
 
@@ -90,7 +90,7 @@ export function pmIdOf(actor: SprintActor): string {
 
 /** The user id of a user caller. Throws FORBIDDEN for anyone else. */
 export function userIdOf(actor: SprintActor): string {
-  if (actor.role !== 'TRAINEE') throw new SprintError('FORBIDDEN', 'Your role cannot do this');
+  if (actor.role !== 'USER') throw new SprintError('FORBIDDEN', 'Your role cannot do this');
   return actor.userId;
 }
 

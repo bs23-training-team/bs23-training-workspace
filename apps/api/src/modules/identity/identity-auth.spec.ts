@@ -97,7 +97,7 @@ describe('IdentityService.login: PM (email + password, Pm model)', () => {
         expect(h.db.rows('session')).toHaveLength(0);
     });
 
-    it('refuses an unverified PM only after the correct password (FR-AUTH-04)', async () => {
+    it('signs in a PM whose old row is still unverified (no verification step)', async () => {
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
         h.db.addPm(h.passwordHash, {
@@ -110,10 +110,9 @@ describe('IdentityService.login: PM (email + password, Pm model)', () => {
         await expect(
             h.service.login({ identifier: 'new.pm@bs23.test', password: 'WrongPass123' }),
         ).rejects.toThrow('Invalid credentials.');
-        await expect(
-            h.service.login({ identifier: 'new.pm@bs23.test', password: PASSWORD }),
-        ).rejects.toThrow('Verify your email before signing in.');
         expect(h.db.rows('session')).toHaveLength(0);
+        const result = await h.service.login({ identifier: 'new.pm@bs23.test', password: PASSWORD });
+        expect(result.user).toMatchObject({ id: 'PM002', role: 'PM' });
     });
 
     it('fails closed on old data where one email belongs to PMs in two workspaces (new data cannot: the email is unique everywhere)', async () => {
@@ -677,13 +676,13 @@ describe('JwtAuthGuard (protected routes)', () => {
         expect((await makeGuard(h, true)(login.accessToken)).user.sub).toBe('BS23011');
     });
 
-    it('rejects an unverified PM even with a live session', async () => {
+    it('accepts a PM with a live session whatever the old emailVerified value says', async () => {
         const h = await makeHarness();
         await seedAccounts(h);
         const login = await h.service.login({ identifier: 'pm001@bs23.test', password: PASSWORD });
         h.db.rows('pm')[0].emailVerified = false;
 
-        await expect(makeGuard(h)(login.accessToken)).rejects.toThrow(UnauthorizedException);
+        expect((await makeGuard(h)(login.accessToken)).user.sub).toBe('PM001');
     });
 });
 

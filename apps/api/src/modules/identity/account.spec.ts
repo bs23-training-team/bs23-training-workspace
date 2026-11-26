@@ -5,7 +5,6 @@ import {
     nextPmId,
     orgToday,
     ownerData,
-    pmSignInBlock,
     resolveSessionOwner,
     slugify,
     toSessionUser,
@@ -68,9 +67,9 @@ describe('roles come from the table, not a role column', () => {
 });
 
 describe('sign-in blocks', () => {
-    it('an unverified PM is blocked, a verified PM is not (FR-AUTH-04)', () => {
-        expect(pmSignInBlock({ emailVerified: false })).toBe('EMAIL_NOT_VERIFIED');
-        expect(pmSignInBlock({ emailVerified: true })).toBe(null);
+    it('a PM is never blocked: there is no email verification', () => {
+        expect(resolveSessionOwner({ pm: { ...pm, emailVerified: false } }, NOW)?.block).toBe(null);
+        expect(resolveSessionOwner({ pm }, NOW)?.block).toBe(null);
     });
 
     it('an active user is not blocked', () => {
@@ -103,7 +102,7 @@ describe('sign-in blocks', () => {
         expect(isUserInactive({ archivedAt: null, departureDate: departure }, justPastDhakaMidnight)).toBe(true);
     });
 
-    it('email verification is not required of users (only PMs verify)', () => {
+    it('email verification is not required of users', () => {
         const unverified = { ...user, emailVerified: false };
         expect(userSignInBlock(unverified, NOW)).toBe(null);
     });
@@ -122,9 +121,6 @@ describe('ownerData / resolveSessionOwner', () => {
     });
 
     it('reports why the owner may not continue', () => {
-        expect(resolveSessionOwner({ pm: { ...pm, emailVerified: false } }, NOW)?.block).toBe(
-            'EMAIL_NOT_VERIFIED',
-        );
         expect(resolveSessionOwner({ user: { ...user, archivedAt: NOW } }, NOW)?.block).toBe(
             'INACTIVE',
         );

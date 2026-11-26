@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 import { BadRequestException } from '@nestjs/common';
 
@@ -22,31 +22,44 @@ async function responseOf(call: Promise<unknown>) {
     throw new Error('expected the call to throw');
 }
 
-// A PM that an authorized PM created through AccountProvisioningService: it
-// starts unverified, with an emailed (dev-exposed) verification token. The
-// creating PM is PM001, the new PM is PM002.
-const register = async (h: Harness, email = 'Reg.PM@Example.com') => {
+// A PM row from before verification was dropped: unverified, holding a live
+// verification link. New accounts never look like this; the verification routes
+// still serve such rows. The seeded PM is PM001, this one is PM002.
+const register = async (h: Harness) => {
     const actorPm = h.db.rows('pm')[0] ?? (await seedAccounts(h)).pm;
+    const verificationToken = randomBytes(32).toString('hex');
 
-    return h.provisioning.createPm(
-        { sub: actorPm.pmId, role: 'PM', workspaceId: actorPm.workspaceId },
-        { pmId: 'PM002', name: 'Reg PM', email, password: PASSWORD },
-    );
+    h.db.addPm(h.passwordHash, {
+        pmId: 'PM002',
+        workspaceId: actorPm.workspaceId,
+        email: 'reg.pm@example.com',
+        emailVerified: false,
+        mustChangePassword: true,
+    });
+    await h.db.authToken.create({
+        data: {
+            workspaceId: actorPm.workspaceId,
+            pmId: 'PM002',
+            type: 'EMAIL_VERIFICATION',
+            tokenHash: sha256(verificationToken),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+    });
+
+    return { verificationToken };
 };
 
 const newPm = (h: Harness) => h.db.rows('pm').find((row) => row.pmId === 'PM002');
 
-describe('email verification of a provisioned PM (FR-AUTH-04)', () => {
-    it('provision -> refused sign-in -> verify -> sign-in works', async () => {
+describe('verification links of old unverified PM rows', () => {
+    it('sign-in works before the link is used, and the link still marks the email verified', async () => {
         const h = await makeHarness({ IDENTITY_EXPOSE_DEV_TOKENS: 'true' });
         const reg = await register(h);
 
         await expect(
             h.service.login({ identifier: 'reg.pm@example.com', password: 'WrongPass123' }),
         ).rejects.toThrow('Invalid credentials.');
-        await expect(
-            h.service.login({ identifier: 'reg.pm@example.com', password: PASSWORD }),
-        ).rejects.toThrow('Verify your email before signing in.');
+        await h.service.login({ identifier: 'reg.pm@example.com', password: PASSWORD });
 
         const verified = await h.service.verifyEmail({ token: reg.verificationToken as string });
         expect(verified.message).toContain('verified');
@@ -102,7 +115,7 @@ describe('email verification of a provisioned PM (FR-AUTH-04)', () => {
         const resent = await h.service.resendVerification({ token: reg.verificationToken as string });
 
         expect(resent.verificationToken).not.toBe(reg.verificationToken);
-        expect(h.mail.send).toHaveBeenCalledTimes(2);
+        expect(h.mail.send).toHaveBeenCalledTimes(1);
         expect((await responseOf(h.service.verifyEmail({ token: reg.verificationToken as string }))).code).toBe(
             'VERIFICATION_LINK_INVALID',
         );
@@ -163,7 +176,7 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         expect(login.user.role).toBe('USER');
     });
 
-    it('does not send a reset to an unverified PM or an archived user', async () => {
+    it('sends a reset to an unverified PM, who may sign in, but not to an archived user', async () => {
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
         h.db.addPm(h.passwordHash, {
@@ -182,8 +195,9 @@ describe('forgot and reset password with AuthToken (FR-AUTH-04)', () => {
         await h.service.forgotPassword({ workEmail: 'unverified@bs23.test' });
         await h.service.forgotPassword({ workEmail: 'archived@bs23.test' });
 
-        expect(h.mail.send).toHaveBeenCalledTimes(0);
-        expect(h.db.rows('authToken')).toHaveLength(0);
+        expect(h.mail.send).toHaveBeenCalledTimes(1);
+        expect(h.mail.send.mock.calls[0][0].to).toBe('unverified@bs23.test');
+        expect(h.db.rows('authToken')).toMatchObject([{ pmId: 'PM002', type: 'PASSWORD_RESET' }]);
     });
 
     it('skips an email that matches more than one account (old data: new data cannot, the email is unique everywhere)', async () => {

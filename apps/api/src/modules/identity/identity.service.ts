@@ -34,7 +34,6 @@ import {
     accountFromPm,
     accountFromUser,
     ownerData,
-    pmSignInBlock,
     resolveSessionOwner,
     signInBlockMessage,
     toSessionUser,
@@ -393,7 +392,7 @@ export class IdentityService {
             return {
                 account: accountFromPm(pm),
                 passwordHash: pm.credential.passwordHash,
-                block: pmSignInBlock(pm),
+                block: null,
             };
         }
 
@@ -536,7 +535,7 @@ export class IdentityService {
         }
 
         if (owner.block) {
-            // The account was archived (or is not verified): end the session.
+            // The account was archived: end the session.
             await this.endSession(session.id);
             throw new UnauthorizedException('Invalid or expired refresh token.');
         }
@@ -785,8 +784,8 @@ export class IdentityService {
     }
 
     // The accounts an email address may reset the password of. Both tables,
-    // case-insensitive, all workspaces. An account that cannot sign in yet
-    // (unverified PM, archived user) is not eligible.
+    // case-insensitive, all workspaces. An account that cannot sign in
+    // (an archived or departed user) is not eligible.
     private async findResetCandidates(email: string) {
         const where = {
             email: { equals: normalizeEmail(email), mode: 'insensitive' as const },
@@ -800,7 +799,7 @@ export class IdentityService {
         return [
             ...pms.map((pm) => ({
                 account: accountFromPm(pm),
-                block: pmSignInBlock(pm),
+                block: null,
             })),
             ...users.map((user) => ({
                 account: accountFromUser(user),

@@ -10,6 +10,8 @@
  * leak between tests.
  */
 
+import { createHash, randomBytes } from 'node:crypto';
+
 import { ConfigService } from '@nestjs/config';
 import { Controller, Get, UseGuards, type INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -54,6 +56,30 @@ class GuardProbeController {
     traineeOnly() {
         return { ok: true };
     }
+}
+
+// A PM row from before verification was dropped (unverified, with a live link).
+// New accounts never look like this; returns the link's token.
+async function addUnverifiedPm(
+    h: Awaited<ReturnType<typeof makeHarness>>,
+    workspaceId: string,
+    pmId: string,
+    email: string,
+) {
+    const token = randomBytes(32).toString('hex');
+
+    h.db.addPm(h.passwordHash, { pmId, workspaceId, email, emailVerified: false });
+    await h.db.authToken.create({
+        data: {
+            workspaceId,
+            pmId,
+            type: 'EMAIL_VERIFICATION',
+            tokenHash: createHash('sha256').update(token).digest('hex'),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+    });
+
+    return token;
 }
 
 let ipCounter = 0;
@@ -228,7 +254,8 @@ describe('auth routes through the real controller and guards', () => {
             body: { pmId: 'PM800002', name: 'Added PM', email: 'Added.PM@Example.test', password: TEMP, workspaceId: other.id, role: 'USER' },
         });
         expect(created.status).toBe(201);
-        expect(created.body).toMatchObject({ pmId: 'PM800002', workspaceId: workspace.id, emailVerified: false, mustChangePassword: true });
+        expect(created.body).toMatchObject({ pmId: 'PM800002', workspaceId: workspace.id, mustChangePassword: true, emailSent: false });
+        expect(created.body).not.toHaveProperty('verificationToken');
         expect(JSON.stringify(created.body)).not.toMatch(new RegExp(`${TEMP}|passwordHash`));
 
         const dup = await send('post', '/auth/accounts/pms', { token: pm.accessToken, body: { pmId: 'PM800003', name: 'D', email: 'added.pm@example.test', password: TEMP } });
@@ -239,11 +266,7 @@ describe('auth routes through the real controller and guards', () => {
         const none = await send('post', '/auth/accounts/pms', { token: pm.accessToken, body: { pmId: 'PM800006', name: 'N', email: 'n@example.test' } });
         expect(none.status).toBe(400);
 
-        // The new PM cannot sign in until the link is used, and is then limited to the password change.
-        expect((await send('post', '/auth/login', { body: { identifier: 'added.pm@example.test', password: TEMP } })).status).toBe(401);
-        const verified = await send('post', '/auth/email/verify', { body: { token: created.body.verificationToken } });
-        expect(verified.status).toBe(200);
-        expect((await send('post', '/auth/email/verify', { body: { token: created.body.verificationToken } })).status).toBe(400);
+        // The new PM signs in at once, and is limited to the password change.
         const newPm = await login('added.pm@example.test', TEMP);
         const blocked = await send('post', '/auth/accounts/pms', {
             token: newPm.accessToken,
@@ -346,42 +369,33 @@ describe('auth routes through the real controller and guards', () => {
     });
 
     it('verification link request over HTTP: the same answer for any email; an unverified PM gets a fresh link', async () => {
-        const { send, login, h } = ctx;
-        const pm = await login('pm001@bs23.test');
-        const created = await send('post', '/auth/accounts/pms', {
-            token: pm.accessToken,
-            body: { pmId: 'PM800020', name: 'Late', email: 'late@example.test', password: TEMP },
-        });
-        expect(created.status).toBe(201);
+        const { send, h, workspace } = ctx;
+        const oldToken = await addUnverifiedPm(h, workspace.id as string, 'PM800020', 'late@example.test');
 
         const known = await send('post', '/auth/email/verify/request', { body: { email: 'late@example.test' } });
         const unknown = await send('post', '/auth/email/verify/request', { body: { email: 'nobody@example.test' } });
         expect(known.status).toBe(200);
         expect(unknown.status).toBe(200);
         expect(known.body.message).toBe(unknown.body.message);
-        expect(known.body.verificationToken).not.toBe(created.body.verificationToken);
+        expect(known.body.verificationToken).not.toBe(oldToken);
 
-        expect((await send('post', '/auth/email/verify', { body: { token: created.body.verificationToken } })).status).toBe(400);
+        expect((await send('post', '/auth/email/verify', { body: { token: oldToken } })).status).toBe(400);
         expect((await send('post', '/auth/email/verify', { body: { token: known.body.verificationToken } })).status).toBe(200);
         expect(h.db.rows('pm').find((row) => row.pmId === 'PM800020')?.emailVerified).toBe(true);
         expect((await send('post', '/auth/email/verify/request', { body: { email: 'not-an-email' } })).status).toBe(400);
     });
 
     it('token purposes over HTTP: a verification token cannot reset a password, and a reset token cannot verify an email', async () => {
-        const { send, login, h, workspace } = ctx;
-        const pm = await login('pm001@bs23.test');
-        const created = await send('post', '/auth/accounts/pms', {
-            token: pm.accessToken,
-            body: { pmId: 'PM800021', name: 'Purpose', email: 'purpose@example.test', password: TEMP },
-        });
+        const { send, h, workspace } = ctx;
+        const verificationToken = await addUnverifiedPm(h, workspace.id as string, 'PM800021', 'purpose@example.test');
         // A dedicated user, so resetting its password cannot affect other tests.
         h.db.addUser(h.passwordHash, { userId: 'BS23099', workspaceId: workspace.id, email: 'purpose.user@bs23.test' });
         const forgot = await send('post', '/auth/password/forgot', { body: { workEmail: 'purpose.user@bs23.test' } });
 
-        expect((await send('post', '/auth/password/reset', { body: { token: created.body.verificationToken, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } })).status).toBe(400);
+        expect((await send('post', '/auth/password/reset', { body: { token: verificationToken, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } })).status).toBe(400);
         expect((await send('post', '/auth/email/verify', { body: { token: forgot.body.resetToken } })).status).toBe(400);
         // Both tokens are still usable for their own purpose afterwards.
-        expect((await send('post', '/auth/email/verify', { body: { token: created.body.verificationToken } })).status).toBe(200);
+        expect((await send('post', '/auth/email/verify', { body: { token: verificationToken } })).status).toBe(200);
         expect((await send('post', '/auth/password/reset', { body: { token: forgot.body.resetToken, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } })).status).toBe(200);
     });
 

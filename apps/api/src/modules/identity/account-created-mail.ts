@@ -5,7 +5,8 @@ import type { MailService } from './mail.service.js';
  * email went out).
  *
  * It carries the account ID, the TEMPORARY password and the sign-in link, so
- * the PM does not have to pass the password on by hand. The first sign-in
+ * the PM does not have to pass the password on by hand. A new PM is also told
+ * to sign in with the email address (`signInWithEmail`). The first sign-in
  * forces the user to choose a new password. The mail body is never written to a
  * log (the console transport prints the masked recipient and the subject
  * only). Best effort: a delivery problem is never thrown to the caller.
@@ -15,7 +16,14 @@ import type { MailService } from './mail.service.js';
 export async function sendAccountCreatedMail(
     mail: Pick<MailService, 'send'>,
     baseUrl: string | null,
-    account: { name: string; email: string; accountId: string; createdByPmId: string; temporaryPassword: string },
+    account: {
+        name: string;
+        email: string;
+        accountId: string;
+        createdByPmId: string;
+        temporaryPassword: string;
+        signInWithEmail?: boolean;
+    },
 ): Promise<{ emailSent: boolean }> {
     const signIn = baseUrl ? `${baseUrl}/login` : 'the BS23 Training Workspace sign-in page';
 
@@ -27,6 +35,7 @@ export async function sendAccountCreatedMail(
                 `Hello ${account.name},\n\n` +
                 `${account.createdByPmId} created an account for you.\n\n` +
                 `Account ID: ${account.accountId}\n` +
+                (account.signInWithEmail ? `Sign in with your email address: ${account.email}\n` : '') +
                 `Temporary password: ${account.temporaryPassword}\n` +
                 `Sign in at: ${signIn}\n\n` +
                 'You will be asked to choose a new password the first time you sign in. ' +

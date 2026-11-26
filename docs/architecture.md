@@ -386,7 +386,9 @@ Checklist (every item must be done or consciously decided; some items need E01's
 4. **Mail:** `MAIL_PROVIDER=console` is refused in production; a real provider (and sender address)
    must be chosen before any email can be delivered.
 5. **Tokens in the browser:** the web app keeps tokens in `httpOnly`, `Secure`, `SameSite` cookies,
-   never in `localStorage` (the decision and the Next.js proxy are still open).
+   never in `localStorage`. Still to do before staging, including the Next.js proxy: for local
+   development only, the shared client (`apps/web/src/lib/api-client.ts`) uses `localStorage`
+   (E01 decision, 2026-11-26).
 6. **Rate limits:** set `trust proxy` for the chosen host and use a shared store (for example Redis)
    when more than one API instance runs; the counters are in memory today.
 7. **Mock data:** the reports web feature uses mock data only when an explicit flag is set, never by
@@ -514,3 +516,4 @@ Recommended extras (not in the SRS): secret scanning, dependency audit, SonarQub
 | 2026-11-24 | Decisions recorded in 4.3: every PM reads every user, only the managing PM changes a user; `Pm` and `User` stay two tables in v1. |
 | 2026-11-25 | The login role of a user is `USER` (was `TRAINEE`): `req.user.role` is `'PM'` or `'USER'`. `TRAINEE` stays only as a resource type. |
 | 2026-11-25 | Shared Neon development database: `Migrate Neon dev` workflow applies merged migrations after E11 approves the `neon-dev` environment; guide `docs/neon-dev-database.md`. |
+| 2026-11-26 | Web tokens: for local development the shared client keeps them in `localStorage`; `httpOnly` cookies are still required before staging (6.1). |

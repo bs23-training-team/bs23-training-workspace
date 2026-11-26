@@ -310,12 +310,17 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
         expect(JSON.stringify(result)).not.toContain(TEMP);
     });
 
-    it('does not depend on email: nothing is mailed, no token is created, and the trainee signs in with the Trainee ID', async () => {
+    it('does not depend on email: the credentials are mailed best effort, no token is created, and the trainee signs in with the Trainee ID', async () => {
         const { h, actor, input } = await withTeam();
 
-        await h.provisioning.createTrainee(actor, input());
+        const created = await h.provisioning.createTrainee(actor, input());
 
-        expect(h.mail.send).not.toHaveBeenCalled();
+        // The harness mail transport delivers nothing, like the console and disabled providers.
+        expect(created.emailSent).toBe(false);
+        expect(h.mail.send).toHaveBeenCalledTimes(1);
+        expect(h.mail.send.mock.calls[0][0].to).toBe('new.trainee@example.com');
+        expect(h.mail.send.mock.calls[0][0].text).toContain('BS23002');
+        expect(h.mail.send.mock.calls[0][0].text).toContain(TEMP);
         expect(h.db.rows('authToken')).toHaveLength(0);
 
         const login = await h.service.login({ identifier: 'bs23002', password: TEMP });
@@ -323,6 +328,22 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
         await expect(
             h.service.login({ identifier: 'new.trainee@example.com', password: TEMP }),
         ).rejects.toThrow('Invalid credentials.');
+    });
+
+    it('reports emailSent true only when the mail provider delivered it', async () => {
+        const { h, actor, input } = await withTeam();
+        h.mail.send.mockResolvedValueOnce({ delivered: true, transport: 'console' });
+
+        await expect(h.provisioning.createTrainee(actor, input())).resolves.toMatchObject({ emailSent: true });
+    });
+
+    it('keeps the account when sending the email fails', async () => {
+        const { h, actor, input } = await withTeam();
+        h.mail.send.mockRejectedValueOnce(new Error('mail server down'));
+
+        await expect(h.provisioning.createTrainee(actor, input())).resolves.toMatchObject({ emailSent: false });
+        expect(h.db.rows('user')).toHaveLength(2);
+        await expect(h.service.login({ identifier: 'BS23002', password: TEMP })).resolves.toBeDefined();
     });
 
     it('first login requires a password change; afterwards the flag is cleared and the temporary password stops working', async () => {

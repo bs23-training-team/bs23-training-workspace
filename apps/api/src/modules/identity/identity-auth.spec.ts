@@ -506,7 +506,7 @@ describe('IdentityService.changePassword (FR-AUTH-03)', () => {
             'BS23010',
             workspace.id as string,
             decodePayload(current.accessToken).sid as string,
-            { currentPassword: PASSWORD, newPassword: NEW_PASSWORD },
+            { currentPassword: PASSWORD, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD },
         );
 
         expect(h.db.rows('user').find((u) => u.userId === 'BS23010')?.mustChangePassword).toBe(false);
@@ -530,6 +530,7 @@ describe('IdentityService.changePassword (FR-AUTH-03)', () => {
         await h.service.changePassword('PM', 'PM001', workspace.id as string, 'no-session', {
             currentPassword: PASSWORD,
             newPassword: NEW_PASSWORD,
+            confirmPassword: NEW_PASSWORD,
         });
 
         expect(h.db.rows('pm')[0].mustChangePassword).toBe(false);
@@ -545,6 +546,7 @@ describe('IdentityService.changePassword (FR-AUTH-03)', () => {
             h.service.changePassword('USER', 'BS23001', workspace.id as string, 's', {
                 currentPassword,
                 newPassword,
+                confirmPassword: newPassword,
             });
 
         await expect(call('WrongPass123', NEW_PASSWORD)).rejects.toThrow('Current password is incorrect.');

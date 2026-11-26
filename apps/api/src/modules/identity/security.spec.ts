@@ -61,7 +61,7 @@ describe('security events and secrets (SEC-09)', () => {
             secrets.push(second.accessToken, second.refreshToken);
             const forgot = await h.service.forgotPassword({ workEmail: 'bs23001@bs23.test' });
             secrets.push(forgot.resetToken as string);
-            await h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD });
+            await h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
 
             const actor = h.db.rows('pm')[0];
             const created = await h.provisioning.createPm(
@@ -88,7 +88,7 @@ describe('security events and secrets (SEC-09)', () => {
             secrets.push(traineeLogin.accessToken, traineeLogin.refreshToken);
             await h.service.changePassword(
                 'USER', 'BS23010', actor.workspaceId, h.db.rows('session').at(-1)!.id as string,
-                { currentPassword: 'Tr@inee-temp-pw1', newPassword: NEW_PASSWORD },
+                { currentPassword: 'Tr@inee-temp-pw1', newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD },
             );
         });
 

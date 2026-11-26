@@ -46,7 +46,7 @@ import type {
  */
 @Controller('sprint')
 @SprintHttp()
-@Roles('TRAINEE')
+@Roles('USER')
 export class SprintController {
   constructor(private readonly sprint: SprintService) {}
 

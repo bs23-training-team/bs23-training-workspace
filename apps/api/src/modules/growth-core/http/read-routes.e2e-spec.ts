@@ -210,6 +210,37 @@ describe('read routes: badge catalogue and PM growth summary (database)', () => 
     });
   });
 
+  describe('GET /pm/xp-events: every active user, marked managedByYou (FR-GRW-59)', () => {
+    type Row = { userId: string; managedByYou: boolean };
+    const rows = async (url: string) =>
+      ((await as(pm()).get(url)).body as { events: Row[] }).events
+        .map((e) => [e.userId, e.managedByYou])
+        .sort((x, y) => String(x[0]).localeCompare(String(y[0])));
+
+    it("lists another PM's active user as not managed by you", async () => {
+      await xp(A, 10, 'PENDING');
+      await xp(C, 20, 'PENDING');
+      expect(await rows('/pm/xp-events')).toEqual([[A, true], [C, false]]);
+      expect(await rows(`/pm/xp-events?userId=${C}`)).toEqual([[C, false]]);
+    });
+
+    it("keeps an archived user for their own PM only", async () => {
+      await xp(A, 10, 'PENDING');
+      await xp(B, 15, 'PENDING'); // PM001's user, archived below
+      await xp(C, 20, 'PENDING'); // PM002's user, archived below
+      await prisma.user.updateMany({ where: { workspaceId, userId: { in: [B, C] } }, data: { archivedAt: new Date('2026-11-18T00:00:00Z') } });
+      try {
+        expect(await rows('/pm/xp-events')).toEqual([[A, true], [B, true]]);
+        const other = await as(pm()).get(`/pm/xp-events?userId=${C}`);
+        expect([other.status, errorCode(other)]).toEqual([403, 'FORBIDDEN_SCOPE']);
+        expect((await as(pm()).get(`/pm/streak-freezes?userId=${C}`)).status).toBe(403);
+        expect((await as(pm()).get(`/pm/streak-freezes?userId=${B}`)).status).toBe(200);
+      } finally {
+        await prisma.user.updateMany({ where: { workspaceId, userId: { in: [B, C] } }, data: { archivedAt: null } });
+      }
+    });
+  });
+
   describe('GET /pm/growth-summary', () => {
     it('lists every active user by name with awarded XP, pending XP, level and the stored streak', async () => {
       await prisma.level.createMany({
@@ -229,10 +260,10 @@ describe('read routes: badge catalogue and PM growth summary (database)', () => 
       expect(res.body).toEqual({
         nextCursor: null,
         users: [
-          { userId: A, name: `Name ${A}`, awardedXp: 120, pendingXp: 50, level: 'Builder', streak: { current: 3, longest: 7 } },
-          { userId: B, name: `Name ${B}`, awardedXp: 40, pendingXp: 0, level: 'Rookie', streak: { current: 0, longest: 0 } },
+          { userId: A, name: `Name ${A}`, managedByYou: true, awardedXp: 120, pendingXp: 50, level: 'Builder', streak: { current: 3, longest: 7 } },
+          { userId: B, name: `Name ${B}`, managedByYou: true, awardedXp: 40, pendingXp: 0, level: 'Rookie', streak: { current: 0, longest: 0 } },
           // C belongs to PM002 and is still listed: every PM sees every active user (the directory's rule)
-          { userId: C, name: `Name ${C}`, awardedXp: 0, pendingXp: 0, level: 'Rookie', streak: { current: 0, longest: 0 } },
+          { userId: C, name: `Name ${C}`, managedByYou: false, awardedXp: 0, pendingXp: 0, level: 'Rookie', streak: { current: 0, longest: 0 } },
         ],
       });
     });

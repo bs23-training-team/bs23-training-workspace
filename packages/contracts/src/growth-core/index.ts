@@ -22,6 +22,8 @@ export interface XpEventView {
   id: string;
   userId: string;
   userName: string;
+  /** true when the asking PM manages the user: show the decision buttons only then. */
+  managedByYou: boolean;
   source: XpSource;
   amount: number;
   status: XpStatus;
@@ -43,7 +45,7 @@ export interface XpEventPage {
  * An XP event as its OWNER sees it in GET /me/xp-events. The flag is a PM's information and is never here: the user
  * sees the status, and the reason once a PM has decided. The owner's own name is not repeated.
  */
-export type MyXpEventView = Omit<XpEventView, 'flag' | 'userName'>;
+export type MyXpEventView = Omit<XpEventView, 'flag' | 'userName' | 'managedByYou'>;
 
 /** Answer of GET /me/xp-events. */
 export interface MyXpEventPage {
@@ -163,6 +165,8 @@ export interface PmStreakFreeze {
   source: FreezeSource;
   reason: string;
   grantedById: string;
+  /** true when the asking PM manages the user. */
+  managedByYou: boolean;
 }
 
 /** A freeze as the user sees it (GET /me/streak-freezes): never the reason. */
@@ -263,6 +267,8 @@ export interface PmBadgeAward {
   awardId: string;
   userId: string;
   userName: string;
+  /** true when the asking PM manages the user: show Revoke only then. */
+  managedByYou: boolean;
   source: BadgeAwardSource;
   awardedAt: string;
   /** The PM who awarded it by hand. null for an automatic award: show "System". */
@@ -285,6 +291,8 @@ export type BadgePage =
 export interface PmGrowthSummaryRow {
   userId: string;
   name: string;
+  /** true when the asking PM manages the user: show the change buttons only then. */
+  managedByYou: boolean;
   /** XP that counts: AWARDED only. */
   awardedXp: number;
   /** XP waiting for a PM (PENDING and HELD), shown apart. */

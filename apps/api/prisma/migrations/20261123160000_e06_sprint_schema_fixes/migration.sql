@@ -11,11 +11,10 @@
 -- ---------------------------------------------------------------------------
 -- F-02: the enum value SBO is a typo for SBU (PRD and UserResource both say SBU).
 --
--- Postgres renames the value in place, so the type and its rows are untouched.
--- (Prisma's own generated SQL would rebuild the type and DROP the old one; this is
--- the narrower change.)
+-- Not done here. 20261126100000_rename_lnd_sbo_to_rnd_sbu (#71) already renames
+-- TaskCategory SBO -> SBU, and it runs after this migration. Renaming here too made
+-- that one fail with: "SBO" is not an existing enum label.
 -- ---------------------------------------------------------------------------
-ALTER TYPE "TaskCategory" RENAME VALUE 'SBO' TO 'SBU';
 
 -- ---------------------------------------------------------------------------
 -- F-01: a task done for oneself has neither a category nor an owner, so the

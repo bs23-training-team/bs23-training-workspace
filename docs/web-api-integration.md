@@ -73,6 +73,11 @@ every pull that touches `packages/contracts`, and before `pnpm --filter api type
 pnpm --filter @bs23/contracts build
 ```
 
+`apps/web` also depends on `@bs23/contracts` (`workspace:*`) and reads it from `packages/contracts/dist`. The root
+commands (`pnpm dev`, `pnpm typecheck`, `pnpm lint`, `pnpm build`) go through Turborepo, which builds contracts first,
+and CI uses them. A command that skips Turborepo, such as `pnpm --filter web typecheck`, does not build contracts:
+run the build above first. Import types with `import type { ... } from '@bs23/contracts'`.
+
 ## 4. How the web talks to the API
 
 Facts from the code on `develop` (verified by reading it, not by running it):

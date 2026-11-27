@@ -1,17 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Download, Pencil, Plus, Search } from "lucide-react";
 import { useMe } from "@/features/shell";
 import { assignmentsOf, courseById, overallProgress } from "@/features/learning";
-import { createTeam } from "../mock-api";
 import { nameOf, pmTrainees } from "@/lib/mock/selectors";
 import { skillsOf } from "@/features/assessment";
 import { streakOf, xpTotal } from "@/features/gamification-core";
 import { TECHNOLOGIES } from "@/lib/mock/content";
 import { TraineeFormDialog } from "../components/trainee-form";
-import { Avatar, Badge, Button, Card, EmptyState, Field, Input, PageHeader, Pagination, ProgressBar, Select, Table, Tabs, Td } from "@/components/ui/ui";
+import { TeamsTab } from "../components/teams-tab";
+import { createTeam, listMyTeams, type ApiTeam } from "../api";
+import { Avatar, Badge, Button, EmptyState, Field, Input, PageHeader, Pagination, ProgressBar, Select, Table, Tabs, Td } from "@/components/ui/ui";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { addDays, formatDate, POSITION_LABEL, RESOURCE_LABEL, tenureLabel, todayISO } from "@/lib/utils";
@@ -32,6 +33,21 @@ export default function AllUsersPage() {
   const [teamOpen, setTeamOpen] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [teamError, setTeamError] = useState("");
+  const [creatingTeam, setCreatingTeam] = useState(false);
+  // null until the first answer of the API
+  const [teams, setTeams] = useState<ApiTeam[] | null>(null);
+  const [teamsError, setTeamsError] = useState("");
+
+  const loadTeams = useCallback(() => {
+    void listMyTeams().then((r) => {
+      setTeamsError(r.ok ? "" : r.error);
+      if (r.ok) setTeams(r.data!);
+    });
+  }, []);
+  // Loaded again each time the tab is opened, so a team made by Add user appears too.
+  useEffect(() => {
+    if (tab === "teams") loadTeams();
+  }, [tab, loadTeams]);
 
   const today = todayISO();
   const all = pmTrainees(db, user.id);
@@ -42,7 +58,6 @@ export default function AllUsersPage() {
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
   const current = Math.min(page, pages);
   const rows = filtered.slice((current - 1) * PAGE, current * PAGE);
-  const myTeams = db.teams.filter((t) => t.pmId === user.id);
 
   const attendanceAsOf = (uid: string, physical: boolean) => {
     if (!physical) return <Badge tone="gray">Online</Badge>;
@@ -97,7 +112,7 @@ export default function AllUsersPage() {
           )
         }
       />
-      <Tabs label="Directory" value={tab} onChange={setTab} tabs={[{ id: "trainees", label: `Users (${all.length})` }, { id: "teams", label: `Teams (${myTeams.length})` }]} />
+      <Tabs label="Directory" value={tab} onChange={setTab} tabs={[{ id: "trainees", label: `Users (${all.length})` }, { id: "teams", label: teams ? `Teams (${teams.length})` : "Teams" }]} />
 
       {tab === "trainees" && (
         <>
@@ -207,31 +222,7 @@ export default function AllUsersPage() {
         </>
       )}
 
-      {tab === "teams" && (
-        <div className="grid gap-4 md:grid-cols-2">
-          {myTeams.map((tm) => {
-            const members = all.filter((t) => t.teamIds.includes(tm.id));
-            return (
-              <Card key={tm.id} title={tm.name} description={`PM: ${nameOf(db, tm.pmId)} · ${members.length} user(s)`}>
-                {members.length === 0 ? (
-                  <p className="text-sm text-muted">No users yet. Add them from the Users tab.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {members.map((m) => (
-                      <li key={m.userId} className="flex items-center justify-between text-sm">
-                        <Link href={`/pm/trainees/${m.userId}`} className="hover:text-brand-700">
-                          {nameOf(db, m.userId)} <span className="text-muted">({m.traineeId})</span>
-                        </Link>
-                        <span className="text-xs text-muted">{POSITION_LABEL[m.position]}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Card>
-            );
-          })}
-        </div>
-      )}
+      {tab === "teams" && <TeamsTab teams={teams} error={teamsError} />}
 
       {form.open && <TraineeFormDialog key={form.key} db={db} pmId={user.id} editUserId={form.id} open onClose={() => setForm({ ...form, open: false })} onSaved={(m) => toast(m)} />}
 
@@ -245,9 +236,14 @@ export default function AllUsersPage() {
               Cancel
             </Button>
             <Button
-              onClick={() => {
-                const r = createTeam(user.id, teamName);
+              disabled={creatingTeam}
+              onClick={async () => {
+                setTeamError("");
+                setCreatingTeam(true);
+                const r = await createTeam(teamName);
+                setCreatingTeam(false);
                 if (!r.ok) return setTeamError(r.error);
+                loadTeams();
                 setTeamOpen(false);
                 setTeamName("");
                 toast("Team created. You are its PM.");

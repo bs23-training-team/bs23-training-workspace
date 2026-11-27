@@ -4,6 +4,16 @@
 
 All Users table, Add/Edit trainee, teams, full evaluation profile with ten cards, RND feedback.
 
+## Connected to the API so far
+
+| Screen | Routes | Still on the mock |
+| --- | --- | --- |
+| Add PM, Add user | `POST /auth/accounts/pms`, `/auth/accounts/trainees` | Edit user |
+| Teams tab, Create team, the team box of Add user | `GET` / `POST /directory/teams` | All Users table, profile page, export |
+
+A new account is stored in the database but does not appear in the All Users table until that table is
+connected.
+
 ## Suggested layout
 
 ```

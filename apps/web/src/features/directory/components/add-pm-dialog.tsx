@@ -1,20 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { createPM, type AccountCredentials } from "../mock-api";
+import { createPM, type AccountCredentials } from "../api";
 import { CredentialsDialog } from "./credentials-dialog";
 import { Button, Field, Input } from "@/components/ui/ui";
 import { Dialog } from "@/components/ui/dialog";
 
 /** Create another PM account from the dashboard. The new PM signs in with the email or PM ID. */
-export function AddPMDialog({ creatorId, open, onClose, onSaved }: { creatorId: string; open: boolean; onClose: () => void; onSaved: (msg: string) => void }) {
+export function AddPMDialog({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: (msg: string) => void }) {
   const [f, setF] = useState({ name: "", email: "", pmCode: "", password: "" });
   const [error, setError] = useState("");
   const [creds, setCreds] = useState<AccountCredentials | null>(null);
+  const [saving, setSaving] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
 
-  const save = () => {
-    const r = createPM(creatorId, f);
+  const save = async () => {
+    setError("");
+    setSaving(true);
+    const r = await createPM(f);
+    setSaving(false);
     if (!r.ok) return setError(r.error);
     setCreds(r.data!);
   };
@@ -36,7 +40,9 @@ export function AddPMDialog({ creatorId, open, onClose, onSaved }: { creatorId: 
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={save}>Create account</Button>
+          <Button onClick={save} disabled={saving}>
+            {saving ? "Creating…" : "Create account"}
+          </Button>
         </>
       }
     >
@@ -49,7 +55,7 @@ export function AddPMDialog({ creatorId, open, onClose, onSaved }: { creatorId: 
         <Field label="PM name" htmlFor="pmn" required>
           <Input id="pmn" value={f.name} onChange={set("name")} autoComplete="off" />
         </Field>
-        <Field label="PM ID" htmlFor="pmi" required>
+        <Field label="PM ID" htmlFor="pmi" required hint="PM and at least 3 digits, for example PM003.">
           <Input id="pmi" value={f.pmCode} onChange={set("pmCode")} placeholder="PM003" autoComplete="off" />
         </Field>
         <Field label="PM email" htmlFor="pme" required>

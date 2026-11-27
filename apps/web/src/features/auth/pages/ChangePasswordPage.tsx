@@ -3,30 +3,35 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useDB } from "@/lib/mock/store";
-import { changePassword, homeFor } from "../mock-api";
+import { homeFor } from "../mock-api";
+import { changePassword, useApiSession } from "../api";
 import { currentUser } from "@/lib/mock/selectors";
 import { Alert, Button, Field, Input, Loading } from "@/components/ui/ui";
 
-/** Forced first-login password change for trainees (FR-AUTH-03). */
+/** Forced first-login password change (FR-AUTH-03). */
 export default function ChangePasswordPage() {
   const db = useDB();
+  const session = useApiSession(); // the API decides who is signed in
   const user = currentUser(db);
   const router = useRouter();
   const [f, setF] = useState({ current: "", next: "", confirm: "" });
   const [error, setError] = useState("");
 
-  const needsChange = !!user && user.mustChangePassword;
+  const needsChange = session === "signed-in" && !!user && user.mustChangePassword;
   useEffect(() => {
-    if (!user) router.replace("/login");
+    if (session === "checking") return;
+    if (session === "signed-out" || !user) router.replace("/login");
     else if (!user.mustChangePassword) router.replace(homeFor(user.id));
-  }, [user, router]);
+  }, [session, user, router]);
 
-  if (!needsChange) return <Loading label="Redirecting…" />;
+  if (!needsChange) return <Loading label={session === "checking" ? "Checking your session…" : "Redirecting…"} />;
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const r = changePassword(user.id, f.current, f.next, f.confirm);
+    const r = await changePassword(f.current, f.next, f.confirm);
     if (!r.ok) return setError(r.error);
+    setError("");
+    setF({ current: "", next: "", confirm: "" }); // Next.js keeps this page's state
     router.replace(homeFor(user.id));
   };
 
@@ -53,9 +58,11 @@ export default function ChangePasswordPage() {
           Save and continue
         </Button>
       </form>
-      <div className="mt-6">
-        <Alert tone="blue">Next you&apos;ll complete a short skill assessment so your PM can plan your learning.</Alert>
-      </div>
+      {user.role === "TRAINEE" && (
+        <div className="mt-6">
+          <Alert tone="blue">Next you&apos;ll complete a short skill assessment so your PM can plan your learning.</Alert>
+        </div>
+      )}
     </div>
   );
 }

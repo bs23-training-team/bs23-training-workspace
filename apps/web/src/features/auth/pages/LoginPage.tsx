@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { login } from "../mock-api";
-import { Alert, Button, Checkbox, Field, Input } from "@/components/ui/ui";
+import { login } from "../api";
+import { homeFor } from "../mock-api";
+import { Button, Checkbox, Field, Input } from "@/components/ui/ui";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,7 +17,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
     if (!identity.trim() || !password) {
@@ -24,10 +25,11 @@ export default function LoginPage() {
       return;
     }
     setLoading(true);
-    const r = login(identity, password, remember);
+    const r = await login(identity, password, remember);
     setLoading(false);
-    if (!r.ok) setError(r.error);
-    else router.replace(r.data!.redirect);
+    if (!r.ok) return setError(r.error);
+    setPassword(""); // Next.js keeps this page's state; the password must not stay in the form
+    router.replace(homeFor(r.data!.userId));
   };
 
   return (
@@ -62,15 +64,6 @@ export default function LoginPage() {
         </Button>
       </form>
       <p className="mt-6 text-center text-sm text-muted">New PM accounts are created by an existing PM from the PM dashboard.</p>
-      <div className="mt-8">
-        <Alert tone="blue" title="Demo accounts (mock data)">
-          <ul className="mt-1 space-y-0.5 text-xs">
-            <li>PM: sarah@bs23.com / Password123</li>
-            <li>User: BS23001 / Password123</li>
-            <li>New user (first login): BS23002 / Temp1234</li>
-          </ul>
-        </Alert>
-      </div>
     </div>
   );
 }

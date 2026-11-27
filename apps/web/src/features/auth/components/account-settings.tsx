@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 import type { DB, User } from "@/lib/mock/types";
-import { changePassword, endSession, setPhoto, validatePhoto } from "../mock-api";
+import { changePassword } from "../api";
+import { endSession, setPhoto, validatePhoto } from "../mock-api";
 import { setNotificationPref } from "@/features/notifications";
 import { ALWAYS_SHOWN_CATEGORIES, NOTIFICATION_CATEGORIES } from "@/lib/mock/content";
 import { Avatar, Badge, Button, Card, Checkbox, Field, Input, Select } from "@/components/ui/ui";
@@ -55,7 +56,7 @@ export function PhotoUpload({ user }: { user: User }) {
   );
 }
 
-export function PasswordCard({ userId }: { userId: string }) {
+export function PasswordCard() {
   const toast = useToast();
   const [f, setF] = useState({ current: "", next: "", confirm: "" });
   const [error, setError] = useState("");
@@ -77,8 +78,8 @@ export function PasswordCard({ userId }: { userId: string }) {
           <Input id="cp3" type="password" value={f.confirm} onChange={(e) => setF({ ...f, confirm: e.target.value })} autoComplete="new-password" />
         </Field>
         <Button
-          onClick={() => {
-            const r = changePassword(userId, f.current, f.next, f.confirm);
+          onClick={async () => {
+            const r = await changePassword(f.current, f.next, f.confirm);
             if (!r.ok) return setError(r.error);
             setError("");
             setF({ current: "", next: "", confirm: "" });

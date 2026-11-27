@@ -52,7 +52,7 @@ describe('BadgesQueryService (database)', () => {
     badges.awardSpecial({ workspaceId, badgeId, userId, pmId, evidence: 'Led the demo' });
   const userBadge = async (userId: string, badgeId: string) =>
     (await reader.forUser(workspaceId, userId)).badges.find((b) => b.badgeId === badgeId);
-  const pmBadge = async (badgeId: string) => (await reader.forPm(workspaceId)).badges.find((b) => b.badgeId === badgeId);
+  const pmBadge = async (badgeId: string) => (await reader.forPm(workspaceId, 'PM001')).badges.find((b) => b.badgeId === badgeId);
 
   beforeAll(async () => {
     prisma = createTestPrisma();
@@ -141,10 +141,10 @@ describe('BadgesQueryService (database)', () => {
       await award(s.badgeId, U1);
       await badges.retire({ workspaceId, badgeId: gone.badgeId, pmId: 'PM001' });
 
-      const page = await reader.forPm(workspaceId);
+      const page = await reader.forPm(workspaceId, 'PM001');
       expect(page.viewer).toBe('PM');
       expect(page.badges.map((b) => b.badgeId)).toEqual([s.badgeId, gone.badgeId]);
-      expect(page.badges[0]?.awards).toMatchObject([{ userId: U1, userName: `Name ${U1}`, source: 'MANUAL', awardedBy: 'PM001', revokedAt: null }]);
+      expect(page.badges[0]?.awards).toMatchObject([{ userId: U1, userName: `Name ${U1}`, managedByYou: true, source: 'MANUAL', awardedBy: 'PM001', revokedAt: null }]);
       expect(page.badges[1]?.retiredAt).not.toBeNull();
     });
 
@@ -170,8 +170,11 @@ describe('BadgesQueryService (database)', () => {
       await prisma.badgeAward.create({
         data: { workspaceId, badgeId: s.badgeId, userId: U4, source: 'MANUAL', evidence: 'x', awardedById: 'PM001' },
       });
-      const holders = (await pmBadge(s.badgeId))?.awards.map((a) => a.userId);
-      expect(holders).toEqual([U3]);
+      const holders = (await pmBadge(s.badgeId))?.awards.map((a) => [a.userId, a.managedByYou]);
+      expect(holders).toEqual([[U3, false]]);
+      // the same award, read by the user's own PM
+      const own = (await reader.forPm(workspaceId, 'PM002')).badges.find((b) => b.badgeId === s.badgeId);
+      expect(own?.awards.map((a) => [a.userId, a.managedByYou])).toEqual([[U3, true]]);
     });
   });
 
@@ -184,7 +187,7 @@ describe('BadgesQueryService (database)', () => {
       const second = await reader.forUser(workspaceId, U1, { limit: 2, cursor: first.nextCursor });
       expect(second.badges.map((x) => x.badgeId)).toEqual([c.badgeId]);
       expect(second.nextCursor).toBeNull();
-      expect((await reader.forPm(workspaceId, { limit: 2 })).nextCursor).toBe('2');
+      expect((await reader.forPm(workspaceId, 'PM001', { limit: 2 })).nextCursor).toBe('2');
     });
   });
 });

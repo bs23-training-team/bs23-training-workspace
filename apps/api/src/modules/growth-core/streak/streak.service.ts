@@ -8,6 +8,7 @@ import type { Db, Tx } from '../ports/db.js';
 import { SPRINT_SOURCE, type SprintSourcePort } from '../ports/sprint-source.port.js';
 import { CLOCK, type ClockPort } from '../time/clock.port.js';
 import { orgToday, parseDay, type DayString } from '../time/org-time.js';
+import { pmMayRead } from '../visibility/pm-visible-users.js';
 import { computeStreak, type StreakResult } from './compute-streak.js';
 
 export interface GrantFreezeInput {
@@ -28,6 +29,8 @@ export interface FreezeForPm {
   source: FreezeSource;
   reason: string;
   grantedById: string;
+  /** true when this PM manages the user. Only then may the PM grant another freeze (FR-GRW-59). */
+  managedByYou: boolean;
 }
 
 /** What the user sees of a freeze: never the reason. */
@@ -182,15 +185,16 @@ export class StreakService {
     });
   }
 
-  /** The freezes of a user, with their private reasons: only for the user's own PM. */
+  /** The freezes of a user, with their private reasons: for PMs only, never for users (FR-GRW-37, FR-GRW-59). */
   async listFreezesForPm(workspaceId: string, pmId: string, userId: string): Promise<FreezeForPm[]> {
-    const user = await this.prisma.user.findFirst({ where: { userId, workspaceId }, select: { pmId: true } });
+    const user = await this.prisma.user.findFirst({ where: { userId, workspaceId }, select: { pmId: true, archivedAt: true } });
     if (!user) {
       throw new GrowthError('NOT_FOUND', 'User not found');
     }
-    if (user.pmId !== pmId) {
-      throw new GrowthError('FORBIDDEN_SCOPE', 'This user is not managed by you');
+    if (!pmMayRead(user, pmId)) {
+      throw new GrowthError('FORBIDDEN_SCOPE', 'This user is archived and not managed by you');
     }
+    const managedByYou = user.pmId === pmId;
     const rows = await this.prisma.streakFreeze.findMany({ where: { userId }, orderBy: { date: 'asc' } });
     return rows.map((r) => ({
       id: r.id,
@@ -198,6 +202,7 @@ export class StreakService {
       source: r.source,
       reason: r.reason,
       grantedById: r.grantedById,
+      managedByYou,
     }));
   }
 

@@ -43,6 +43,8 @@ export interface PmBadgeAwardView {
   awardId: string;
   userId: string;
   userName: string;
+  /** true when this PM manages the user. Only then may the PM revoke the award (FR-GRW-59). */
+  managedByYou: boolean;
   source: BadgeAwardSource;
   awardedAt: string;
   /** The PM who awarded it by hand. null for an automatic award: the UI shows "System". */
@@ -107,7 +109,7 @@ export class BadgesQueryService {
   }
 
   /** The catalogue for a PM: every badge, retired ones too, with the awards of the users the PM can see. */
-  async forPm(workspaceId: string, input: PageInput = {}) {
+  async forPm(workspaceId: string, pmId: string, input: PageInput = {}) {
     const skip = parseCursor(input.cursor);
     const take = Math.min(input.limit ?? MAX_PAGE, MAX_PAGE);
     const rows = await this.prisma.badge.findMany({
@@ -119,7 +121,7 @@ export class BadgesQueryService {
     const page = rows.slice(0, take);
     const awards = await this.prisma.badgeAward.findMany({
       where: { workspaceId, badgeId: { in: page.map((b) => b.id) }, user: pmVisibleUsers(workspaceId) },
-      include: { user: { select: { name: true } } },
+      include: { user: { select: { name: true, pmId: true } } },
       orderBy: [{ awardedAt: 'asc' }, { id: 'asc' }],
     });
 
@@ -131,6 +133,7 @@ export class BadgesQueryService {
           awardId: a.id,
           userId: a.userId,
           userName: a.user.name,
+          managedByYou: a.user.pmId === pmId,
           source: a.source,
           awardedAt: a.awardedAt.toISOString(),
           awardedBy: a.source === 'AUTOMATIC' ? null : a.awardedById,

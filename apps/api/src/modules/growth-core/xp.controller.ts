@@ -58,8 +58,8 @@ export class XpController {
   }
 
   /**
-   * The PM's review queue and history for their own users. `status` is one status or several joined by commas
-   * ("PENDING,HELD" is the waiting queue); no status means all of them.
+   * The PM's review queue and history over every active user, each event marked `managedByYou`. `status` is one
+   * status or several joined by commas ("PENDING,HELD" is the waiting queue); no status means all of them.
    */
   @Get('pm/xp-events')
   @Roles('PM')
@@ -87,7 +87,7 @@ export class XpController {
   @Get('pm/growth-summary')
   @Roles('PM')
   summary(@CurrentActor() actor: Actor, @Query('cursor') cursor?: unknown) {
-    return this.summaries.page(actor.workspaceId, { cursor: query(cursor) ?? null });
+    return this.summaries.page(actor.workspaceId, pmIdOf(actor), { cursor: query(cursor) ?? null });
   }
 
   /** A user's own level, XP, streak and badges. */

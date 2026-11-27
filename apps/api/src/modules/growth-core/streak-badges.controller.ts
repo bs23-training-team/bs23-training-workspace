@@ -13,7 +13,7 @@ const KINDS = ['BEHAVIORAL', 'SPECIAL'] as const;
 const RULES = ['ON_TIME_SPRINT_STREAK', 'SPRINT_STREAK', 'KUDOS_DISTINCT_SENDERS', 'MANUAL'] as const;
 const SOURCES = ['LEAVE', 'HOLIDAY'] as const;
 
-/** Streak freezes and badges. Every action is a PM's, for users in their own scope. */
+/** Streak freezes and badges. Every change is a PM's, for users in their own scope; a PM reads every active user. */
 @Controller()
 @GamificationHttp()
 export class StreakBadgesController {
@@ -32,7 +32,7 @@ export class StreakBadgesController {
   badgeCatalogue(@CurrentActor() actor: Actor, @Query('cursor') cursor?: unknown) {
     const page = { cursor: query(cursor) ?? null };
     return actor.role === 'PM'
-      ? this.badgeReader.forPm(actor.workspaceId, page)
+      ? this.badgeReader.forPm(actor.workspaceId, pmIdOf(actor), page)
       : this.badgeReader.forUser(actor.workspaceId, userIdOf(actor), page);
   }
 
@@ -57,7 +57,7 @@ export class StreakBadgesController {
     return result;
   }
 
-  /** The freezes of one of the PM's users, with their private reasons. */
+  /** The freezes of one user, with their private reasons, marked `managedByYou`. */
   @Get('pm/streak-freezes')
   @Roles('PM')
   freezesForPm(@CurrentActor() actor: Actor, @Query('userId') userId?: unknown) {

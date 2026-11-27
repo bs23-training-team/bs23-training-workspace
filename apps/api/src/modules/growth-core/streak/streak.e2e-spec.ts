@@ -152,7 +152,7 @@ describe('StreakService (database)', () => {
       expect((await row())?.current).toBe(3); // Tue 17 no longer breaks it
       expect(await streaks.listOwnFreezes(USER)).toEqual([{ date: d('17'), source: 'LEAVE' }]); // no reason
       const forPm = await streaks.listFreezesForPm(workspaceId, 'PM001', USER);
-      expect(forPm).toMatchObject([{ date: d('17'), reason: 'Sick leave, certificate seen', grantedById: 'PM001' }]);
+      expect(forPm).toMatchObject([{ date: d('17'), reason: 'Sick leave, certificate seen', grantedById: 'PM001', managedByYou: true }]);
     });
 
     it('refuses a second freeze for the same user and date (ALREADY_FROZEN)', async () => {
@@ -169,11 +169,16 @@ describe('StreakService (database)', () => {
       }
     });
 
-    it("refuses another PM's user (FORBIDDEN_SCOPE), for granting and for reading reasons", async () => {
+    it("refuses granting for another PM's user (FORBIDDEN_SCOPE); an unknown user is NOT_FOUND", async () => {
       await expect(freeze(d('17'), 'x', 'PM002')).rejects.toMatchObject({ code: 'FORBIDDEN_SCOPE' });
-      await expect(streaks.listFreezesForPm(workspaceId, 'PM002', USER)).rejects.toMatchObject({ code: 'FORBIDDEN_SCOPE' });
       await expect(streaks.listFreezesForPm(workspaceId, 'PM001', 'BS99999')).rejects.toMatchObject({ code: 'NOT_FOUND' });
       expect(await prisma.streakFreeze.count({ where: { userId: USER } })).toBe(0);
+    });
+
+    it("lets another PM read an active user's freezes, marked as not managed by them (FR-GRW-59)", async () => {
+      await freeze(d('17'), 'Approved leave');
+      const other = await streaks.listFreezesForPm(workspaceId, 'PM002', USER);
+      expect(other).toMatchObject([{ date: d('17'), reason: 'Approved leave', managedByYou: false }]);
     });
 
     it('validates: a reason, a real date, a known source, an existing user', async () => {

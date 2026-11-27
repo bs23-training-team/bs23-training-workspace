@@ -10,6 +10,8 @@ import type { XpLedger } from './xp-ledger.types.js';
 export interface PmGrowthSummaryRow {
   userId: string;
   name: string;
+  /** true when this PM manages the user. Only then may the PM change anything about them (FR-GRW-59). */
+  managedByYou: boolean;
   /** XP that counts: AWARDED only. */
   awardedXp: number;
   /** XP waiting for a PM (PENDING and HELD), shown apart, never added to the total. */
@@ -33,13 +35,14 @@ export class PmGrowthSummaryService {
 
   async page(
     workspaceId: string,
+    pmId: string,
     input: { cursor?: string | null; limit?: number } = {},
   ): Promise<{ users: PmGrowthSummaryRow[]; nextCursor: string | null }> {
     const skip = parseCursor(input.cursor);
     const take = Math.min(input.limit ?? MAX_PAGE, MAX_PAGE);
     const people = await this.prisma.user.findMany({
       where: pmVisibleUsers(workspaceId),
-      select: { userId: true, name: true },
+      select: { userId: true, name: true, pmId: true },
       orderBy: [{ name: 'asc' }, { userId: 'asc' }],
       skip,
       take: take + 1,
@@ -66,6 +69,7 @@ export class PmGrowthSummaryService {
         return {
           userId: p.userId,
           name: p.name,
+          managedByYou: p.pmId === pmId,
           awardedXp,
           pendingXp: pending.get(p.userId) ?? 0,
           level: levelFor(levels, awardedXp)?.name ?? null,

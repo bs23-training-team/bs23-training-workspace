@@ -292,16 +292,37 @@ describe('QuestsService (database)', () => {
       await expect(quests.list(workspaceId, { cursor: 'x' })).rejects.toMatchObject({ code: 'VALIDATION' });
     });
 
-    it('a user sees only their own progress; a PM only the progress of their own users', async () => {
+    it('a user sees only their own progress', async () => {
       const { questId } = await newQuest();
       await progress(questId, U1, 1);
       await progress(questId, U2, 2);
-      // PM002's user: recorded by PM002 (their own scope)
       await quests.setProgress({ workspaceId, questId, userId: X1, pmId: 'PM002', count: 3 });
 
-      expect((await quests.progressForUser(workspaceId, U1)).map((p) => p.userId)).toEqual([U1]);
-      expect((await quests.progressForPm(workspaceId, 'PM001')).map((p) => p.userId).sort()).toEqual([U1, U2].sort());
-      expect((await quests.progressForPm(workspaceId, 'PM002')).map((p) => p.userId)).toEqual([X1]);
+      const mine = await quests.progressForUser(workspaceId, U1);
+      expect(mine.map((p) => p.userId)).toEqual([U1]);
+      expect(Object.keys(mine[0]!).sort()).toEqual(['count', 'questId', 'userId', 'verifiedAt']); // no managedByYou
+    });
+
+    it('a PM reads the progress of every active user, and managedByYou says whose it is to verify', async () => {
+      const { questId } = await newQuest();
+      await progress(questId, U1, 1);
+      await progress(questId, U2, 2);
+      await quests.setProgress({ workspaceId, questId, userId: X1, pmId: 'PM002', count: 3 }); // PM002's user
+
+      const flags = async (pmId: string) =>
+        (await quests.progressForPm(workspaceId, pmId)).map((p) => [p.userId, p.managedByYou] as const).sort();
+      expect(await flags('PM001')).toEqual([[U1, true], [U2, true], [X1, false]].sort());
+      expect(await flags('PM002')).toEqual([[U1, false], [U2, false], [X1, true]].sort());
+    });
+
+    it('an archived user is read only by their own PM', async () => {
+      const { questId } = await newQuest();
+      await progress(questId, U1, 1);
+      // Written directly: recording progress for an archived user is refused, but it can exist from before the archive.
+      await prisma.questProgress.create({ data: { workspaceId, questId, userId: ARCH, count: 2 } });
+
+      expect((await quests.progressForPm(workspaceId, 'PM001')).map((p) => p.userId)).toContain(ARCH); // ARCH is PM001's
+      expect((await quests.progressForPm(workspaceId, 'PM002')).map((p) => p.userId)).not.toContain(ARCH);
     });
 
     it('a PM can narrow progress to one quest, and a verified row shows when it was verified', async () => {

@@ -171,17 +171,20 @@ describe('engagement HTTP routes (database, req.user set by the test)', () => {
       expect([limit.status, errorCode(limit)]).toEqual([422, 'SEND_LIMIT']);
     });
 
-    it('a user sees only their own kudos; a PM sees the kudos of their own users only', async () => {
-      await sendKudos(U1, U2);
+    it('a user sees only their own kudos; a PM reads the kudos of every user and managedByYou marks their own', async () => {
+      await sendKudos(U1, U2); // PM001 people only
       await sendKudos(X1, U3); // involves PM002's user and a PM001 user
       const own = (await as(user(U4)).get('/kudos')).body as { kudos: unknown[] };
       expect(own.kudos).toHaveLength(0);
       const u1 = (await as(user(U1)).get('/kudos')).body as { kudos: { fromUserId: string }[] };
       expect(u1.kudos.map((k) => k.fromUserId)).toEqual([U1]);
-      const pm1 = (await as(pm('PM001')).get('/kudos')).body as { kudos: unknown[] };
-      expect(pm1.kudos).toHaveLength(2);
-      const pm2 = (await as(pm('PM002')).get('/kudos')).body as { kudos: { fromUserId: string }[] };
-      expect(pm2.kudos.map((k) => k.fromUserId)).toEqual([X1]);
+
+      const flagsOf = async (pmId: string) =>
+        ((await as(pm(pmId)).get('/kudos')).body as { kudos: { fromUserId: string; managedByYou: boolean }[] }).kudos
+          .map((k) => [k.fromUserId, k.managedByYou] as const)
+          .sort();
+      expect(await flagsOf('PM001')).toEqual([[U1, true], [X1, true]].sort());
+      expect(await flagsOf('PM002')).toEqual([[U1, false], [X1, true]].sort()); // reads PM001's kudos, does not manage them
       expect((await as(user(U1)).get('/kudos?cursor=abc')).status).toBe(400);
     });
   });
@@ -304,7 +307,7 @@ describe('engagement HTTP routes (database, req.user set by the test)', () => {
       expect([negative.status, errorCode(negative)]).toEqual([422, 'COUNT']); // SRS: COUNT, 422
     });
 
-    it('everyone lists quests; a user sees only their own progress; a PM only their own users\'', async () => {
+    it('everyone lists quests; a user sees only their own progress; a PM reads every user\'s and managedByYou marks their own', async () => {
       const questId = ((await quest()).body as { questId: string }).questId;
       await as(pm()).post(`/pm/quests/${questId}/progress`).send({ userId: U1, count: 1 });
       await as(pm('PM002')).post(`/pm/quests/${questId}/progress`).send({ userId: X1, count: 4 });
@@ -313,8 +316,15 @@ describe('engagement HTTP routes (database, req.user set by the test)', () => {
       expect(((await as(pm('PM002')).get('/quests')).body as { quests: unknown[] }).quests).toHaveLength(1);
       expect(((await as(user(U1)).get('/me/quest-progress')).body as { userId: string }[]).map((p) => p.userId)).toEqual([U1]);
       expect(((await as(user(U2)).get('/me/quest-progress')).body as unknown[])).toHaveLength(0);
-      expect(((await as(pm()).get('/pm/quest-progress')).body as { userId: string }[]).map((p) => p.userId)).toEqual([U1]);
-      expect(((await as(pm('PM002')).get('/pm/quest-progress')).body as { userId: string }[]).map((p) => p.userId)).toEqual([X1]);
+      const flagsOf = async (pmId?: string) =>
+        ((await as(pm(pmId)).get('/pm/quest-progress')).body as { userId: string; managedByYou: boolean }[])
+          .map((p) => [p.userId, p.managedByYou] as const)
+          .sort();
+      expect(await flagsOf()).toEqual([[U1, true], [X1, false]].sort());
+      expect(await flagsOf('PM002')).toEqual([[U1, false], [X1, true]].sort());
+      // Reading is wide, verifying is not: PM001 can see X1's progress but cannot verify it.
+      const refused = await as(pm()).post(`/pm/quests/${questId}/verify`).send({ userId: X1 });
+      expect([refused.status, errorCode(refused)]).toEqual([403, 'FORBIDDEN_SCOPE']);
     });
   });
 

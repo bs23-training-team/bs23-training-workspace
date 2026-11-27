@@ -46,9 +46,14 @@ export interface KudosView {
   sentOn: string;
 }
 
-/** What a PM also sees: whether the kudos is part of a suspicious exchange. Never shown to a user. */
+/**
+ * What a PM also sees: whether the kudos is part of a suspicious exchange (never shown to a user), and
+ * `managedByYou`: true when this PM manages the sender or the receiver. Every PM reads the kudos of every active
+ * user; the screen acts on a row only when `managedByYou` is true.
+ */
 export interface PmKudosView extends KudosView {
   suspicious: boolean;
+  managedByYou: boolean;
 }
 
 export interface KudosPage<T extends KudosView = KudosView> {
@@ -147,10 +152,18 @@ export type VerifyQuestResponse =
   | { paid: false; reason: 'BELOW_TARGET'; count: number; target: number }
   | { paid: false; reason: 'ALREADY_PAID' };
 
-/** Progress of one user on one quest (GET /me/quest-progress and GET /pm/quest-progress?questId=). */
+/** Progress of one user on one quest (GET /me/quest-progress; GET /pm/quest-progress returns PmQuestProgressView). */
 export interface QuestProgressView {
   questId: string;
   userId: string;
   count: number;
   verifiedAt: string | null;
+}
+
+/**
+ * A row of GET /pm/quest-progress?questId=: every active user's progress. `managedByYou` is true when this PM
+ * manages the user, the only PM who may verify.
+ */
+export interface PmQuestProgressView extends QuestProgressView {
+  managedByYou: boolean;
 }

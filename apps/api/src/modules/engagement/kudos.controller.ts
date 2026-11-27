@@ -4,6 +4,7 @@ import { CurrentActor, GamificationHttp, Roles, bodyOf, oneOf, query, str, userI
 import { KudosLimitsService } from './kudos/kudos-limits.service.js';
 import { KudosQueryService } from './kudos/kudos-query.service.js';
 import { KudosService } from './kudos/kudos.service.js';
+import { pmReadableUsers } from './visibility/pm-readable-users.js';
 
 const CATEGORIES = ['HELPFUL', 'GREAT_EXPLANATION', 'TEAMWORK'] as const;
 
@@ -42,12 +43,15 @@ export class KudosController {
     return this.limitsReader.forUser(actor.workspaceId, userIdOf(actor));
   }
 
-  /** A user's own kudos, or a PM's own users' kudos. */
+  /** A user's own kudos, or a PM's view of the kudos of every active user (each marked `managedByYou`). */
   @Get('kudos')
   list(@CurrentActor() actor: Actor, @Query('cursor') cursor?: unknown) {
     return this.reader.page({
       workspaceId: actor.workspaceId,
-      viewer: actor.role === 'PM' ? { role: 'PM', pmId: actor.pmId } : { role: 'USER', userId: actor.userId },
+      viewer:
+        actor.role === 'PM'
+          ? { role: 'PM', pmId: actor.pmId, readable: pmReadableUsers(actor.workspaceId, actor.pmId) }
+          : { role: 'USER', userId: actor.userId },
       cursor: query(cursor) ?? null,
     });
   }

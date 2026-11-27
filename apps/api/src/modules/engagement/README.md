@@ -36,13 +36,13 @@ engagement/
 | Route | Who | What |
 | --- | --- | --- |
 | `POST /kudos` | user | `{ toUserId, category, message }`. The sender is the signed-in user; the day is the server's. Answers `{ kudosId }` only: the sender never learns whether the exchange is suspicious or whether the weekly cap cut the XP. |
-| `GET /kudos?cursor=` | user, PM | Own kudos (user) or own users' kudos (PM), with the sender's and receiver's names. Only a PM's rows carry `suspicious`. |
+| `GET /kudos?cursor=` | user, PM | Own kudos (user) or the kudos of every active user (PM, plus the PM's own archived users), with the sender's and receiver's names. Only a PM's rows carry `suspicious` (every PM sees it) and `managedByYou` (true when the PM manages the sender or the receiver). |
 | `GET /me/kudos-limits` | user | `{ sentThisWeek, sendLimitPerWeek, cooldownDays }`: what the "Send kudos" card shows (the rules themselves are a PM's to read). |
 | `POST /pm/quests` | PM | Create a quest |
 | `POST /pm/quests/:id/progress` | PM | `{ userId, count }` |
 | `POST /pm/quests/:id/verify` | PM | `{ userId }`. Pays once if the target is met. |
 | `GET /quests?cursor=` | any | Quests of the workspace |
-| `GET /me/quest-progress`, `GET /pm/quest-progress` | user, PM | Own progress / own users' progress |
+| `GET /me/quest-progress`, `GET /pm/quest-progress` | user, PM | Own progress / the progress of every active user, each row marked `managedByYou`. Verifying stays limited to the managing PM (403 `FORBIDDEN_SCOPE` for another PM). |
 | `GET /leaderboard?window=weekly\|monthly\|all&cursor=` | any | The board for the caller's PM group |
 | `GET` / `PUT /me/leaderboard-preference` | user | `{ hidden }` |
 

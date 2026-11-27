@@ -61,17 +61,17 @@ describe('security events and secrets (SEC-09)', () => {
             secrets.push(second.accessToken, second.refreshToken);
             const forgot = await h.service.forgotPassword({ workEmail: 'bs23001@bs23.test' });
             secrets.push(forgot.resetToken as string);
-            await h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD });
+            await h.service.resetPassword({ token: forgot.resetToken as string, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
 
             const actor = h.db.rows('pm')[0];
-            const created = await h.provisioning.createPm(
+            await h.provisioning.createPm(
                 { sub: actor.pmId, role: 'PM', workspaceId: actor.workspaceId },
                 { pmId: 'PM002', name: 'Second', email: 'second@example.com', password: 'Temp0rary!pw1' },
             );
-            secrets.push(created.verificationToken as string, 'Temp0rary!pw1');
+            secrets.push('Temp0rary!pw1');
             secrets.push(...h.db.rows('credential').map((row) => row.passwordHash as string));
 
-            // Add Trainee, a verification re-request, and the first-login password change.
+            // Add Trainee and the first-login password change.
             const team = h.db.addTeam({ workspaceId: actor.workspaceId, pmId: actor.pmId });
             const traineeActor = { sub: actor.pmId, role: 'PM' as const, workspaceId: actor.workspaceId };
             await h.provisioning.createTrainee(traineeActor, {
@@ -82,13 +82,11 @@ describe('security events and secrets (SEC-09)', () => {
                 skillAssessmentMinutes: 30, skillAssessmentMarks: 50, teamIds: [team.id],
             });
             secrets.push('Tr@inee-temp-pw1');
-            const requested = await h.service.requestVerification({ email: 'second@example.com' });
-            secrets.push(requested.verificationToken as string);
             const traineeLogin = await h.service.login({ identifier: 'BS23010', password: 'Tr@inee-temp-pw1' });
             secrets.push(traineeLogin.accessToken, traineeLogin.refreshToken);
             await h.service.changePassword(
                 'USER', 'BS23010', actor.workspaceId, h.db.rows('session').at(-1)!.id as string,
-                { currentPassword: 'Tr@inee-temp-pw1', newPassword: NEW_PASSWORD },
+                { currentPassword: 'Tr@inee-temp-pw1', newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD },
             );
         });
 
@@ -98,7 +96,6 @@ describe('security events and secrets (SEC-09)', () => {
         expect(output).toContain('security_event=password_reset_completed');
         expect(output).toContain('security_event=pm_provisioned');
         expect(output).toContain('security_event=trainee_provisioned');
-        expect(output).toContain('security_event=verification_requested');
         expect(output).toContain('security_event=password_changed');
         for (const secret of secrets) {
             expect(output).not.toContain(secret);

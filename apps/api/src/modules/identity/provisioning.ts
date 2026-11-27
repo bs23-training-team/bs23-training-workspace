@@ -29,7 +29,7 @@ export const POSITIONS = ['FRONTEND', 'BACKEND', 'FULLSTACK', 'QA'] as const;
 export const ATTENDANCE_MODES = ['PHYSICAL', 'ONLINE'] as const;
 export const USER_RESOURCE_VALUES = [
     'TRAINEE',
-    'CENTRAL_LND',
+    'CENTRAL_RND',
     'INDUSTRIAL_ATTACHMENT',
     'SBU',
 ] as const;
@@ -83,8 +83,10 @@ type Db = Pick<PrismaService, 'pm' | 'user'>;
 
 /**
  * True when the email belongs to any PM or user in ANY workspace
- * (case-insensitive). Used before creating an account, because the schema only
- * guarantees uniqueness per workspace and login looks emails up everywhere.
+ * (case-insensitive). Agreed rule: an email, a PM ID and a User ID are each
+ * unique in the whole system, not only inside one workspace. The database
+ * enforces it too (see the migration "global_unique_email"); this check gives
+ * the clean 409 answer before the database has to refuse.
  */
 export async function emailInUse(db: Db, email: string): Promise<boolean> {
     const where = {
@@ -114,8 +116,7 @@ export type InitialPmInput = {
  *
  * - Refuses to run when ANY PM already exists, so it cannot be used to create
  *   extra workspaces or accounts later.
- * - The PM is email-verified (the operator vouches for it) and must change the
- *   password at first sign-in (mustChangePassword = true).
+ * - The PM must change the password at first sign-in (mustChangePassword = true).
  */
 export async function provisionInitialPm(
     prisma: Pick<PrismaService, 'pm' | 'user' | 'workspace' | 'credential' | '$transaction'>,

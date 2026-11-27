@@ -54,7 +54,7 @@ export default function TraineeProfilePage() {
               ["Position", POSITION_LABEL[t.position]],
               ["Attendance mode", MODE_LABEL[t.attendanceMode]],
               ["Team", t.teamIds.map((id) => db.teams.find((x) => x.id === id)?.name).join(", ")],
-              ["L&D onboarding date", formatDate(t.onboardDate)],
+              ["RND onboarding date", formatDate(t.onboardDate)],
             ]}
           />
           <div className="mt-4">
@@ -63,7 +63,7 @@ export default function TraineeProfilePage() {
             </Link>
           </div>
         </Card>
-        <PasswordCard userId={user.id} />
+        <PasswordCard />
       </div>
     </div>
   );

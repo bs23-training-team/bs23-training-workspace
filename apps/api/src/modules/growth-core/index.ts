@@ -24,6 +24,8 @@ export { StreakService } from './streak/streak.service.js';
 export { GrowthTriggersService, type NightlyResult } from './triggers/growth-triggers.service.js';
 // The read side for screens (a user's growth, a PM's review queue): the snapshot facade (IF-07) composes it.
 export { XpQueryService, type MyGrowth, type XpEventView } from './xp/xp-query.service.js';
+// Which users a PM may READ (the directory's rule, FR-GRW-59): other modules' PM lists use the same one.
+export { pmVisibleUsers } from './visibility/pm-visible-users.js';
 
 // Ports other squads IMPLEMENT or are called through: IF-06 (sprint and calendar sources, E06/E07)
 // and IF-05 (the notice layer, E01). Provide a class under the token to replace the default.

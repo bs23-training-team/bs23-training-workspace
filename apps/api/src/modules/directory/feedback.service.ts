@@ -5,7 +5,7 @@ import { forbiddenScope, type PmActor } from './directory.actor.js';
 
 export const MAX_FEEDBACK_LENGTH = 5000;
 
-/** L&D feedback: every save is a new version, an old version is never changed or deleted. */
+/** RND feedback: every save is a new version, an old version is never changed or deleted. */
 @Injectable()
 export class FeedbackService {
   constructor(private readonly prisma: PrismaService) {}

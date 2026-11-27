@@ -28,7 +28,7 @@ import { useDB, resetDemoData } from "@/lib/mock/store";
 import { alertStaleOwnerApprovals } from "@/features/sprint";
 import { archiveExpiredTrainees, PmSearch } from "@/features/directory";
 import { currentUser } from "@/lib/mock/selectors";
-import { homeFor, logout } from "@/features/auth";
+import { homeFor, logout, useApiSession } from "@/features/auth";
 import { latestEvaluation } from "@/features/assessment";
 import type { Role } from "@/lib/mock/types";
 import { NotificationBell } from "@/features/notifications";
@@ -62,6 +62,9 @@ const TRAINEE_NAV = [
 
 export function AppShell({ role, children }: { role: Role; children: ReactNode }) {
   const db = useDB();
+  // Who is signed in is decided by the API (GET /auth/me), never by the mock store. `user` is only the mirror
+  // used for display.
+  const session = useApiSession();
   const user = currentUser(db);
   const router = useRouter();
   const pathname = usePathname();
@@ -77,7 +80,8 @@ export function AppShell({ role, children }: { role: Role; children: ReactNode }
   const firstAssessment = !!user && user.role === "TRAINEE" && pathname === "/trainee/onboarding" && myEvals.length === 1 && myEvals[0].createdAt >= (db.sessions.find((s) => s.id === db.currentSessionId)?.createdAt ?? "9");
   const hideNav = gated || firstAssessment;
   let redirect: string | null = null;
-  if (!user) redirect = "/login";
+  if (session === "checking") redirect = null;
+  else if (session === "signed-out" || !user) redirect = "/login";
   else if (user.role !== role) redirect = homeFor(user.id);
   else if (user.mustChangePassword) redirect = "/change-password";
   else if (gated && pathname !== "/trainee/onboarding") redirect = "/trainee/onboarding";
@@ -105,6 +109,7 @@ export function AppShell({ role, children }: { role: Role; children: ReactNode }
     return () => document.removeEventListener("mousedown", h);
   }, [menu]);
 
+  if (session === "checking") return <Loading label="Checking your session…" />;
   if (redirect || !user) return <Loading label="Redirecting…" />;
 
   const nav = role === "PM" ? PM_NAV : TRAINEE_NAV;
@@ -112,6 +117,7 @@ export function AppShell({ role, children }: { role: Role; children: ReactNode }
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/") || (href === "/pm/users" && pathname.startsWith("/pm/trainees"));
 
   const signOut = () => {
+    setMenu(false); // Next.js keeps this page's state: the menu must not be open at the next sign-in
     logout();
     router.replace("/login");
   };

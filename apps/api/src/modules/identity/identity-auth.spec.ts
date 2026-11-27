@@ -97,29 +97,11 @@ describe('IdentityService.login: PM (email + password, Pm model)', () => {
         expect(h.db.rows('session')).toHaveLength(0);
     });
 
-    it('refuses an unverified PM only after the correct password (FR-AUTH-04)', async () => {
-        const h = await makeHarness();
-        const { workspace } = await seedAccounts(h);
-        h.db.addPm(h.passwordHash, {
-            pmId: 'PM002',
-            workspaceId: workspace.id,
-            email: 'new.pm@bs23.test',
-            emailVerified: false,
-        });
-
-        await expect(
-            h.service.login({ identifier: 'new.pm@bs23.test', password: 'WrongPass123' }),
-        ).rejects.toThrow('Invalid credentials.');
-        await expect(
-            h.service.login({ identifier: 'new.pm@bs23.test', password: PASSWORD }),
-        ).rejects.toThrow('Verify your email before signing in.');
-        expect(h.db.rows('session')).toHaveLength(0);
-    });
-
-    it('fails closed when one email belongs to PMs in two workspaces (open E10/E11 decision)', async () => {
+    it('fails closed on old data where one email belongs to PMs in two workspaces (new data cannot: the email is unique everywhere)', async () => {
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
         const other = h.db.addWorkspace({ slug: 'second' });
+        h.db.enforceEmailTriggers = false; // rows from before the global-unique-email migration
         h.db.addPm(h.passwordHash, { pmId: 'PM002', workspaceId: other.id, email: 'pm001@bs23.test' });
         expect(workspace.id).not.toBe(other.id);
 
@@ -154,7 +136,7 @@ describe('IdentityService.login: user (Trainee ID + password, User.userId)', () 
         const h = await makeHarness();
         const { workspace } = await seedAccounts(h);
 
-        const resources = ['CENTRAL_LND', 'INDUSTRIAL_ATTACHMENT', 'SBU'];
+        const resources = ['CENTRAL_RND', 'INDUSTRIAL_ATTACHMENT', 'SBU'];
         for (const [index, resource] of resources.entries()) {
             h.db.addUser(h.passwordHash, {
                 userId: `BS23${100 + index}`,
@@ -216,20 +198,6 @@ describe('IdentityService.login: user (Trainee ID + password, User.userId)', () 
 
         const future = await h.service.login({ identifier: 'BS23004', password: PASSWORD });
         expect(future.user.id).toBe('BS23004');
-    });
-
-    it('does not require a verified email for users', async () => {
-        const h = await makeHarness();
-        const { workspace } = await seedAccounts(h);
-        h.db.addUser(h.passwordHash, {
-            userId: 'BS23005',
-            workspaceId: workspace.id,
-            email: 'unverified.user@bs23.test',
-            emailVerified: false,
-        });
-
-        const result = await h.service.login({ identifier: 'BS23005', password: PASSWORD });
-        expect(result.user.role).toBe('USER');
     });
 
     it('returns mustChangePassword for a temporary password (FR-AUTH-03)', async () => {
@@ -475,7 +443,7 @@ describe('IdentityService logout, sessions and me', () => {
         const pm = await h.service.me('PM', 'PM001');
         const user = await h.service.me('USER', 'BS23001');
 
-        expect(pm.user).toMatchObject({ id: 'PM001', role: 'PM', emailVerified: true });
+        expect(pm.user).toMatchObject({ id: 'PM001', role: 'PM' });
         expect(user.user).toMatchObject({
             id: 'BS23001',
             role: 'USER',
@@ -505,7 +473,7 @@ describe('IdentityService.changePassword (FR-AUTH-03)', () => {
             'BS23010',
             workspace.id as string,
             decodePayload(current.accessToken).sid as string,
-            { currentPassword: PASSWORD, newPassword: NEW_PASSWORD },
+            { currentPassword: PASSWORD, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD },
         );
 
         expect(h.db.rows('user').find((u) => u.userId === 'BS23010')?.mustChangePassword).toBe(false);
@@ -529,6 +497,7 @@ describe('IdentityService.changePassword (FR-AUTH-03)', () => {
         await h.service.changePassword('PM', 'PM001', workspace.id as string, 'no-session', {
             currentPassword: PASSWORD,
             newPassword: NEW_PASSWORD,
+            confirmPassword: NEW_PASSWORD,
         });
 
         expect(h.db.rows('pm')[0].mustChangePassword).toBe(false);
@@ -544,6 +513,7 @@ describe('IdentityService.changePassword (FR-AUTH-03)', () => {
             h.service.changePassword('USER', 'BS23001', workspace.id as string, 's', {
                 currentPassword,
                 newPassword,
+                confirmPassword: newPassword,
             });
 
         await expect(call('WrongPass123', NEW_PASSWORD)).rejects.toThrow('Current password is incorrect.');
@@ -672,15 +642,6 @@ describe('JwtAuthGuard (protected routes)', () => {
 
         await expect(makeGuard(h, false)(login.accessToken)).rejects.toThrow(ForbiddenException);
         expect((await makeGuard(h, true)(login.accessToken)).user.sub).toBe('BS23011');
-    });
-
-    it('rejects an unverified PM even with a live session', async () => {
-        const h = await makeHarness();
-        await seedAccounts(h);
-        const login = await h.service.login({ identifier: 'pm001@bs23.test', password: PASSWORD });
-        h.db.rows('pm')[0].emailVerified = false;
-
-        await expect(makeGuard(h)(login.accessToken)).rejects.toThrow(UnauthorizedException);
     });
 });
 

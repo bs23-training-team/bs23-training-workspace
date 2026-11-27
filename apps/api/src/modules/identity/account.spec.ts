@@ -5,7 +5,6 @@ import {
     nextPmId,
     orgToday,
     ownerData,
-    pmSignInBlock,
     resolveSessionOwner,
     slugify,
     toSessionUser,
@@ -20,7 +19,6 @@ const pm = {
     name: 'Pat PM',
     email: 'pat@bs23.test',
     mustChangePassword: false,
-    emailVerified: true,
 };
 
 const user = {
@@ -29,7 +27,6 @@ const user = {
     name: 'Tina Trainee',
     email: 'tina@bs23.test',
     mustChangePassword: true,
-    emailVerified: true,
     resource: 'SBU',
     pmId: 'PM002',
     archivedAt: null as Date | null,
@@ -49,7 +46,7 @@ describe('roles come from the table, not a role column', () => {
     });
 
     it('every User row is a USER keyed by userId, whatever its resource', () => {
-        for (const resource of ['TRAINEE', 'CENTRAL_LND', 'INDUSTRIAL_ATTACHMENT', 'SBU']) {
+        for (const resource of ['TRAINEE', 'CENTRAL_RND', 'INDUSTRIAL_ATTACHMENT', 'SBU']) {
             const account = accountFromUser({ ...user, resource });
             expect(account.role).toBe('USER');
             expect(account.id).toBe('BS23001');
@@ -68,11 +65,6 @@ describe('roles come from the table, not a role column', () => {
 });
 
 describe('sign-in blocks', () => {
-    it('an unverified PM is blocked, a verified PM is not (FR-AUTH-04)', () => {
-        expect(pmSignInBlock({ emailVerified: false })).toBe('EMAIL_NOT_VERIFIED');
-        expect(pmSignInBlock({ emailVerified: true })).toBe(null);
-    });
-
     it('an active user is not blocked', () => {
         expect(userSignInBlock(user, NOW)).toBe(null);
     });
@@ -102,11 +94,6 @@ describe('sign-in blocks', () => {
         expect(isUserInactive({ archivedAt: null, departureDate: departure }, beforeDhakaMidnight)).toBe(false);
         expect(isUserInactive({ archivedAt: null, departureDate: departure }, justPastDhakaMidnight)).toBe(true);
     });
-
-    it('email verification is not required of users (only PMs verify)', () => {
-        const unverified = { ...user, emailVerified: false };
-        expect(userSignInBlock(unverified, NOW)).toBe(null);
-    });
 });
 
 describe('ownerData / resolveSessionOwner', () => {
@@ -122,9 +109,6 @@ describe('ownerData / resolveSessionOwner', () => {
     });
 
     it('reports why the owner may not continue', () => {
-        expect(resolveSessionOwner({ pm: { ...pm, emailVerified: false } }, NOW)?.block).toBe(
-            'EMAIL_NOT_VERIFIED',
-        );
         expect(resolveSessionOwner({ user: { ...user, archivedAt: NOW } }, NOW)?.block).toBe(
             'INACTIVE',
         );

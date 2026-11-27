@@ -7,18 +7,17 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { createHash, randomBytes } from 'node:crypto';
-
 import type {
     AttendanceMode,
     Position,
     UserResource,
 } from '../../generated/prisma/enums.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { sendAccountCreatedMail } from './account-created-mail.js';
 import { orgToday, type AuthRole } from './account.js';
 import { recordAuthEvent, SECURITY_CATEGORY } from './auth-events.js';
 import { normalizeEmail } from './email.js';
-import { exposeDevTokens, webAppUrl } from './identity-env.js';
+import { webAppUrl } from './identity-env.js';
 import { MailService } from './mail.service.js';
 import { hashPassword } from './password.js';
 import {
@@ -34,12 +33,6 @@ import {
     parseDateOnly,
     passwordProblem,
 } from './provisioning.js';
-import { sendVerificationMail } from './verification-mail.js';
-
-const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
-
-const sha256 = (value: string) =>
-    createHash('sha256').update(value).digest('hex');
 
 /** `request.user` as JwtAuthGuard sets it. Re-checked against the database. */
 export type ProvisioningActor = {
@@ -85,14 +78,9 @@ export type CreatedPm = {
     workspaceId: string;
     name: string;
     email: string;
-    emailVerified: false;
     mustChangePassword: true;
-    /** True only when a mail provider really delivered the verification link. */
+    /** True only when a mail provider really delivered the credentials email (it carries the temporary password). */
     emailSent: boolean;
-    verificationExpiresAt: Date;
-    /** Only with IDENTITY_EXPOSE_DEV_TOKENS=true outside production. */
-    verificationLink?: string;
-    verificationToken?: string;
 };
 
 export type CreatedTrainee = {
@@ -109,9 +97,11 @@ export type CreatedTrainee = {
     skillAssessmentMinutes: number;
     skillAssessmentMarks: number;
     teamIds: string[];
-    /** The account is active immediately; no email step is involved. */
+    /** The account is active immediately; nothing depends on the email. */
     active: true;
     mustChangePassword: true;
+    /** True only when a mail provider really delivered the credentials email (it carries the temporary password). */
+    emailSent: boolean;
 };
 
 /**
@@ -119,7 +109,7 @@ export type CreatedTrainee = {
  * workflows. The product team decided that E01 owns the backend of both.
  *
  * Authorization is checked here against the database, not trusted from the
- * caller: only a verified PM of the same workspace may create accounts. The
+ * caller: only a PM of the same workspace may create accounts. The
  * workspace, the managing PM (`pmId`) and the role of a new account come from
  * the verified actor, never from the request body. The controller adds the JWT
  * + role guards on top; this check is the second, independent line of defence.
@@ -139,18 +129,18 @@ export class AccountProvisioningService {
         private readonly mail: MailService,
     ) { }
 
-    // The actor must be a verified PM that still exists in the workspace the
-    // caller claims. A trainee, a stale token or another workspace fails here.
+    // The actor must be a PM that still exists in the workspace the caller
+    // claims. A trainee, a stale token or another workspace fails here.
     private async requireActorPm(actor: ProvisioningActor) {
         const pm =
             actor?.role === 'PM' && typeof actor.sub === 'string'
                 ? await this.prisma.pm.findUnique({
                     where: { pmId: actor.sub },
-                    select: { pmId: true, workspaceId: true, emailVerified: true },
+                    select: { pmId: true, workspaceId: true },
                 })
                 : null;
 
-        if (!pm || pm.workspaceId !== actor.workspaceId || !pm.emailVerified) {
+        if (!pm || pm.workspaceId !== actor.workspaceId) {
             this.logger.warn(
                 `security_event=provisioning_denied actor=${String(actor?.sub)} role=${String(actor?.role)}`,
             );
@@ -209,10 +199,10 @@ export class AccountProvisioningService {
     /**
      * Add PM (PRD FR-DIR-09, E01 SRS FR-16: there is no public PM sign-up).
      * Creates a PM in the actor's workspace with the password the acting PM
-     * typed. A PM must verify their email before signing in (PRD FR-AUTH-04),
-     * so a 24 hour verification link is created and mailed, and the new PM
-     * must change the password at first sign-in. The PM, credential,
-     * verification token, notification and outbox event are ONE transaction.
+     * typed. There is no email verification (an E01 v1 decision): the new PM
+     * can sign in at once and must change the password at first sign-in. The
+     * PM, credential, notification and outbox event are ONE transaction. The
+     * credentials are mailed afterwards, best effort (`emailSent`).
      */
     async createPm(actor: ProvisioningActor, input: CreatePmInput): Promise<CreatedPm> {
         const actorPm = await this.requireActorPm(actor);
@@ -241,8 +231,6 @@ export class AccountProvisioningService {
 
         const passwordHash = await hashPassword(input.password);
         const workspaceId = actorPm.workspaceId;
-        const verificationToken = randomBytes(32).toString('hex');
-        const verificationExpiresAt = new Date(Date.now() + VERIFICATION_TTL_MS);
 
         try {
             await this.prisma.$transaction(async (tx) => {
@@ -252,23 +240,14 @@ export class AccountProvisioningService {
                         workspaceId,
                         name,
                         email,
-                        emailVerified: false,
+                        // No verification step: the column is true for every new account.
+                        emailVerified: true,
                         mustChangePassword: true,
                     },
                 });
 
                 await tx.credential.create({
                     data: { workspaceId, pmId, passwordHash },
-                });
-
-                await tx.authToken.create({
-                    data: {
-                        workspaceId,
-                        pmId,
-                        type: 'EMAIL_VERIFICATION',
-                        tokenHash: sha256(verificationToken),
-                        expiresAt: verificationExpiresAt,
-                    },
                 });
 
                 await recordAuthEvent(tx, {
@@ -279,7 +258,7 @@ export class AccountProvisioningService {
                     notification: {
                         category: SECURITY_CATEGORY,
                         title: 'Your PM account was created',
-                        message: `Your PM account was created by ${actorPm.pmId}. Verify your email, then change your password the first time you sign in.`,
+                        message: `Your PM account was created by ${actorPm.pmId}. Sign in with your email and temporary password, then choose a new password.`,
                     },
                 });
             });
@@ -291,25 +270,22 @@ export class AccountProvisioningService {
             `security_event=pm_provisioned pm=${pmId} by=${actorPm.pmId} workspace=${workspaceId}`,
         );
 
-        const { emailSent, link } = await sendVerificationMail(
-            this.mail,
-            webAppUrl(this.config),
-            { name, email },
-            verificationToken,
-        );
+        const { emailSent } = await sendAccountCreatedMail(this.mail, webAppUrl(this.config), {
+            name,
+            email,
+            accountId: pmId,
+            createdByPmId: actorPm.pmId,
+            temporaryPassword: input.password,
+            signInWithEmail: true,
+        });
 
         return {
             pmId,
             workspaceId,
             name,
             email,
-            emailVerified: false,
             mustChangePassword: true,
             emailSent,
-            verificationExpiresAt,
-            ...(exposeDevTokens(this.config) && link
-                ? { verificationLink: link, verificationToken }
-                : {}),
         };
     }
 
@@ -317,7 +293,9 @@ export class AccountProvisioningService {
      * Add Trainee (PRD FR-DIR-04, journey J1). The account is ACTIVE as soon
      * as this returns: the acting PM's temporary password is stored and
      * `mustChangePassword = true`, so the first login is sent to the password
-     * change. Nothing depends on email delivery and no email is sent.
+     * change. After the transaction the credentials (ID, temporary password,
+     * sign-in link) are mailed best effort; nothing depends on delivery and
+     * `emailSent` says whether it went out.
      *
      * Scope: the trainee is managed by the ACTING PM (`User.pmId`), and every
      * team must be one of that PM's own teams in the same workspace and not
@@ -429,7 +407,7 @@ export class AccountProvisioningService {
                         skillAssessmentMinutes: minutes,
                         skillAssessmentMarks: marks,
                         mustChangePassword: true,
-                        emailVerified: false,
+                        emailVerified: true,
                     },
                 });
 
@@ -464,6 +442,14 @@ export class AccountProvisioningService {
             `security_event=trainee_provisioned user=${userId} by=${actorPm.pmId} workspace=${workspaceId}`,
         );
 
+        const { emailSent } = await sendAccountCreatedMail(this.mail, webAppUrl(this.config), {
+            name,
+            email,
+            accountId: userId,
+            createdByPmId: actorPm.pmId,
+            temporaryPassword: input.temporaryPassword,
+        });
+
         return {
             userId,
             workspaceId,
@@ -480,6 +466,7 @@ export class AccountProvisioningService {
             teamIds,
             active: true,
             mustChangePassword: true,
+            emailSent,
         };
     }
 }

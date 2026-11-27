@@ -200,12 +200,12 @@ export function buildSeed(): DB {
     { userId: "u2", traineeId: "BS23002", position: "FRONTEND", attendanceMode: "ONLINE", resource: "SBU", onboardDate: addDays(today, -2), periodEnd: addMonths(addDays(today, -2), 3), skills: ["HTML & CSS", "JavaScript"], teamIds: ["t-alpha"], pmId: "pm1", hideFromLeaderboard: false },
     { userId: "u3", traineeId: "BS23003", position: "BACKEND", attendanceMode: "PHYSICAL", resource: "TRAINEE", onboardDate: addDays(today, -24), periodEnd: addMonths(addDays(today, -24), 3), skills: ["NestJS", "PostgreSQL"], teamIds: ["t-alpha", "t-beta"], pmId: "pm1", hideFromLeaderboard: false },
     { userId: "u4", traineeId: "BS23004", position: "QA", attendanceMode: "PHYSICAL", resource: "INDUSTRIAL_ATTACHMENT", onboardDate: addDays(today, -17), periodEnd: addMonths(addDays(today, -17), 3), skills: ["Testing", "JavaScript"], teamIds: ["t-beta"], pmId: "pm1", hideFromLeaderboard: true },
-    { userId: "u5", traineeId: "BS23005", position: "BACKEND", attendanceMode: "ONLINE", resource: "CENTRAL_LND", onboardDate: addDays(today, -17), periodEnd: addMonths(addDays(today, -17), 3), skills: ["Docker", "Git"], teamIds: ["t-beta"], pmId: "pm1", hideFromLeaderboard: false },
+    { userId: "u5", traineeId: "BS23005", position: "BACKEND", attendanceMode: "ONLINE", resource: "CENTRAL_RND", onboardDate: addDays(today, -17), periodEnd: addMonths(addDays(today, -17), 3), skills: ["Docker", "Git"], teamIds: ["t-beta"], pmId: "pm1", hideFromLeaderboard: false },
     { userId: "u6", traineeId: "BS23006", position: "FRONTEND", attendanceMode: "PHYSICAL", resource: "INDUSTRIAL_ATTACHMENT", onboardDate: addDays(today, 5), periodEnd: addMonths(addDays(today, 5), 3), skills: ["React"], teamIds: ["t-beta"], pmId: "pm1", hideFromLeaderboard: false },
-    { userId: "u7", traineeId: "BS23007", position: "BACKEND", attendanceMode: "PHYSICAL", resource: "CENTRAL_LND", onboardDate: addDays(today, -10), periodEnd: addMonths(addDays(today, -10), 3), skills: ["Node.js"], teamIds: ["t-gamma"], pmId: "pm2", hideFromLeaderboard: false },
+    { userId: "u7", traineeId: "BS23007", position: "BACKEND", attendanceMode: "PHYSICAL", resource: "CENTRAL_RND", onboardDate: addDays(today, -10), periodEnd: addMonths(addDays(today, -10), 3), skills: ["Node.js"], teamIds: ["t-gamma"], pmId: "pm2", hideFromLeaderboard: false },
     // Archived (inactive): trainee period already over
     { userId: "u8", traineeId: "BS23008", position: "FRONTEND", attendanceMode: "PHYSICAL", resource: "TRAINEE", onboardDate: addDays(today, -130), periodEnd: addMonths(addDays(today, -130), 3), archivedAt: addMonths(addDays(today, -130), 3), skills: ["JavaScript", "React", "Git"], teamIds: ["t-alpha"], pmId: "pm1", hideFromLeaderboard: false },
-    { userId: "u9", traineeId: "BS23009", position: "BACKEND", attendanceMode: "PHYSICAL", resource: "CENTRAL_LND", onboardDate: addDays(today, -200), periodEnd: addMonths(addDays(today, -200), 6), archivedAt: addMonths(addDays(today, -200), 6), skills: ["NestJS", "PostgreSQL", "SQL"], teamIds: ["t-beta"], pmId: "pm1", hideFromLeaderboard: false },
+    { userId: "u9", traineeId: "BS23009", position: "BACKEND", attendanceMode: "PHYSICAL", resource: "CENTRAL_RND", onboardDate: addDays(today, -200), periodEnd: addMonths(addDays(today, -200), 6), archivedAt: addMonths(addDays(today, -200), 6), skills: ["NestJS", "PostgreSQL", "SQL"], teamIds: ["t-beta"], pmId: "pm1", hideFromLeaderboard: false },
     { userId: "u10", traineeId: "BS23010", position: "QA", attendanceMode: "PHYSICAL", resource: "INDUSTRIAL_ATTACHMENT", onboardDate: addDays(today, -95), periodEnd: addMonths(addDays(today, -95), 2), archivedAt: addMonths(addDays(today, -95), 2), skills: ["Testing", "JavaScript", "Git"], teamIds: ["t-alpha"], pmId: "pm1", hideFromLeaderboard: false },
     { userId: "u11", traineeId: "BS23011", position: "BACKEND", attendanceMode: "PHYSICAL", resource: "SBU", onboardDate: addDays(today, -150), periodEnd: addMonths(addDays(today, -150), 4), archivedAt: addMonths(addDays(today, -150), 4), skills: ["SQL", "Docker", "Git"], teamIds: ["t-beta"], pmId: "pm1", hideFromLeaderboard: false },
   ];
@@ -323,10 +323,10 @@ export function buildSeed(): DB {
   const active = trainees.filter((t) => t.pmId === "pm1" && !t.archivedAt && t.onboardDate <= today && t.userId !== "u2");
   const taskTitles = [
     ["Read lesson: Closures", "LND"],
-    ["Fix login form validation", "SBO"],
+    ["Fix login form validation", "SBU"],
     ["Practice SQL joins", "LND"],
-    ["Write unit tests for utils", "SBO"],
-    ["Review PR feedback", "SBO"],
+    ["Write unit tests for utils", "SBU"],
+    ["Review PR feedback", "SBU"],
     ["Complete Git rebasing lesson", "LND"],
   ] as const;
   for (let d = -14; d <= 0; d++) {
@@ -421,7 +421,7 @@ export function buildSeed(): DB {
   // today's tasks for u1 (not yet submitted)
   sprintTasks.push(
     { id: "st-u1-today-1", traineeUserId: "u1", title: "SQL: Aggregation lesson", description: "Finish GROUP BY exercises", category: "LND", plannedHours: 3, plannedStart: "10:00", plannedEnd: "13:00", actualHours: 0, blocker: "", done: false, date: today },
-    { id: "st-u1-today-2", traineeUserId: "u1", title: "Build user card component", description: "", category: "SBO", plannedHours: 4, plannedStart: "14:00", plannedEnd: "18:00", actualHours: 0, blocker: "", done: false, date: today },
+    { id: "st-u1-today-2", traineeUserId: "u1", title: "Build user card component", description: "", category: "SBU", plannedHours: 4, plannedStart: "14:00", plannedEnd: "18:00", actualHours: 0, blocker: "", done: false, date: today },
   );
 
   /* DS sheet: Team Alpha + Beta current week built from tasks */
@@ -515,9 +515,9 @@ export function buildSeed(): DB {
     taskOwners: [
       { id: "own-lnd-1", name: "Farhana Islam", kind: "LND", email: "farhana.islam@bs23.example" },
       { id: "own-lnd-2", name: "Tahmid Rahman", kind: "LND", email: "tahmid.rahman@bs23.example" },
-      { id: "own-sbu-1", name: "Rafiq Ahmed", kind: "SBO", email: "rafiq.ahmed@bs23.example" },
-      { id: "own-sbu-2", name: "Nadia Karim", kind: "SBO", email: "nadia.karim@bs23.example" },
-      { id: "own-sbu-3", name: "Imran Hossain", kind: "SBO", email: "imran.hossain@bs23.example" },
+      { id: "own-sbu-1", name: "Rafiq Ahmed", kind: "SBU", email: "rafiq.ahmed@bs23.example" },
+      { id: "own-sbu-2", name: "Nadia Karim", kind: "SBU", email: "nadia.karim@bs23.example" },
+      { id: "own-sbu-3", name: "Imran Hossain", kind: "SBU", email: "imran.hossain@bs23.example" },
     ],
     dsMeetings: [{ id: "m1", title: "Team Alpha Daily Scrum", teamId: "t-alpha", date: addDays(today, 1), time: "10:30", teamsLink: "https://teams.microsoft.com/l/meetup-join/demo", createdBy: "pm1" }],
     attendance,

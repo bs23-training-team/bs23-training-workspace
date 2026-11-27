@@ -127,7 +127,7 @@ const TABLES: Record<TableName, TableDef> = {
 };
 
 const AUTH_TOKEN_TYPES = ['EMAIL_VERIFICATION', 'PASSWORD_RESET'];
-const USER_RESOURCES = ['TRAINEE', 'CENTRAL_LND', 'INDUSTRIAL_ATTACHMENT', 'SBU'];
+const USER_RESOURCES = ['TRAINEE', 'CENTRAL_RND', 'INDUSTRIAL_ATTACHMENT', 'SBU'];
 
 function constraintError(message: string): Error & { code: string } {
     return Object.assign(new Error(message), { code: 'P2002' });
@@ -193,6 +193,13 @@ function matches(row: Row, where: Row | undefined): boolean {
 }
 
 export class FakePrisma {
+    /**
+     * The email triggers (global_unique_email migration). A test turns this off only to build the
+     * data that existed BEFORE that migration (two accounts sharing an email), to prove the API
+     * still fails closed on it.
+     */
+    enforceEmailTriggers = true;
+
     private data: Record<TableName, Row[]> = {
         workspace: [],
         pm: [],
@@ -336,23 +343,7 @@ export class FakePrisma {
             row.lastSeenAt ??= now;
         }
 
-        // The init migration's triggers trg_pm_email / trg_user_email (ADR 0003):
-        // an email cannot belong to a Pm and a User of the same workspace. They
-        // raise a plain exception, not a Prisma P2002.
-        if (table === 'pm' || table === 'user') {
-            const other: TableName = table === 'pm' ? 'user' : 'pm';
-            const taken = this.data[other].some(
-                (existing) =>
-                    existing.workspaceId === row.workspaceId &&
-                    String(existing.email).toLowerCase() === String(row.email).toLowerCase(),
-            );
-
-            if (taken) {
-                throw new Error(
-                    `email ${row.email} is already used by a ${table === 'pm' ? 'User' : 'PM'}`,
-                );
-            }
-        }
+        this.checkEmailTrigger(table, row);
 
         const keys = [[def.primaryKey], ...def.unique];
         for (const columns of keys) {
@@ -374,6 +365,30 @@ export class FakePrisma {
         row.updatedAt ??= now;
         this.data[table].push(row);
         return { ...row };
+    }
+
+    // The triggers trg_pm_email / trg_user_email (init migration, widened by the migration
+    // "global_unique_email"): an email belongs to ONE account in the whole system, whatever the
+    // table and the workspace. They raise a plain exception, not a Prisma P2002.
+    private checkEmailTrigger(table: TableName, row: Row) {
+        if (!this.enforceEmailTriggers || (table !== 'pm' && table !== 'user')) {
+            return;
+        }
+
+        const key = table === 'pm' ? 'pmId' : 'userId';
+        const email = String(row.email).toLowerCase();
+
+        for (const other of ['pm', 'user'] as const) {
+            const clash = this.data[other].find(
+                (existing) =>
+                    String(existing.email).toLowerCase() === email &&
+                    !(other === table && existing[key] === row[key]),
+            );
+
+            if (clash) {
+                throw new Error(`email ${row.email} is already used by a ${other === 'user' ? 'User' : 'PM'}`);
+            }
+        }
     }
 
     private project(table: TableName, row: Row, args: Row = {}): Row {
@@ -432,7 +447,6 @@ export class FakePrisma {
     }
 
     private delegate(table: TableName) {
-        const def = TABLES[table];
         const find = (where?: Row) => this.data[table].filter((row) => matches(row, where));
 
         return {
@@ -467,6 +481,9 @@ export class FakePrisma {
                 if (!row) {
                     throw Object.assign(new Error('Record not found'), { code: 'P2025' });
                 }
+                if (args.data.email !== undefined) {
+                    this.checkEmailTrigger(table, { ...row, email: args.data.email });
+                }
                 Object.assign(row, args.data, { updatedAt: new Date() });
                 return this.project(table, row, args);
             },
@@ -486,7 +503,5 @@ export class FakePrisma {
                 return this.project(table, this.insert(table, args.create), args);
             },
         };
-        // `def` is read by insert(); referenced here so the lookup stays explicit.
-        void def;
     }
 }

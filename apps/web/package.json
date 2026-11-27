@@ -10,6 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@bs23/contracts": "workspace:*",
     "lucide-react": "^1.71.0",
     "next": "16.4.5",
     "react": "19.3.0",

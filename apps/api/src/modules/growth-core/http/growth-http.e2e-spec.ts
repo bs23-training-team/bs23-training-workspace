@@ -223,20 +223,23 @@ describe('growth-core HTTP routes (database, req.user set by the test)', () => {
       expect([other.status, errorCode(other)]).toEqual([403, 'FORBIDDEN_SCOPE']);
     });
 
-    it('the queue lists only the PM\'s own users\' events, can be filtered, and is paged', async () => {
+    it('the queue lists every user\'s events marked managedByYou, can be filtered, and is paged', async () => {
       const a = await pendingEvent(U1);
       const b = await pendingEvent(U2);
-      await pendingEvent(X1); // PM002's user
+      const x = await pendingEvent(X1); // PM002's user
 
       const all = await as(pm()).get('/pm/xp-events');
       expect(all.status).toBe(200);
-      expect((all.body as { events: { id: string }[] }).events.map((e) => e.id).sort()).toEqual([a, b].sort());
+      const listed = (all.body as { events: { id: string; managedByYou: boolean }[] }).events;
+      expect(listed.map((e) => e.id).sort()).toEqual([a, b, x].sort());
+      expect(listed.filter((e) => !e.managedByYou).map((e) => e.id)).toEqual([x]);
 
       const mine = await as(pm()).get(`/pm/xp-events?userId=${U1}&status=PENDING`);
       expect((mine.body as { events: unknown[] }).events).toHaveLength(1);
 
       const other = await as(pm()).get(`/pm/xp-events?userId=${X1}`);
-      expect([other.status, errorCode(other)]).toEqual([403, 'FORBIDDEN_SCOPE']);
+      expect(other.status).toBe(200);
+      expect(other.body).toMatchObject({ events: [{ id: x, managedByYou: false }] });
       expect((await as(pm()).get('/pm/xp-events?status=NOPE')).status).toBe(400);
       expect((await as(pm()).get('/pm/xp-events?cursor=abc')).status).toBe(400);
       expect((await as(pm()).get('/pm/xp-events?status=PENDING&status=HELD')).status).toBe(400); // an array is refused
@@ -298,7 +301,9 @@ describe('growth-core HTTP routes (database, req.user set by the test)', () => {
       expect(JSON.stringify(own.body)).not.toContain('Sick leave');
 
       const forPm = await as(pm()).get(`/pm/streak-freezes?userId=${U1}`);
-      expect(forPm.body).toMatchObject([{ date: '2026-11-17', reason: 'Sick leave, certificate seen' }]);
+      expect(forPm.body).toMatchObject([{ date: '2026-11-17', reason: 'Sick leave, certificate seen', managedByYou: true }]);
+      const otherPm = await as(pm('PM002')).get(`/pm/streak-freezes?userId=${U1}`);
+      expect(otherPm.body).toMatchObject([{ date: '2026-11-17', managedByYou: false }]);
     });
 
     it('refuses another PM\'s user 403, a bad source 400, a bad date 400', async () => {
@@ -306,7 +311,7 @@ describe('growth-core HTTP routes (database, req.user set by the test)', () => {
       expect((await send({ userId: X1, date: '2026-11-17', source: 'LEAVE', reason: 'x' })).status).toBe(403);
       expect((await send({ userId: U1, date: '2026-11-17', source: 'PARTY', reason: 'x' })).status).toBe(400);
       expect((await send({ userId: U1, date: '2026-02-30', source: 'LEAVE', reason: 'x' })).status).toBe(400);
-      expect((await as(pm('PM002')).get(`/pm/streak-freezes?userId=${U1}`)).status).toBe(403);
+      expect((await send({ userId: U1, date: '2026-11-17', source: 'LEAVE', reason: 'x' }, pm('PM002'))).status).toBe(403);
     });
 
     it('listing a user\'s freezes needs a userId (400), and an unknown user is 404', async () => {

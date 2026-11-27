@@ -41,7 +41,7 @@ async function setup(env: Record<string, string> = {}) {
 }
 
 describe('AccountProvisioningService.createPm (Add PM, PRD FR-DIR-09)', () => {
-    it('lets an authorized PM create a PM in the SAME workspace, unverified, with the typed password', async () => {
+    it('lets an authorized PM create a PM in the SAME workspace, verified at once, with the typed password', async () => {
         const { h, actor, workspace } = await setup();
 
         const result = await h.provisioning.createPm(actor, newPm());
@@ -51,27 +51,20 @@ describe('AccountProvisioningService.createPm (Add PM, PRD FR-DIR-09)', () => {
             workspaceId: workspace.id,
             name: 'Second PM',
             email: 'second.pm@example.com',
-            emailVerified: false,
             mustChangePassword: true,
         });
         expect(h.db.rows('pm')[1]).toMatchObject({
             pmId: 'PM002',
             workspaceId: workspace.id,
-            emailVerified: false,
+            emailVerified: true,
             mustChangePassword: true,
         });
         expect(h.db.rows('credential')[2]).toMatchObject({ pmId: 'PM002', userId: null });
-        expect(h.db.rows('authToken')[0]).toMatchObject({
-            pmId: 'PM002',
-            userId: null,
-            type: 'EMAIL_VERIFICATION',
-            usedAt: null,
-        });
-        // No invitation-style token of any kind is created.
-        expect(h.db.rows('authToken').filter((row) => row.type === 'PASSWORD_RESET')).toHaveLength(0);
+        // No token of any kind: no verification link and no invitation.
+        expect(h.db.rows('authToken')).toHaveLength(0);
     });
 
-    it('stores a scrypt hash, never the password, and only the hash of the token', async () => {
+    it('stores a scrypt hash, never the password, and the answer carries no secret', async () => {
         const { h, actor } = await setup();
 
         const result = await h.provisioning.createPm(actor, newPm());
@@ -79,32 +72,40 @@ describe('AccountProvisioningService.createPm (Add PM, PRD FR-DIR-09)', () => {
         const credential = h.db.rows('credential')[2];
         expect(credential.passwordHash).toMatch(/^[0-9a-f]{32}:[0-9a-f]{128}$/);
         expect(JSON.stringify(h.db.rows('credential'))).not.toContain(TEMP);
-        expect(JSON.stringify(h.db.rows('authToken'))).not.toContain(result.verificationToken as string);
+        expect(JSON.stringify(result)).not.toContain(TEMP);
     });
 
-    it('the new PM cannot sign in until the emailed link is used, then must change the password', async () => {
+    it('the new PM signs in at once with the email address, and must change the password', async () => {
         const { h, actor } = await setup();
-        const created = await h.provisioning.createPm(actor, newPm());
+        await h.provisioning.createPm(actor, newPm());
 
-        await expect(
-            h.service.login({ identifier: 'second.pm@example.com', password: TEMP }),
-        ).rejects.toThrow('Verify your email before signing in.');
-
-        await h.service.verifyEmail({ token: created.verificationToken as string });
         const login = await h.service.login({ identifier: 'SECOND.pm@example.com', password: TEMP });
 
         expect(login.user).toMatchObject({ id: 'PM002', role: 'PM', mustChangePassword: true });
     });
 
-    it('emails the verification link, and returns the token only with the dev flag outside production', async () => {
+    it('mails the credentials and says to sign in with the email address; emailSent follows the provider', async () => {
         const { h, actor } = await setup();
-        await h.provisioning.createPm(actor, newPm());
-        expect(h.mail.send).toHaveBeenCalledTimes(1);
 
-        const plain = await setup({ IDENTITY_EXPOSE_DEV_TOKENS: 'false' });
-        const result = await plain.h.provisioning.createPm(plain.actor, newPm());
-        expect(result.verificationToken).toBeUndefined();
-        expect(result.verificationLink).toBeUndefined();
+        // The harness mail transport delivers nothing, like the console and disabled providers.
+        await expect(h.provisioning.createPm(actor, newPm())).resolves.toMatchObject({ emailSent: false });
+
+        expect(h.mail.send).toHaveBeenCalledTimes(1);
+        const [{ to, text }] = h.mail.send.mock.calls[0];
+        expect(to).toBe('second.pm@example.com');
+        expect(text).toContain('Account ID: PM002');
+        expect(text).toContain('Sign in with your email address: second.pm@example.com');
+        expect(text).toContain(TEMP);
+        expect(text).not.toContain('token=');
+
+        h.mail.send.mockRejectedValueOnce(new Error('mail server down'));
+        await expect(
+            h.provisioning.createPm(actor, newPm({ pmId: 'PM003', email: 'third@example.com' })),
+        ).resolves.toMatchObject({ pmId: 'PM003', emailSent: false });
+        h.mail.send.mockResolvedValueOnce({ delivered: true, transport: 'console' });
+        await expect(
+            h.provisioning.createPm(actor, newPm({ pmId: 'PM004', email: 'fourth@example.com' })),
+        ).resolves.toMatchObject({ emailSent: true });
     });
 
     it('records a notification for the new PM and an outbox event, in the same transaction (FR-14, FR-15)', async () => {
@@ -131,7 +132,7 @@ describe('AccountProvisioningService.createPm (Add PM, PRD FR-DIR-09)', () => {
         expect(stored).not.toContain('second.pm@example.com');
     });
 
-    it('refuses a Trainee, an unknown PM, a PM of another workspace and an unverified PM (nothing is created)', async () => {
+    it('refuses a Trainee, an unknown PM and a PM of another workspace (nothing is created)', async () => {
         const { h, user, pm, actor } = await setup();
         const other = h.db.addWorkspace({ slug: 'other' });
 
@@ -149,8 +150,6 @@ describe('AccountProvisioningService.createPm (Add PM, PRD FR-DIR-09)', () => {
         await expect(
             h.provisioning.createPm({ sub: 'BS23001', role: 'PM', workspaceId: pm.workspaceId }, newPm()),
         ).rejects.toThrow(ForbiddenException);
-        h.db.rows('pm')[0].emailVerified = false;
-        await expect(h.provisioning.createPm(actor, newPm())).rejects.toThrow(ForbiddenException);
 
         expect(h.db.rows('pm')).toHaveLength(1);
         expect(h.db.rows('authToken')).toHaveLength(0);
@@ -222,7 +221,7 @@ describe('AccountProvisioningService.createPm (Add PM, PRD FR-DIR-09)', () => {
     it('rolls everything back when a later step fails, including the outbox write (no half-created PM)', async () => {
         const { h, actor } = await setup();
 
-        for (const table of ['authToken', 'notification', 'outboxEvent'] as const) {
+        for (const table of ['credential', 'notification', 'outboxEvent'] as const) {
             const original = h.db[table].create.bind(h.db[table]);
 
             h.db[table].create = async () => {
@@ -301,6 +300,7 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
             skillAssessmentMinutes: 60,
             skillAssessmentMarks: 100,
             mustChangePassword: true,
+            emailVerified: true,
             archivedAt: null,
         });
         expect(h.db.rows('user')[1].departureDate.toISOString().slice(0, 10)).toBe(departureDate);
@@ -310,12 +310,19 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
         expect(JSON.stringify(result)).not.toContain(TEMP);
     });
 
-    it('does not depend on email: nothing is mailed, no token is created, and the trainee signs in with the Trainee ID', async () => {
+    it('does not depend on email: the credentials are mailed best effort, no token is created, and the trainee signs in with the Trainee ID', async () => {
         const { h, actor, input } = await withTeam();
 
-        await h.provisioning.createTrainee(actor, input());
+        const created = await h.provisioning.createTrainee(actor, input());
 
-        expect(h.mail.send).not.toHaveBeenCalled();
+        // The harness mail transport delivers nothing, like the console and disabled providers.
+        expect(created.emailSent).toBe(false);
+        expect(h.mail.send).toHaveBeenCalledTimes(1);
+        expect(h.mail.send.mock.calls[0][0].to).toBe('new.trainee@example.com');
+        expect(h.mail.send.mock.calls[0][0].text).toContain('BS23002');
+        expect(h.mail.send.mock.calls[0][0].text).toContain(TEMP);
+        // A user signs in with the ID, so the "use your email address" line is for PMs only.
+        expect(h.mail.send.mock.calls[0][0].text).not.toContain('Sign in with your email address');
         expect(h.db.rows('authToken')).toHaveLength(0);
 
         const login = await h.service.login({ identifier: 'bs23002', password: TEMP });
@@ -323,6 +330,22 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
         await expect(
             h.service.login({ identifier: 'new.trainee@example.com', password: TEMP }),
         ).rejects.toThrow('Invalid credentials.');
+    });
+
+    it('reports emailSent true only when the mail provider delivered it', async () => {
+        const { h, actor, input } = await withTeam();
+        h.mail.send.mockResolvedValueOnce({ delivered: true, transport: 'console' });
+
+        await expect(h.provisioning.createTrainee(actor, input())).resolves.toMatchObject({ emailSent: true });
+    });
+
+    it('keeps the account when sending the email fails', async () => {
+        const { h, actor, input } = await withTeam();
+        h.mail.send.mockRejectedValueOnce(new Error('mail server down'));
+
+        await expect(h.provisioning.createTrainee(actor, input())).resolves.toMatchObject({ emailSent: false });
+        expect(h.db.rows('user')).toHaveLength(2);
+        await expect(h.service.login({ identifier: 'BS23002', password: TEMP })).resolves.toBeDefined();
     });
 
     it('first login requires a password change; afterwards the flag is cleared and the temporary password stops working', async () => {
@@ -336,6 +359,7 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
         await h.service.changePassword('USER', 'BS23002', first.user.workspaceId, current.id as string, {
             currentPassword: TEMP,
             newPassword: NEW_PASSWORD,
+            confirmPassword: NEW_PASSWORD,
         });
 
         expect(h.db.rows('user')[1].mustChangePassword).toBe(false);
@@ -367,7 +391,7 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
         expect(stored).not.toContain('new.trainee@example.com');
     });
 
-    it('only an authorized PM may create: Trainee, unknown PM, wrong-workspace claim and unverified PM are refused (nothing is created)', async () => {
+    it('only an authorized PM may create: Trainee, unknown PM and wrong-workspace claim are refused (nothing is created)', async () => {
         const { h, actor, user, input } = await withTeam();
         const other = h.db.addWorkspace({ slug: 'other' });
 
@@ -376,8 +400,6 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
         ).rejects.toThrow(ForbiddenException);
         await expect(h.provisioning.createTrainee({ ...actor, sub: 'PM999' }, input())).rejects.toThrow(ForbiddenException);
         await expect(h.provisioning.createTrainee({ ...actor, workspaceId: other.id }, input())).rejects.toThrow(ForbiddenException);
-        h.db.rows('pm')[0].emailVerified = false;
-        await expect(h.provisioning.createTrainee(actor, input())).rejects.toThrow(ForbiddenException);
 
         expect(h.db.rows('user')).toHaveLength(1);
         expect(h.db.rows('membership')).toHaveLength(0);
@@ -540,6 +562,25 @@ describe('AccountProvisioningService.createTrainee (Add Trainee, PRD FR-DIR-04, 
     });
 });
 
+describe('an email, a PM ID and a User ID are unique in the whole system', () => {
+    it('the database rule covers every workspace and both tables, in any letter case', async () => {
+        const { h, workspace } = await setup();
+        const other = h.db.addWorkspace({ slug: 'other' });
+
+        // Same email: another workspace, other table, other case. All refused by the trigger.
+        expect(() => h.db.addPm('hash', { pmId: 'PM050', workspaceId: other.id, email: 'PM001@bs23.test' })).toThrow(/already used by a PM/);
+        expect(() => h.db.addUser('hash', { userId: 'BS23050', workspaceId: other.id, pmId: 'PM001', email: 'PM001@BS23.test' })).toThrow(/already used by a PM/);
+        expect(() => h.db.addPm('hash', { pmId: 'PM051', workspaceId: other.id, email: 'bs23001@bs23.test' })).toThrow(/already used by a User/);
+        expect(() => h.db.addUser('hash', { userId: 'BS23051', workspaceId: other.id, pmId: 'PM001', email: 'BS23001@bs23.test' })).toThrow(/already used by a User/);
+        // The IDs are primary keys: a second PM001 or BS23001 cannot exist, in any workspace.
+        expect(() => h.db.addPm('hash', { pmId: 'PM001', workspaceId: other.id, email: 'x1@example.com' })).toThrow();
+        expect(() => h.db.addUser('hash', { userId: 'BS23001', workspaceId: other.id, pmId: 'PM001', email: 'x2@example.com' })).toThrow();
+        expect(h.db.rows('pm')).toHaveLength(1);
+        expect(h.db.rows('user')).toHaveLength(1);
+        expect(workspace.id).not.toBe(other.id);
+    });
+});
+
 describe('invitations are stopped (the approved schema cannot separate them from password reset)', () => {
     it('Add PM and Add Trainee create no PASSWORD_RESET token, so no reset-type token can be used to activate or take over a new account', async () => {
         const { h, actor, workspace } = await setup();
@@ -552,7 +593,7 @@ describe('invitations are stopped (the approved schema cannot separate them from
             skillAssessmentMinutes: 30, skillAssessmentMarks: 50, teamIds: [team.id],
         });
 
-        expect(h.db.rows('authToken').map((row) => row.type)).toEqual(['EMAIL_VERIFICATION']);
+        expect(h.db.rows('authToken')).toHaveLength(0);
     });
 
     it('the service has no invitation entry points', async () => {
@@ -629,9 +670,6 @@ describe('the public API surface', () => {
                 'GET /auth/sessions',
                 'POST /auth/accounts/pms',
                 'POST /auth/accounts/trainees',
-                'POST /auth/email/verify',
-                'POST /auth/email/verify/request',
-                'POST /auth/email/verify/resend',
                 'POST /auth/login',
                 'POST /auth/logout',
                 'POST /auth/password/change',

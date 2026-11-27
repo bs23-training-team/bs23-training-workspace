@@ -228,7 +228,8 @@ describe('auth routes through the real controller and guards', () => {
             body: { pmId: 'PM800002', name: 'Added PM', email: 'Added.PM@Example.test', password: TEMP, workspaceId: other.id, role: 'USER' },
         });
         expect(created.status).toBe(201);
-        expect(created.body).toMatchObject({ pmId: 'PM800002', workspaceId: workspace.id, emailVerified: false, mustChangePassword: true });
+        expect(created.body).toMatchObject({ pmId: 'PM800002', workspaceId: workspace.id, mustChangePassword: true, emailSent: false });
+        expect(created.body).not.toHaveProperty('verificationToken');
         expect(JSON.stringify(created.body)).not.toMatch(new RegExp(`${TEMP}|passwordHash`));
 
         const dup = await send('post', '/auth/accounts/pms', { token: pm.accessToken, body: { pmId: 'PM800003', name: 'D', email: 'added.pm@example.test', password: TEMP } });
@@ -239,11 +240,7 @@ describe('auth routes through the real controller and guards', () => {
         const none = await send('post', '/auth/accounts/pms', { token: pm.accessToken, body: { pmId: 'PM800006', name: 'N', email: 'n@example.test' } });
         expect(none.status).toBe(400);
 
-        // The new PM cannot sign in until the link is used, and is then limited to the password change.
-        expect((await send('post', '/auth/login', { body: { identifier: 'added.pm@example.test', password: TEMP } })).status).toBe(401);
-        const verified = await send('post', '/auth/email/verify', { body: { token: created.body.verificationToken } });
-        expect(verified.status).toBe(200);
-        expect((await send('post', '/auth/email/verify', { body: { token: created.body.verificationToken } })).status).toBe(400);
+        // The new PM signs in at once, and is limited to the password change.
         const newPm = await login('added.pm@example.test', TEMP);
         const blocked = await send('post', '/auth/accounts/pms', {
             token: newPm.accessToken,
@@ -266,7 +263,10 @@ describe('auth routes through the real controller and guards', () => {
         expect(created.status).toBe(201);
         expect(created.body).toMatchObject({ userId: 'BS238010', workspaceId: workspace.id, pmId: pm.pmId, active: true, mustChangePassword: true, teamIds: [team.id] });
         expect(JSON.stringify(created.body)).not.toContain(TEMP);
-        expect(h.mail.send).not.toHaveBeenCalled();
+        // The credentials email goes out (best effort); the HTTP answer itself never carries the password.
+        expect(created.body.emailSent).toBe(false);
+        expect(h.mail.send).toHaveBeenCalledTimes(1);
+        expect(h.mail.send.mock.calls[0][0].text).toContain(TEMP);
 
         // First login: signs in with the Trainee ID and the temporary password ...
         const signedIn = await send('post', '/auth/login', { body: { identifier: 'BS238010', password: TEMP } });
@@ -282,7 +282,7 @@ describe('auth routes through the real controller and guards', () => {
         expect((await send('get', '/auth/me', { token })).status).toBe(200);
 
         // ... and the change unlocks it, with the temporary password no longer valid.
-        const changed = await send('post', '/auth/password/change', { token, body: { currentPassword: TEMP, newPassword: NEW_PASSWORD } });
+        const changed = await send('post', '/auth/password/change', { token, body: { currentPassword: TEMP, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } });
         expect(changed.status).toBe(200);
         expect((await send('get', '/guard-probe/trainee-only', { token })).status).toBe(200);
         expect((await send('post', '/auth/login', { body: { identifier: 'BS238010', password: TEMP } })).status).toBe(401);
@@ -339,47 +339,32 @@ describe('auth routes through the real controller and guards', () => {
         const pm = await login('pm001@bs23.test');
 
         expect((await send('post', '/auth/invitations', { token: pm.accessToken, body: { userId: 'BS23001' } })).status).toBe(404);
-        expect((await send('post', '/auth/invitations/activate', { body: { token: 'f'.repeat(64), newPassword: NEW_PASSWORD } })).status).toBe(404);
+        expect((await send('post', '/auth/invitations/activate', { body: { token: 'f'.repeat(64), newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } })).status).toBe(404);
     });
 
-    it('verification link request over HTTP: the same answer for any email; an unverified PM gets a fresh link', async () => {
-        const { send, login, h } = ctx;
-        const pm = await login('pm001@bs23.test');
-        const created = await send('post', '/auth/accounts/pms', {
-            token: pm.accessToken,
-            body: { pmId: 'PM800020', name: 'Late', email: 'late@example.test', password: TEMP },
-        });
-        expect(created.status).toBe(201);
+    it('the email verification routes do not exist (404)', async () => {
+        const { send } = ctx;
 
-        const known = await send('post', '/auth/email/verify/request', { body: { email: 'late@example.test' } });
-        const unknown = await send('post', '/auth/email/verify/request', { body: { email: 'nobody@example.test' } });
-        expect(known.status).toBe(200);
-        expect(unknown.status).toBe(200);
-        expect(known.body.message).toBe(unknown.body.message);
-        expect(known.body.verificationToken).not.toBe(created.body.verificationToken);
-
-        expect((await send('post', '/auth/email/verify', { body: { token: created.body.verificationToken } })).status).toBe(400);
-        expect((await send('post', '/auth/email/verify', { body: { token: known.body.verificationToken } })).status).toBe(200);
-        expect(h.db.rows('pm').find((row) => row.pmId === 'PM800020')?.emailVerified).toBe(true);
-        expect((await send('post', '/auth/email/verify/request', { body: { email: 'not-an-email' } })).status).toBe(400);
+        for (const path of ['/auth/email/verify', '/auth/email/verify/request', '/auth/email/verify/resend']) {
+            expect((await send('post', path, { body: { token: 'f'.repeat(64), email: 'a@b.co' } })).status).toBe(404);
+        }
     });
 
-    it('token purposes over HTTP: a verification token cannot reset a password, and a reset token cannot verify an email', async () => {
-        const { send, login, h, workspace } = ctx;
-        const pm = await login('pm001@bs23.test');
-        const created = await send('post', '/auth/accounts/pms', {
-            token: pm.accessToken,
-            body: { pmId: 'PM800021', name: 'Purpose', email: 'purpose@example.test', password: TEMP },
-        });
-        // A dedicated user, so resetting its password cannot affect other tests.
-        h.db.addUser(h.passwordHash, { userId: 'BS23099', workspaceId: workspace.id, email: 'purpose.user@bs23.test' });
-        const forgot = await send('post', '/auth/password/forgot', { body: { workEmail: 'purpose.user@bs23.test' } });
+    it('a mismatching confirmPassword is 400 over HTTP, and a missing one is 400 too', async () => {
+        const { send, login } = ctx;
+        const trainee = await login('BS23001');
 
-        expect((await send('post', '/auth/password/reset', { body: { token: created.body.verificationToken, newPassword: NEW_PASSWORD } })).status).toBe(400);
-        expect((await send('post', '/auth/email/verify', { body: { token: forgot.body.resetToken } })).status).toBe(400);
-        // Both tokens are still usable for their own purpose afterwards.
-        expect((await send('post', '/auth/email/verify', { body: { token: created.body.verificationToken } })).status).toBe(200);
-        expect((await send('post', '/auth/password/reset', { body: { token: forgot.body.resetToken, newPassword: NEW_PASSWORD } })).status).toBe(200);
+        const mismatch = await send('post', '/auth/password/change', {
+            token: trainee.accessToken,
+            body: { currentPassword: PASSWORD, newPassword: NEW_PASSWORD, confirmPassword: 'Different-Passw0rd!' },
+        });
+        expect(mismatch.status).toBe(400);
+        expect(mismatch.body.message).toBe('Passwords do not match.');
+        const missing = await send('post', '/auth/password/change', {
+            token: trainee.accessToken,
+            body: { currentPassword: PASSWORD, newPassword: NEW_PASSWORD },
+        });
+        expect(missing.status).toBe(400);
     });
 
     it('password reset over HTTP: the same answer for any email, single use, expired is 400', async () => {
@@ -391,13 +376,13 @@ describe('auth routes through the real controller and guards', () => {
         expect(unknown.status).toBe(200);
         expect(known.body.message).toBe(unknown.body.message);
 
-        const reset = await send('post', '/auth/password/reset', { body: { token: known.body.resetToken, newPassword: NEW_PASSWORD } });
+        const reset = await send('post', '/auth/password/reset', { body: { token: known.body.resetToken, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } });
         expect(reset.status).toBe(200);
-        expect((await send('post', '/auth/password/reset', { body: { token: known.body.resetToken, newPassword: NEW_PASSWORD } })).status).toBe(400);
+        expect((await send('post', '/auth/password/reset', { body: { token: known.body.resetToken, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } })).status).toBe(400);
 
         const again = await send('post', '/auth/password/forgot', { body: { workEmail: 'pm001@bs23.test' } });
         h.db.rows('authToken').find((row) => row.pmId === 'PM001' && row.usedAt === null)!.expiresAt = new Date(Date.now() - 1000);
-        expect((await send('post', '/auth/password/reset', { body: { token: again.body.resetToken, newPassword: NEW_PASSWORD } })).status).toBe(400);
+        expect((await send('post', '/auth/password/reset', { body: { token: again.body.resetToken, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD } })).status).toBe(400);
     });
 
     it('PM self-registration and the old /identity routes do not exist (404)', async () => {
@@ -435,17 +420,15 @@ describe('rate limiting through the real RateLimitGuard', () => {
         await ctx.app.close();
     });
 
-    it('verification requests, password reset and forgot-password are throttled too', async () => {
+    it('password reset and forgot-password are throttled too', async () => {
         const ctx = await makeApp({
-            AUTH_RATE_LIMIT_EMAIL_VERIFY_REQUEST_MAX: '2',
             AUTH_RATE_LIMIT_PASSWORD_RESET_MAX: '2',
             AUTH_RATE_LIMIT_PASSWORD_FORGOT_MAX: '2',
         });
         const ip = nextIp();
 
         for (const [path, body] of [
-            ['/auth/email/verify/request', { email: 'nobody@example.test' }],
-            ['/auth/password/reset', { token: 'f'.repeat(64), newPassword: NEW_PASSWORD }],
+            ['/auth/password/reset', { token: 'f'.repeat(64), newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD }],
             ['/auth/password/forgot', { workEmail: 'nobody@example.test' }],
         ] as const) {
             const statuses: number[] = [];

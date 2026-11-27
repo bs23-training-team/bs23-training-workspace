@@ -104,7 +104,7 @@ rejected because it would duplicate modules, the Prisma client and config.
 | Owner | API module (`apps/api/src/modules/`) | Web feature (`apps/web/src/features/`) | Section in `schema.prisma` |
 |---|---|---|---|
 | E01 | `identity`, `notifications`, `outbox`, `dashboard` | `shell`, `auth`, `dashboard`, `notifications` | `E01: identity` |
-| E02 | `directory` (trainees, teams, L&D feedback) | `directory` | `E02: directory` |
+| E02 | `directory` (trainees, teams, RND feedback) | `directory` | `E02: directory` |
 | E03 | `assessment` (expertise, attempts, evaluation, AI adapter) | `assessment` | `E03: assessment` |
 | E04 | `catalog` (courses, assignments, requests) | `catalog` | `E04: catalog` |
 | E05 | `learning` (roadmap, topic state, progress) | `learning` | `E05: learning` |
@@ -210,7 +210,7 @@ controller, service with the check, a spec for each). Copy its shape when starti
 There are two separate login tables and no role enum: which table a person is in decides their role.
 
 - `Pm` for PMs (admins), primary key `pmId`, e.g. `PM002`
-- `User` for the 4 resource types (TRAINEE, CENTRAL_LND, INDUSTRIAL_ATTACHMENT, SBU), primary key
+- `User` for the 4 resource types (TRAINEE, CENTRAL_RND, INDUSTRIAL_ATTACHMENT, SBU), primary key
   `userId`, e.g. `BS23001`
 
 These IDs are foreign keys in more than 30 tables. The usual alternative (a hidden uuid key plus a
@@ -379,14 +379,16 @@ Secrets:
 Checklist (every item must be done or consciously decided; some items need E01's auth on `develop`):
 
 1. **Seed:** a strong `SEED_PASSWORD` (the seed enforces this on non-local databases).
-2. **Dev tokens:** `IDENTITY_EXPOSE_DEV_TOKENS` is unset or `false`. It returns reset and verification
-   tokens in API responses, and it is ignored only when `NODE_ENV=production`.
+2. **Dev tokens:** `IDENTITY_EXPOSE_DEV_TOKENS` is unset or `false`. It returns the password-reset
+   token in API responses, and it is ignored only when `NODE_ENV=production`.
 3. **JWT secrets:** `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` are two different random values of at
    least 32 characters, kept in the host's secret store, never in the repository.
 4. **Mail:** `MAIL_PROVIDER=console` is refused in production; a real provider (and sender address)
    must be chosen before any email can be delivered.
 5. **Tokens in the browser:** the web app keeps tokens in `httpOnly`, `Secure`, `SameSite` cookies,
-   never in `localStorage` (the decision and the Next.js proxy are still open).
+   never in `localStorage`. Still to do before staging, including the Next.js proxy: for local
+   development only, the shared client (`apps/web/src/lib/api-client.ts`) uses `localStorage`
+   (E01 decision, 2026-11-26).
 6. **Rate limits:** set `trust proxy` for the chosen host and use a shared store (for example Redis)
    when more than one API instance runs; the counters are in memory today.
 7. **Mock data:** the reports web feature uses mock data only when an explicit flag is set, never by
@@ -514,3 +516,4 @@ Recommended extras (not in the SRS): secret scanning, dependency audit, SonarQub
 | 2026-11-24 | Decisions recorded in 4.3: every PM reads every user, only the managing PM changes a user; `Pm` and `User` stay two tables in v1. |
 | 2026-11-25 | The login role of a user is `USER` (was `TRAINEE`): `req.user.role` is `'PM'` or `'USER'`. `TRAINEE` stays only as a resource type. |
 | 2026-11-25 | Shared Neon development database: `Migrate Neon dev` workflow applies merged migrations after E11 approves the `neon-dev` environment; guide `docs/neon-dev-database.md`. |
+| 2026-11-26 | Web tokens: for local development the shared client keeps them in `localStorage`; `httpOnly` cookies are still required before staging (6.1). |

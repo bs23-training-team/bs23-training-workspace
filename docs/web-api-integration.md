@@ -73,6 +73,11 @@ every pull that touches `packages/contracts`, and before `pnpm --filter api type
 pnpm --filter @bs23/contracts build
 ```
 
+`apps/web` also depends on `@bs23/contracts` (`workspace:*`) and reads it from `packages/contracts/dist`. The root
+commands (`pnpm dev`, `pnpm typecheck`, `pnpm lint`, `pnpm build`) go through Turborepo, which builds contracts first,
+and CI uses them. A command that skips Turborepo, such as `pnpm --filter web typecheck`, does not build contracts:
+run the build above first. Import types with `import type { ... } from '@bs23/contracts'`.
+
 ## 4. How the web talks to the API
 
 Facts from the code on `develop` (verified by reading it, not by running it):
@@ -83,15 +88,22 @@ Facts from the code on `develop` (verified by reading it, not by running it):
 - There is **no global route prefix**: routes are `/auth/login`, `/me/growth`, `/leaderboard`, and so on.
 - Errors come back with HTTP status and a JSON `message`.
 
-**One shared client (E01, open).** To avoid ten different `fetch` wrappers, E01 provides
+**One shared client (E01).** To avoid ten different `fetch` wrappers, E01 provides
 `apps/web/src/lib/api-client.ts`:
 
 - `request<T>(path, options)` adds the `Authorization` header, retries once after a refresh on `401`,
-  and throws an error whose message is the API's `message`.
-- Where the access and refresh tokens are kept in the browser is **(open)**: E01 decides and writes it
-  down in `docs/architecture.md`. Module owners must not store tokens themselves.
+  and throws an `ApiError` with the API's `message`, `status`, `code` and `details` (read from the top
+  level or from `error`). An answer with no body gives `undefined`. `requestBlob(path)` is the same
+  call for a protected file.
+- The session ends (tokens cleared, `onSessionEnded` listeners called) only when the API refuses the
+  refresh token (400, 401 or 403). On a network or server failure the tokens are kept.
+- Tabs refresh one at a time (Web Locks, available on `https` and `localhost`), because a refresh
+  token used twice ends every session of the account.
+- For local development the access and refresh tokens are kept in `localStorage`; before staging they
+  move to `httpOnly` cookies (`docs/architecture.md` 6.1). Module owners must not store tokens
+  themselves.
 
-Until that client exists, nobody connects a protected route.
+Connect protected routes through this client only.
 
 ## 5. Order of connection
 
@@ -182,7 +194,7 @@ pnpm --filter web build
 
 | # | Decision | Owner |
 |---|---|---|
-| 1 | Where the web stores access and refresh tokens | E01 |
+| 1 | `httpOnly` cookies and the Next.js proxy for staging (local development: `localStorage`, decided 2026-11-26) | E01 |
 | 2 | `WEB_ORIGIN` values for staging and production (local default is done) | E11 |
 | 3 | Data-fetching helper (a small hook, or a library) and the loading/error pattern | E11 |
 | 4 | Whether to add a web test runner (Vitest) before the first screen is connected | E11 |

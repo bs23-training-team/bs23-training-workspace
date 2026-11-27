@@ -25,7 +25,7 @@ interface ReportHeaderProps {
 
 const PRESET_USERS = [
   { id: 'BS23001', label: 'BS23001 - Demo Trainee (Active)' },
-  { id: 'BS23002', label: 'BS23002 - Demo Central L&D' },
+  { id: 'BS23002', label: 'BS23002 - Demo Central RND' },
   { id: 'BS23003', label: 'BS23003 - Demo Industrial Attachment' },
   { id: 'BS23004', label: 'BS23004 - Demo SBU' },
 ];

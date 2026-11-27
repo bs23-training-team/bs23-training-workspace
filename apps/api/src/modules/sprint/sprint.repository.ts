@@ -15,8 +15,10 @@ import type {
  * the SQL shape. A rule that must hold in the database (a deleted task never shows up, a task
  * belongs to its workspace) is written into the `where` clause here, not left to the caller.
  *
- * Every query is scoped by `workspaceId`. The workspace comes from `req.user`, never from the
- * request body (PRD EP-14).
+ * Reads and scoped queries are filtered by `workspaceId` (from `req.user`, never from the
+ * request body — PRD EP-14). By-id updates/writes (`updateTask`, `softDeleteTask`,
+ * `decideOwnerReply`, `markPendingAlertSent`, `saveSheetCellIfVersion`) filter by `id` only
+ * because callers read/verify the scoped row first.
  */
 @Injectable()
 export class SprintRepository {
@@ -292,7 +294,7 @@ export class SprintRepository {
         ownerRequestedAt: Date | null;
       };
     },
-  ): Promise<unknown | null> {
+  ): Promise<unknown> {
     const copy = data.source;
     try {
       return await tx.$transaction(

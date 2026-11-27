@@ -5,12 +5,15 @@ import { GrowthError } from '../errors.js';
 import { levelFor } from '../levels/level-set.js';
 import { MAX_PAGE, parseCursor } from '../paging.js';
 import { LEVELS, type LevelsPort } from '../ports/levels.port.js';
+import { pmMayRead, pmReadableUsers } from '../visibility/pm-visible-users.js';
 
-/** An XP event as a PM sees it (review queue and history): with the user's name and the flag. */
+/** An XP event as a PM sees it (review queue and history): with the user's name, the flag and whose user it is. */
 export interface XpEventView {
   id: string;
   userId: string;
   userName: string;
+  /** true when this PM manages the user. Only then may the PM decide the event (FR-GRW-59). */
+  managedByYou: boolean;
   source: XpSource;
   amount: number;
   status: XpStatus;
@@ -26,7 +29,7 @@ export interface XpEventView {
  * information and is never here; the user sees the status, and the reason once a PM has decided. The owner's own
  * name is not repeated.
  */
-export type MyXpEventView = Omit<XpEventView, 'flag' | 'userName'>;
+export type MyXpEventView = Omit<XpEventView, 'flag' | 'userName' | 'managedByYou'>;
 
 export interface MyGrowth {
   /** XP that counts: AWARDED only. */
@@ -45,7 +48,7 @@ export interface MyGrowth {
 type XpRow = {
   id: string;
   userId: string;
-  user: { name: string };
+  user: { name: string; pmId: string | null };
   source: XpSource;
   amount: number;
   status: XpStatus;
@@ -56,10 +59,11 @@ type XpRow = {
   createdAt: Date;
 };
 
-const toView = (e: XpRow): XpEventView => ({
+const toView = (e: XpRow, pmId: string): XpEventView => ({
   id: e.id,
   userId: e.userId,
   userName: e.user.name,
+  managedByYou: e.user.pmId === pmId,
   source: e.source,
   amount: e.amount,
   status: e.status,
@@ -85,7 +89,7 @@ const toMyView = (e: XpRow): MyXpEventView => ({
 
 /**
  * Reading XP for screens. A user sees only their own events (FR-GRW-23); a PM sees the events
- * of their own users, as a paged review queue and history.
+ * of every active user, as a paged review queue and history, each marked `managedByYou` (FR-GRW-59).
  */
 @Injectable()
 export class XpQueryService {
@@ -94,7 +98,7 @@ export class XpQueryService {
     @Inject(LEVELS) private readonly levels: LevelsPort,
   ) {}
 
-  /** The review queue and history for a PM's own users, newest first. `statuses` is any of the five (none = all). */
+  /** The review queue and history as a PM reads it, newest first. `statuses` is any of the five (none = all). */
   async queue(input: {
     workspaceId: string;
     pmId: string;
@@ -106,21 +110,21 @@ export class XpQueryService {
     if (input.userId) {
       const user = await this.prisma.user.findFirst({
         where: { userId: input.userId, workspaceId: input.workspaceId },
-        select: { pmId: true },
+        select: { pmId: true, archivedAt: true },
       });
       if (!user) throw new GrowthError('NOT_FOUND', 'User not found');
-      if (user.pmId !== input.pmId) throw new GrowthError('FORBIDDEN_SCOPE', 'This user is not managed by you');
+      if (!pmMayRead(user, input.pmId)) throw new GrowthError('FORBIDDEN_SCOPE', 'This user is archived and not managed by you');
     }
     return this.page(
       {
         workspaceId: input.workspaceId,
-        user: { pmId: input.pmId },
+        user: pmReadableUsers(input.workspaceId, input.pmId),
         ...(input.statuses?.length ? { status: { in: input.statuses } } : {}),
         ...(input.userId ? { userId: input.userId } : {}),
       },
       input.cursor,
       input.limit,
-      toView,
+      (row) => toView(row, input.pmId),
     );
   }
 
@@ -171,7 +175,7 @@ export class XpQueryService {
     const take = Math.min(limit ?? MAX_PAGE, MAX_PAGE);
     const rows = await this.prisma.xpEvent.findMany({
       where,
-      include: { user: { select: { name: true } } },
+      include: { user: { select: { name: true, pmId: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip,
       take: take + 1,

@@ -8,7 +8,7 @@ type ConfigReader = { get<T = string>(key: string): T | undefined };
 const isProduction = () => process.env.NODE_ENV === 'production';
 
 /**
- * Raw verification / reset tokens are only returned in API responses when
+ * Raw reset tokens are only returned in API responses when
  * IDENTITY_EXPOSE_DEV_TOKENS=true, and never in production. Without it the
  * token only travels by email.
  */

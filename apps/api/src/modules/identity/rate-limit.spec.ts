@@ -1,5 +1,6 @@
 import { HttpException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { vi } from 'vitest';
 
 import { RATE_LIMIT_KEY } from './decorators/rate-limit.decorator.js';
 import { RateLimitGuard } from './guards/rate-limit.guard.js';
@@ -60,12 +61,12 @@ describe('resolveRateLimits', () => {
         expect(policies['password-reset'].limit).toBe(DEFAULT_RATE_LIMITS['password-reset'].limit);
     });
 
-    it('covers the verification-request and account-provisioning routes (SEC-06)', () => {
+    it('covers the account-provisioning routes and has no email-verification policy (SEC-06)', () => {
         const { policies } = resolveRateLimits(() => undefined);
 
-        expect(policies['email-verify-request']).toEqual({ limit: 5, windowSeconds: 3600, by: 'ip+identifier' });
         expect(policies['account-provision']).toEqual({ limit: 60, windowSeconds: 3600, by: 'ip' });
-        expect(envNames('email-verify-request').max).toBe('AUTH_RATE_LIMIT_EMAIL_VERIFY_REQUEST_MAX');
+        expect(envNames('account-provision').max).toBe('AUTH_RATE_LIMIT_ACCOUNT_PROVISION_MAX');
+        expect(Object.keys(policies).filter((name) => name.startsWith('email-verify'))).toEqual([]);
         expect(Object.keys(policies)).not.toContain('invitation-activate');
     });
 
@@ -152,7 +153,7 @@ describe('RateLimitGuard', () => {
 
         expect(error).toBeInstanceOf(HttpException);
         expect(error?.getStatus()).toBe(429);
-        expect((error?.getResponse() as Record<string, unknown>).message).toBe('Too many attempts. Try again later.');
+        expect((error?.getResponse() as Record<string, unknown> | undefined)?.message).toBe('Too many attempts. Try again later.');
         expect(Number(headers['Retry-After'])).toBeGreaterThan(0);
     });
 
@@ -186,17 +187,16 @@ describe('RateLimitGuard', () => {
 
     it('logs only the policy name and IP, never the identifier', () => {
         const lines: string[] = [];
-        const original = Logger.prototype.warn;
-        Logger.prototype.warn = function (message: unknown) {
+        const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation((message: unknown) => {
             lines.push(String(message));
-        } as never;
+        });
 
         try {
             const { call } = makeGuard({ AUTH_RATE_LIMIT_LOGIN_MAX: '1' });
             call('5.5.5.5', { identifier: 'secret.person@example.com' });
             refused(() => call('5.5.5.5', { identifier: 'secret.person@example.com' }));
         } finally {
-            Logger.prototype.warn = original;
+            warn.mockRestore();
         }
 
         expect(lines.join('\n')).toContain('security_event=rate_limited policy=login');

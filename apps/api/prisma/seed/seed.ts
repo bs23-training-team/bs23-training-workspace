@@ -83,9 +83,9 @@ const users: {
   },
   {
     userId: 'BS23002',
-    name: 'Demo Central L&D',
+    name: 'Demo Central RND',
     email: 'bs23002@bs23.test',
-    resource: 'CENTRAL_LND',
+    resource: 'CENTRAL_RND',
     position: 'FRONTEND',
     attendanceMode: 'ONLINE',
     pmId: 'PM001',

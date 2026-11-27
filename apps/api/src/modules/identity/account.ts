@@ -5,7 +5,7 @@
  *   - `Pm`   primary key `pmId`   (e.g. "PM002")   -> login role PM
  *   - `User` primary key `userId` (e.g. "BS23001") -> login role USER
  * There is NO role column. The role is the table the person was found in.
- * Per the PRD every non-PM account (Trainee, Central L&D, Industrial
+ * Per the PRD every non-PM account (Trainee, Central RND, Industrial
  * Attachment, SBU) has the login role USER, and lands on
  * /trainee/dashboard; the Resources value is only informational here.
  *
@@ -27,7 +27,7 @@ export type Account = {
     name: string;
     email: string;
     mustChangePassword: boolean;
-    /** Users only: TRAINEE | CENTRAL_LND | INDUSTRIAL_ATTACHMENT | SBU. */
+    /** Users only: TRAINEE | CENTRAL_RND | INDUSTRIAL_ATTACHMENT | SBU. */
     resource?: string;
 };
 
@@ -38,7 +38,6 @@ export const PM_FIELDS = {
     name: true,
     email: true,
     mustChangePassword: true,
-    emailVerified: true,
 } as const;
 
 /** Columns read from `User` (use as a Prisma `select`). */
@@ -48,7 +47,6 @@ export const USER_FIELDS = {
     name: true,
     email: true,
     mustChangePassword: true,
-    emailVerified: true,
     resource: true,
     pmId: true,
     archivedAt: true,
@@ -61,7 +59,6 @@ export type PmRow = {
     name: string;
     email: string;
     mustChangePassword: boolean;
-    emailVerified: boolean;
 };
 
 export type UserRow = {
@@ -70,7 +67,6 @@ export type UserRow = {
     name: string;
     email: string;
     mustChangePassword: boolean;
-    emailVerified: boolean;
     resource: string;
     pmId: string;
     archivedAt: Date | null;
@@ -142,19 +138,15 @@ export function isUserInactive(
     );
 }
 
-/** Why an existing account may not sign in (null = it may). */
-export type SignInBlock = 'EMAIL_NOT_VERIFIED' | 'INACTIVE' | null;
+/**
+ * Why an existing account may not sign in (null = it may). Only a User can be
+ * blocked. A PM is never blocked: E01 v1 has no email verification.
+ */
+export type SignInBlock = 'INACTIVE' | null;
 
-/** FR-AUTH-04: a PM cannot sign in until their email is verified. */
-export function pmSignInBlock(pm: Pick<PmRow, 'emailVerified'>): SignInBlock {
-    return pm.emailVerified ? null : 'EMAIL_NOT_VERIFIED';
-}
-
-/** PRD section 7 (US-04, US-06): the exact messages shown for each block. */
-export function signInBlockMessage(block: Exclude<SignInBlock, null>): string {
-    return block === 'EMAIL_NOT_VERIFIED'
-        ? 'Verify your email before signing in.'
-        : 'This account is inactive. Ask your PM to activate it.';
+/** PRD section 7 (US-06): the exact message shown for a block. */
+export function signInBlockMessage(_block: Exclude<SignInBlock, null>): string {
+    return 'This account is inactive. Ask your PM to activate it.';
 }
 
 export function userSignInBlock(
@@ -184,7 +176,7 @@ export function resolveSessionOwner(
     if (session.pm) {
         return {
             account: accountFromPm(session.pm),
-            block: pmSignInBlock(session.pm),
+            block: null,
         };
     }
 

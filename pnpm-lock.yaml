@@ -281,6 +281,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@bs23/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       lucide-react:
         specifier: ^1.71.0
         version: 1.78.0(@types/react@19.3.0)(react@19.3.0)

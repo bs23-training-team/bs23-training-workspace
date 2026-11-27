@@ -14,7 +14,7 @@ import { actorFromRequest, SprintActorGuard, SprintHttp } from './actor.guard.js
 /**
  * Rule 7 (docs/architecture.md section 3.3): the caller comes from `req.user` only. No header,
  * no query, no body. `req.user` is the one E01's JwtAuthGuard sets:
- * `{ sub, sid, workspaceId, role: 'PM' | 'TRAINEE' }`.
+ * `{ sub, sid, workspaceId, role: 'PM' | 'USER' }`.
  */
 
 describe('actorFromRequestUser (E01 req.user -> the signed-in person)', () => {
@@ -24,10 +24,10 @@ describe('actorFromRequestUser (E01 req.user -> the signed-in person)', () => {
     ).toEqual({ role: 'PM', pmId: 'PM001', workspaceId: 'w1' });
   });
 
-  it('reads a user: role TRAINEE, sub is the userId', () => {
+  it('reads a user: role USER, sub is the userId', () => {
     expect(
-      actorFromRequestUser({ sub: 'BS23001', sid: 's1', workspaceId: 'w1', role: 'TRAINEE' }),
-    ).toEqual({ role: 'TRAINEE', userId: 'BS23001', workspaceId: 'w1' });
+      actorFromRequestUser({ sub: 'BS23001', sid: 's1', workspaceId: 'w1', role: 'USER' }),
+    ).toEqual({ role: 'USER', userId: 'BS23001', workspaceId: 'w1' });
   });
 
   it('does not need the session id', () => {
@@ -46,7 +46,7 @@ describe('actorFromRequestUser (E01 req.user -> the signed-in person)', () => {
     expect(actorFromRequestUser({ role: 'PM', workspaceId: 'w1' })).toBeNull();
     expect(actorFromRequestUser({ role: 'PM', sub: 'PM001' })).toBeNull();
     expect(actorFromRequestUser({ role: 'PM', sub: '', workspaceId: 'w1' })).toBeNull();
-    expect(actorFromRequestUser({ role: 'TRAINEE', sub: 'BS23001', workspaceId: '' })).toBeNull();
+    expect(actorFromRequestUser({ role: 'USER', sub: 'BS23001', workspaceId: '' })).toBeNull();
   });
 
   it('is nobody without a role, or with a role E01 never sets', () => {
@@ -61,7 +61,7 @@ describe('actorFromRequestUser (E01 req.user -> the signed-in person)', () => {
       actorFromRequestUser({ role: 'PM', pmId: 'PM001', workspaceId: 'w1' } as never),
     ).toBeNull();
     expect(
-      actorFromRequestUser({ role: 'TRAINEE', userId: 'BS23001', workspaceId: 'w1' } as never),
+      actorFromRequestUser({ role: 'USER', userId: 'BS23001', workspaceId: 'w1' } as never),
     ).toBeNull();
   });
 
@@ -79,7 +79,7 @@ describe('actorFromRequestUser (E01 req.user -> the signed-in person)', () => {
 
 describe('pmIdOf / userIdOf / workspaceIdOf', () => {
   const pm = { role: 'PM', pmId: 'PM001', workspaceId: 'w1' } as const;
-  const user = { role: 'TRAINEE', userId: 'BS23001', workspaceId: 'w1' } as const;
+  const user = { role: 'USER', userId: 'BS23001', workspaceId: 'w1' } as const;
 
   it('return the id of the right role and refuse the other', () => {
     expect(pmIdOf(pm)).toBe('PM001');
@@ -119,7 +119,7 @@ describe('SprintActorGuard', () => {
     return undefined;
   };
 
-  const trainee = { sub: 'BS23001', sid: 's1', workspaceId: 'w1', role: 'TRAINEE' };
+  const USER = { sub: 'BS23001', sid: 's1', workspaceId: 'w1', role: 'USER' };
   const pm = { sub: 'PM001', sid: 's1', workspaceId: 'w1', role: 'PM' };
 
   it('answers UNAUTHENTICATED (401) when there is no req.user', () => {
@@ -157,9 +157,9 @@ describe('SprintActorGuard', () => {
   });
 
   it('lets a signed-in person through and puts the actor on the request', () => {
-    const request: RequestWithActor = { user: trainee };
+    const request: RequestWithActor = { user: USER };
     expect(guard.canActivate(contextFor(request as Record<string, unknown>))).toBe(true);
-    expect(request.actor).toEqual({ role: 'TRAINEE', userId: 'BS23001', workspaceId: 'w1' });
+    expect(request.actor).toEqual({ role: 'USER', userId: 'BS23001', workspaceId: 'w1' });
   });
 
   it('lets a PM through and puts the PM actor on the request', () => {

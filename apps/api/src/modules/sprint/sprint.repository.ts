@@ -156,7 +156,7 @@ export class SprintRepository {
         plannedHours: data.plannedHours,
         actualHours: data.actualHours,
         blocker: data.blocker,
-        category: (data.category ?? 'SBU') as TaskCategory,
+        category: data.category,
         ownerId: data.ownerId,
         verification: data.verification,
         ownerRequestedAt: data.ownerRequestedAt,
@@ -309,7 +309,7 @@ export class SprintRepository {
               plannedHours: copy.plannedHours,
               actualHours: 0,
               blocker: copy.blocker,
-              category: (copy.category ?? 'SBU') as TaskCategory,
+              category: copy.category,
               ownerId: copy.ownerId,
               // A carried task is not sent to the owner again: it is the same task.
               verification: copy.verification,

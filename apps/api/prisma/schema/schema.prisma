@@ -1251,12 +1251,12 @@ model SprintTask {
   date               DateTime          @db.Date
   title              String
   description        String            @db.Text
-  category           TaskCategory
+  category           TaskCategory? // DB: CHECK (category IS NULL) = (ownerId IS NULL)
   plannedHours       Decimal           @db.Decimal(4, 1) // DB: CHECK >= 0
   actualHours        Decimal           @default(0) @db.Decimal(4, 1) // DB: CHECK >= 0
   blocker            String            @default("")
   done               Boolean           @default(false)
-  carriedFromId      String? 
+  carriedFromId      String? // DB: partial unique index where carriedFromId IS NOT NULL
   ownerId            String? 
   verification       TaskVerification?
   ownerRequestedAt   DateTime? 
@@ -1280,6 +1280,7 @@ model SprintTask {
   @@index([userId, date])
   @@index([verification, ownerRequestedAt])
   @@index([ownerId])
+  // DB: CHECK chk_task_reply_state (verification/ownerRepliedAt/ownerReplyById consistency)
 }
 
 model SprintSubmission {
@@ -1295,7 +1296,8 @@ model SprintSubmission {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   user      User      @relation(fields: [userId], references: [userId], onDelete: Restrict)
 
-  @@unique([userId, date]) 
+  @@unique([userId, date])
+  @@index([workspaceId, date])
 }
 
 model SprintWeek {
@@ -1313,6 +1315,7 @@ model SprintWeek {
   dssheetCells DsSheetCell[]
 
   @@unique([teamId, weekStart])
+  // DB: CHECK EXTRACT(ISODOW FROM weekStart) = 1
 }
 
 
@@ -1377,15 +1380,18 @@ model DsMeeting {
   title       String
   teamId      String?
   scheduledAt DateTime
-  teamsLink   String? // https only
-  createdById String
+  teamsLink   String? // DB: CHECK teamsLink IS NULL OR teamsLink ~* '^https://'
+  createdById String?
+  source      String?
+  externalId  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   team      Team?     @relation(fields: [teamId], references: [id], onDelete: Restrict)
-  createdBy Pm        @relation("DsMeetingCreator", fields: [createdById], references: [pmId], onDelete: Restrict)
+  createdBy Pm?       @relation("DsMeetingCreator", fields: [createdById], references: [pmId], onDelete: Restrict)
 
+  @@unique([workspaceId, source, externalId])
   @@index([scheduledAt])
 }
 

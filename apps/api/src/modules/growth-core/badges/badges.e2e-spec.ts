@@ -187,7 +187,7 @@ describe('BadgesService (database)', () => {
   });
 
   describe('revoke', () => {
-    it('revokes with a reason, tells the user, and a re-award clears the revoke on the SAME row', async () => {
+    it('revokes with a reason, tells the user, and the badge can never be awarded to them again', async () => {
       const s = await special();
       const { awardId } = await award(s.badgeId);
 
@@ -199,15 +199,16 @@ describe('BadgesService (database)', () => {
       expect(categories()).toEqual(['New badge', 'Badge revoked']);
       expect(notices.userNotices[1]?.message).toContain('Awarded by mistake');
 
-      const again = await award(s.badgeId, U1, 'Earned it properly');
-      expect(again.awardId).toBe(awardId); // one row per badge and user, ever
-      expect(await prisma.badgeAward.findUniqueOrThrow({ where: { id: awardId } })).toMatchObject({
-        revokedAt: null,
-        revokedById: null,
-        revokeReason: null,
-        evidence: 'Earned it properly',
+      await expect(award(s.badgeId, U1, 'Earned it properly')).rejects.toMatchObject({
+        code: 'ALREADY_AWARDED',
+        message: 'This badge was revoked from this user and cannot be awarded again',
       });
+      const row = await prisma.badgeAward.findUniqueOrThrow({ where: { id: awardId } });
+      expect(row).toMatchObject({ revokedById: 'PM001', revokeReason: 'Awarded by mistake', evidence: 'Led the demo' });
+      expect(row.revokedAt).not.toBeNull(); // nothing changed
+      expect(categories()).toEqual(['New badge', 'Badge revoked']); // and no new notice
       expect(await prisma.badgeAward.count({ where: { badgeId: s.badgeId, userId: U1 } })).toBe(1);
+      await expect(award(s.badgeId, U2)).resolves.toHaveProperty('awardId'); // other users are not affected
     });
 
     it('needs a reason, scope, and an award that is not already revoked', async () => {

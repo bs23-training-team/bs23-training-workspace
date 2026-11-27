@@ -15,7 +15,7 @@ badges. The only module that writes XP. Other modules ask it through its exporte
 | **Manual adjustment** | A PM changes a user's XP by a non-zero whole number with a reason. `AWARDED` at once, no review row, never takes the total below 0, even when several arrive together. |
 | **Levels and XP rules** | A level set is saved as one set (retire changed levels first, then insert). A "Level up" notice is created only when EARNED XP crosses a threshold. XP rules are editable; five are stored but not enforced. |
 | **Streak and freezes** | Consecutive working days with a sprint; Friday and Saturday, leave, holidays and PM freezes neither count nor break it. The `Streak` row is a cache recomputed on demand (`runStreakRefresh` is the nightly entry point; scheduling it is not wired yet). No XP comes from a streak. |
-| **Badges** | Special (a PM awards, with evidence) and Behavioral (awarded automatically by a rule: sprint streak, on-time streak, kudos from different people). One row per badge and user; revoke needs a reason; a badge a PM revoked is never given back automatically. Badges give no XP. |
+| **Badges** | Special (a PM awards, with evidence) and Behavioral (awarded automatically by a rule: sprint streak, on-time streak, kudos from different people). One row per badge and user; revoke needs a reason; a badge a PM revoked is never awarded to that user again, by hand or automatically. Badges give no XP. |
 
 ## Layout
 

@@ -44,7 +44,8 @@ const SYSTEM_REVOKE_REASON = 'Automatic: the approved kudos behind this badge we
 /**
  * Badges. Special badges are awarded by a PM with evidence; Behavioral badges are awarded
  * automatically when a rule is met. A badge is earned once per user (one row, ever): a revoke
- * marks the row, and a re-award clears the revoke on the SAME row. Badges give no XP.
+ * marks the row, and a badge a PM revoked is never awarded to that user again (PRD FR-GAM-06,
+ * US-91). Only a system revoke (see evaluateAuto) can be re-earned. Badges give no XP.
  * Every change and its notice happen in one transaction, under the per-user lock.
  */
 @Injectable()
@@ -96,7 +97,7 @@ export class BadgesService {
       : new GrowthError('NOT_FOUND', 'Badge not found');
   }
 
-  /** A PM awards a Special badge to a user in their scope, with evidence. Once per user. */
+  /** A PM awards a Special badge to a user in their scope, with evidence. Once per user, even after a revoke. */
   async awardSpecial(input: AwardSpecialInput): Promise<{ awardId: string }> {
     const evidence = input.evidence.trim();
     if (evidence === '') {
@@ -132,24 +133,26 @@ export class BadgesService {
         where: { badgeId_userId: { badgeId: badge.id, userId: user.userId } },
         select: { id: true, revokedAt: true },
       });
-      if (existing && !existing.revokedAt) {
-        throw new GrowthError('ALREADY_AWARDED', 'This user already has this badge');
+      if (existing) {
+        throw new GrowthError(
+          'ALREADY_AWARDED',
+          existing.revokedAt
+            ? 'This badge was revoked from this user and cannot be awarded again'
+            : 'This user already has this badge',
+        );
       }
-      const fields = {
-        source: 'MANUAL' as const,
-        evidence,
-        awardedById: input.pmId,
-        awardedAt: this.clock.now(),
-        revokedAt: null,
-        revokedById: null,
-        revokeReason: null,
-      };
-      const award = existing
-        ? await tx.badgeAward.update({ where: { id: existing.id }, data: fields, select: { id: true } })
-        : await tx.badgeAward.create({
-            data: { workspaceId: input.workspaceId, badgeId: badge.id, userId: user.userId, ...fields },
-            select: { id: true },
-          });
+      const award = await tx.badgeAward.create({
+        data: {
+          workspaceId: input.workspaceId,
+          badgeId: badge.id,
+          userId: user.userId,
+          source: 'MANUAL',
+          evidence,
+          awardedById: input.pmId,
+          awardedAt: this.clock.now(),
+        },
+        select: { id: true },
+      });
       await this.noticeAwarded(tx, input.workspaceId, user.userId, badge.name);
       return { awardId: award.id };
     });

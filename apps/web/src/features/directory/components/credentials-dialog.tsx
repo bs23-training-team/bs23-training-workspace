@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/ui";
 import { Dialog } from "@/components/ui/dialog";
-import { useDB } from "@/lib/mock/store";
-import { retryEmail, type AccountCredentials } from "../mock-api";
+import type { AccountCredentials } from "../api";
 
 function CopyRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
@@ -31,8 +30,6 @@ function CopyRow({ label, value }: { label: string; value: string }) {
 
 /** FR-AUTH-08: shown once after an account is created, with the account ID, the temporary password and the email status. */
 export function CredentialsDialog({ creds, onClose }: { creds: AccountCredentials; onClose: () => void }) {
-  const db = useDB();
-  const status = db.emailDeliveries.find((e) => e.id === creds.deliveryId)?.status ?? creds.mailStatus;
   return (
     <Dialog
       open
@@ -50,17 +47,8 @@ export function CredentialsDialog({ creds, onClose }: { creds: AccountCredential
         <CopyRow label="Email" value={creds.email} />
         <CopyRow label="Temporary password" value={creds.tempPassword} />
       </div>
-      <p role="status" className="flex flex-wrap items-center gap-2 text-sm">
-        {status === "ACCEPTED" && <span>The sign-in email was sent to {creds.email}.</span>}
-        {status === "QUEUED" && <span>The sign-in email is queued for {creds.email}.</span>}
-        {status === "FAILED" && (
-          <>
-            <span>The sign-in email was not sent. Share the details above yourself, or retry.</span>
-            <button className="font-medium text-brand-600 hover:underline" onClick={() => retryEmail(creds.deliveryId)}>
-              Retry
-            </button>
-          </>
-        )}
+      <p role="status" className="text-sm">
+        {creds.emailSent ? `The sign-in email was sent to ${creds.email}.` : "The sign-in email was not sent. Share the details above yourself."}
       </p>
     </Dialog>
   );

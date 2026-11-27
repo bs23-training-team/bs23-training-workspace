@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { DB, Position, AttendanceMode, Resource } from "@/lib/mock/types";
-import { createTrainee, updateTrainee, type AccountCredentials, type TraineeInput } from "../mock-api";
+import { assessmentSettingsError, updateTrainee, type TraineeInput } from "../mock-api";
+import { createTeam, createTrainee, listMyTeams, type AccountCredentials, type ApiTeam } from "../api";
 import { CredentialsDialog } from "./credentials-dialog";
 import { Button, Checkbox, Field, Input, Select } from "@/components/ui/ui";
 import { Dialog } from "@/components/ui/dialog";
-import { POSITION_LABEL, MODE_LABEL, RESOURCE_LABEL, addDays, addMonths, todayISO } from "@/lib/utils";
+import { POSITION_LABEL, MODE_LABEL, RESOURCE_LABEL, addDays, addMonths, isEmail, todayISO } from "@/lib/utils";
 
 /** A titled group of fields: two columns, aligned rows, one note under the group. */
 function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
@@ -19,7 +20,42 @@ function Section({ title, note, children }: { title: string; note?: string; chil
   );
 }
 
-/** Create/edit trainee (FR-DIR-03). ID and email must be unique; new accounts get a temporary password. */
+const teamNames = (text: string) => [...new Set(text.split(",").map((n) => n.trim()).filter(Boolean))];
+
+/** Checked before any request, so a wrong field does not leave a new team behind. The API checks every rule again. */
+function newUserProblem(f: TraineeInput, names: string[]): string | null {
+  if (!f.traineeId.trim() || !f.name.trim() || !f.email.trim() || !f.onboardDate) return "Fill in every required field.";
+  if (!isEmail(f.email.trim())) return "Enter a valid email address.";
+  if (!f.tempPassword || f.tempPassword.length < 8) return "Temporary password must be at least 8 characters.";
+  if (!names.length) return "Enter a team name.";
+  if (!f.periodEnd) return "Choose a departure date.";
+  if (f.periodEnd <= f.onboardDate) return "The departure date must be after the onboarding date.";
+  return assessmentSettingsError(f);
+}
+
+/** Team names -> API team IDs. A name the PM does not have yet creates that team. */
+async function resolveTeamIds(names: string[]): Promise<{ ids: string[]; error?: string }> {
+  const listed = await listMyTeams();
+  if (!listed.ok) return { ids: [], error: listed.error };
+  const idByName = new Map(listed.data!.map((t) => [t.name.toLowerCase(), t.id]));
+  const ids: string[] = [];
+  for (const name of names) {
+    let id = idByName.get(name.toLowerCase());
+    if (!id) {
+      const made = await createTeam(name);
+      if (!made.ok) return { ids: [], error: made.error };
+      id = made.data!.id;
+      idByName.set(name.toLowerCase(), id);
+    }
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return { ids };
+}
+
+/**
+ * Create/edit trainee (FR-DIR-03). ID and email must be unique; new accounts get a temporary password.
+ * Create uses the API. Edit is not connected yet and still changes the mock store.
+ */
 export function TraineeFormDialog({ db, pmId, editUserId, open, onClose, onSaved }: { db: DB; pmId: string; editUserId?: string; open: boolean; onClose: () => void; onSaved: (msg: string) => void }) {
   const t = editUserId ? db.trainees.find((x) => x.userId === editUserId) : undefined;
   const u = editUserId ? db.users.find((x) => x.id === editUserId) : undefined;
@@ -31,6 +67,24 @@ export function TraineeFormDialog({ db, pmId, editUserId, open, onClose, onSaved
   const [error, setError] = useState("");
   const [creds, setCreds] = useState<AccountCredentials | null>(null);
   const teams = db.teams.filter((x) => x.pmId === pmId);
+  const [saving, setSaving] = useState(false);
+  // The form is long: bring the error into view, so a failed "Create account" is never silent.
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const showError = (message: string) => {
+    setError(message);
+    // "center": the dialog header covers the top edge of the scrolling box.
+    requestAnimationFrame(() => errorRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }));
+  };
+  // A new user: the team is typed as a name, and the PM's existing teams are listed under the box.
+  const [teamText, setTeamText] = useState("");
+  const [apiTeams, setApiTeams] = useState<ApiTeam[]>([]);
+  useEffect(() => {
+    if (editUserId) return;
+    void listMyTeams().then((r) => {
+      if (r.ok) setApiTeams(r.data!);
+    });
+  }, [editUserId]);
+  const teamHint = `A new name creates the team. Use commas for more than one.${apiTeams.length ? ` Your teams: ${apiTeams.map((tm) => tm.name).join(", ")}.` : ""}`;
 
   const departureNote = t?.archivedAt
     ? "Pick a date after today to extend the period. Saving moves the user back to All Users."
@@ -38,15 +92,26 @@ export function TraineeFormDialog({ db, pmId, editUserId, open, onClose, onSaved
       ? "No departure date is set. Pick a date to set one."
       : "The user moves to the Archive on the departure date.";
 
-  const save = () => {
+  const save = async () => {
+    setError("");
     if (editUserId) {
       const r = updateTrainee(pmId, editUserId, f);
-      if (!r.ok) return setError(r.error);
+      if (!r.ok) return showError(r.error);
       onSaved(t?.archivedAt ? "User reactivated and moved back to All Users." : "User updated.");
       return onClose();
     }
-    const r = createTrainee(pmId, f);
-    if (!r.ok) return setError(r.error);
+    const names = teamNames(teamText);
+    const problem = newUserProblem(f, names);
+    if (problem) return showError(problem);
+    setSaving(true);
+    const team = await resolveTeamIds(names);
+    if (team.error) {
+      setSaving(false);
+      return showError(team.error);
+    }
+    const r = await createTrainee({ ...f, teamIds: team.ids });
+    setSaving(false);
+    if (!r.ok) return showError(r.error);
     setCreds(r.data!);
   };
 
@@ -68,12 +133,14 @@ export function TraineeFormDialog({ db, pmId, editUserId, open, onClose, onSaved
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={save}>{editUserId ? (t?.archivedAt ? "Save and reactivate" : "Save changes") : "Create account"}</Button>
+          <Button onClick={save} disabled={saving}>
+            {editUserId ? (t?.archivedAt ? "Save and reactivate" : "Save changes") : saving ? "Creating…" : "Create account"}
+          </Button>
         </>
       }
     >
       {error && (
-        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p ref={errorRef} role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       )}
@@ -112,6 +179,11 @@ export function TraineeFormDialog({ db, pmId, editUserId, open, onClose, onSaved
               ))}
             </Select>
           </Field>
+          {!editUserId ? (
+            <Field label="Team" htmlFor="tteam" required hint={teamHint}>
+              <Input id="tteam" value={teamText} onChange={(e) => setTeamText(e.target.value)} placeholder="Team Alpha" autoComplete="off" />
+            </Field>
+          ) : (
           <fieldset className="min-w-0">
             <legend className="mb-1.5 text-sm font-medium text-ink">
               Teams <span className="text-red-600" aria-hidden>*</span>
@@ -133,6 +205,7 @@ export function TraineeFormDialog({ db, pmId, editUserId, open, onClose, onSaved
             )}
             <p className="mt-1 text-xs text-muted">A user can belong to more than one team.</p>
           </fieldset>
+          )}
           <Field label="Attendance mode" htmlFor="tmode" required>
             <Select id="tmode" value={f.attendanceMode} onChange={(e) => setF({ ...f, attendanceMode: e.target.value as AttendanceMode })}>
               {Object.entries(MODE_LABEL).map(([k, v]) => (

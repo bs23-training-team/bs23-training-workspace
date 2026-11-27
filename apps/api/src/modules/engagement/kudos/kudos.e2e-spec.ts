@@ -4,6 +4,7 @@ import { XpLedgerService, XpRulesService } from '../../growth-core/index.js';
 import { createTestPrisma } from '../../growth-core/testing/test-db.js';
 import { parseDay } from '../../growth-core/time/org-time.js';
 import { FakeEngagementNotifications } from '../testing/fake-engagement-notifications.js';
+import { pmReadableUsers } from '../visibility/pm-readable-users.js';
 import { KudosQueryService } from './kudos-query.service.js';
 import { KudosService, type SendKudosInput } from './kudos.service.js';
 
@@ -11,14 +12,16 @@ import { KudosService, type SendKudosInput } from './kudos.service.js';
 // Own temporary workspace (its own XpRule row), users and kudos, removed afterwards.
 // Calendar (weeks start on Monday): Sun 15, Mon 16 ... Sun 22, Mon 23, Mon 30 (Nov 2026).
 // Rules in the temporary workspace are the defaults: 5 XP, 3 sends a week, 7 days cooldown, cap 15 a week.
-// U1..U10 belong to PM001, X1 to PM002, ARCH is archived.
+// U1..U10 belong to PM001, X1 and X2 to PM002, ARCH is archived (PM001), ARCH2 is archived (PM002).
 
 describe('KudosService (database)', () => {
   const tag = randomUUID().slice(0, 6);
   const id = (name: string) => `TK${name}${tag}`;
   const U = Array.from({ length: 10 }, (_, i) => id(`U${i + 1}`));
   const X1 = id('X1');
+  const X2 = id('X2');
   const ARCH = id('AR');
+  const ARCH2 = id('A2');
 
   let prisma: PrismaService;
   let notices: FakeEngagementNotifications;
@@ -59,7 +62,9 @@ describe('KudosService (database)', () => {
     await prisma.xpRule.create({ data: { workspaceId } });
     for (const userId of U) await makeUser(userId, 'PM001');
     await makeUser(X1, 'PM002');
+    await makeUser(X2, 'PM002');
     await makeUser(ARCH, 'PM001', new Date('2026-06-01T00:00:00Z'));
+    await makeUser(ARCH2, 'PM002', new Date('2026-06-01T00:00:00Z'));
   });
 
   beforeEach(() => {
@@ -363,19 +368,73 @@ describe('KudosService (database)', () => {
   });
 
   describe('who sees what', () => {
-    it('a user sees only the kudos they sent or received; a PM only those that involve their own users', async () => {
-      const own = await send(U[0]!, U[1]!); // PM001 people
-      const other = await send(X1, U[2]!); // involves PM002's user and a PM001 user
-      const lone = await send(U[3]!, U[4]!); // only PM001 people
+    // The read rule of a PM (FR-ENG-53): every active user of the workspace, plus the PM's own archived users.
+    const readableFor = (pmId: string) => pmReadableUsers(workspaceId, pmId);
+    const listFor = (pmId: string) => query.listForPm(workspaceId, pmId, readableFor(pmId));
 
-      const forU1 = (await query.listForUser(workspaceId, U[0]!)).map((k) => k.id);
-      expect(forU1).toEqual([own.kudosId]);
-      expect((await query.listForUser(workspaceId, U[5]!))).toEqual([]);
+    it('a user sees only the kudos they sent or received', async () => {
+      const own = await send(U[0]!, U[1]!);
+      await send(X1, U[2]!);
+      await send(U[3]!, U[4]!);
 
-      const pm1 = (await query.listForPm(workspaceId, 'PM001')).map((k) => k.id).sort();
-      expect(pm1).toEqual([own.kudosId, other.kudosId, lone.kudosId].sort()); // each involves a PM001 user
-      const pm2 = (await query.listForPm(workspaceId, 'PM002')).map((k) => k.id);
-      expect(pm2).toEqual([other.kudosId]); // only the one that involves X1
+      expect((await query.listForUser(workspaceId, U[0]!)).map((k) => k.id)).toEqual([own.kudosId]);
+      expect(await query.listForUser(workspaceId, U[5]!)).toEqual([]);
+    });
+
+    it('a PM reads the kudos of every active user, and managedByYou says which involve their own users', async () => {
+      const own = await send(U[0]!, U[1]!); // PM001 people only
+      const other = await send(X1, X2); // PM002 people only
+      const mixed = await send(X1, U[2]!); // one of each
+
+      const pm1 = await listFor('PM001');
+      expect(pm1.map((k) => k.id).sort()).toEqual([own.kudosId, other.kudosId, mixed.kudosId].sort());
+      const flags1 = Object.fromEntries(pm1.map((k) => [k.id, k.managedByYou]));
+      expect(flags1).toEqual({ [own.kudosId]: true, [other.kudosId]: false, [mixed.kudosId]: true });
+
+      const flags2 = Object.fromEntries((await listFor('PM002')).map((k) => [k.id, k.managedByYou]));
+      expect(flags2).toEqual({ [own.kudosId]: false, [other.kudosId]: true, [mixed.kudosId]: true });
+    });
+
+    it('archived users: only their own PM still reads their kudos, another PM does not', async () => {
+      // Written directly: a kudos with an archived user cannot be sent any more, but one from before the archive can exist.
+      const old = await prisma.kudos.create({
+        data: {
+          workspaceId,
+          fromUserId: ARCH,
+          toUserId: ARCH2,
+          category: 'HELPFUL',
+          message: 'From before the archive',
+          sentOn: parseDay('2026-05-01'),
+        },
+      });
+
+      const pm1 = await listFor('PM001'); // manages ARCH
+      expect(pm1.find((k) => k.id === old.id)).toMatchObject({ managedByYou: true });
+      const pm2 = await listFor('PM002'); // manages ARCH2
+      expect(pm2.find((k) => k.id === old.id)).toMatchObject({ managedByYou: true });
+      expect(await listFor('PM003')).toEqual([]); // manages neither, and both are archived
+    });
+
+    it('the paged list gives a PM the same rows, and a user never gets managedByYou or a PM id', async () => {
+      const mixed = await send(X1, U[2]!);
+      await send(X1, X2);
+
+      const forPm = await query.page({ workspaceId, viewer: { role: 'PM', pmId: 'PM001', readable: readableFor('PM001') } });
+      expect(forPm.kudos).toHaveLength(2);
+      expect(forPm.kudos.find((k) => k.id === mixed.kudosId)).toMatchObject({ managedByYou: true });
+
+      const forUser = await query.page({ workspaceId, viewer: { role: 'USER', userId: U[2]! } });
+      expect(forUser.kudos).toHaveLength(1);
+      expect(Object.keys(forUser.kudos[0]!).sort()).toEqual([
+        'category',
+        'fromName',
+        'fromUserId',
+        'id',
+        'message',
+        'sentOn',
+        'toName',
+        'toUserId',
+      ]);
     });
   });
 });

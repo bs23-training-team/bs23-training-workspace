@@ -16,6 +16,7 @@ import {
   type XpLedger,
 } from '../../growth-core/index.js';
 import { MAX_PAGE, parseCursor } from '../paging.js';
+import { pmReadableUsers } from '../visibility/pm-readable-users.js';
 import { validateCount, validateNewQuest, type NewQuestInput } from './quest-input.js';
 
 export interface CreateQuestInput extends NewQuestInput {
@@ -52,6 +53,11 @@ export interface ProgressView {
   userId: string;
   count: number;
   verifiedAt: string | null;
+}
+
+/** Progress as a PM sees it: `managedByYou` is true when this PM manages the user, the only PM who may verify. */
+export interface PmProgressView extends ProgressView {
+  managedByYou: boolean;
 }
 
 const day = (date: Date): DayString => date.toISOString().slice(0, 10);
@@ -189,13 +195,17 @@ export class QuestsService {
     return rows.map(toProgressView);
   }
 
-  /** A PM sees the progress of THEIR OWN users only. */
-  async progressForPm(workspaceId: string, pmId: string, questId?: string): Promise<ProgressView[]> {
+  /**
+   * A PM reads the progress of every active user (and of their own archived users), each row marked
+   * `managedByYou`. Only the managing PM may verify (FR-ENG-53, FR-ENG-27).
+   */
+  async progressForPm(workspaceId: string, pmId: string, questId?: string): Promise<PmProgressView[]> {
     const rows = await this.prisma.questProgress.findMany({
-      where: { workspaceId, user: { pmId }, ...(questId ? { questId } : {}) },
+      where: { workspaceId, user: pmReadableUsers(workspaceId, pmId), ...(questId ? { questId } : {}) },
+      include: { user: { select: { pmId: true } } },
       orderBy: { createdAt: 'asc' },
     });
-    return rows.map(toProgressView);
+    return rows.map((p) => ({ ...toProgressView(p), managedByYou: p.user.pmId === pmId }));
   }
 
   private async requireQuestAndUser(tx: Tx, ref: QuestRef) {
